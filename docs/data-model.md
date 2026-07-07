@@ -1,8 +1,6 @@
 # Вітрина — Модель даних (MVP)
 
-> **Статус:** ✅ зафіксовано 2026-07-07. Закриває відкрите питання брифа §5.5
-> («колонки vs версійні рядки») і крок 2 §13. Джерело правди схеми — міграція
-> `supabase/migrations/0001_init.sql`; цей документ пояснює *чому*.
+> **Статус:** ✅ зафіксовано 2026-07-07; оновлено 2026-07-07 — додано `leads` + Telegram-колонки + shipped-нотатки. Закриває §5.5, §5.6, O1. Джерело правди схеми — міграції `supabase/migrations/0001_init.sql` + `0002_leads.sql`; цей документ пояснює *чому*.
 > **Підстава:** стратегічне ревю (Fable) визначило форму draft/published як
 > найризикованіше несуче рішення фундаменту — воно тримає редактор, публікацію,
 > purge кешу і switchTemplate.
@@ -33,22 +31,23 @@ Data-layer вибирає, який зріз повернути; рендер-к
 тому впровадження draft/published **не** зачепило `PageRenderer`, middleware чи
 компоненти.
 
-## switchTemplate (у MVP — рішення власника 2026-07-07)
+## switchTemplate → «Перегенерувати» (shipped 2026-07-07, журнал #36)
 
-- Лишається **в MVP** (журнал #5): 2-й пресет квіткарні будуємо у Фазі 2,
-  тверда фіча — у Фазі 4.
-- Алгоритм (§4.7): новий каркас+тема застосовуються в **чернетку**; блоки, яких
-  нема в новому каркасі, йдуть у `draft_content.pocket` (не видаляються);
-  факти живуть у `tenants.facts`, тож не губляться; тема — від нового пресету.
+- Реалізовано як **«Перегенерувати»** (адаптація §4.7 до вільної композиції):
+  ре-запуск генерації з `tenants.facts` пише нові блоки+тему в **чернетку**;
+  старі draft-блоки йдуть у `draft_content.pocket` (не видаляються, кеп 40);
+  факти живуть у `tenants.facts`, тож не губляться. Плюс окремий перемикач
+  тема-пресетів (миттєвий, детермінований).
 
 ## Таблиці (стисло)
 
 | Таблиця | Призначення | Ключові поля |
 |---|---|---|
-| `tenants` | конфіг сайту + версійована тема | `host` (nullable, unique), `canonical_hostname`, `status`, `nav_mode`, `brand`, `footer`, `facts`, `draft_theme`, `published_theme`, `vertical` |
+| `tenants` | конфіг сайту + версійована тема + Telegram | `host` (nullable, unique), `canonical_hostname`, `status`, `nav_mode`, `brand`, `footer`, `facts`, `vertical`, `draft_theme`, `published_theme`, `telegram_chat_id`, `telegram_connect_token` |
 | `pages` | сторінки + версійований контент | `slug` (`''`=home), `draft_content`, `published_content`, `is_published`, `unique(tenant_id, slug)` |
-| `conversations` | онбординг агент-чат (§4.9) | `messages` (лише інтерфейс), `facts_state` (slot-filling стан), `is_complete` |
+| `conversations` | онбординг агент-чат (§4.9) | `tenant_id`, `messages` (інтерфейс чату), `facts_state` (slot-filling стан — `{facts, verticalId, ready}`), `is_complete` |
 | `tenant_members` | auth↔tenant членством (§3.1) | `(tenant_id, user_id)`, `role` |
+| `leads` | заявки з `lead_form` (§5.6) | `tenant_id`, `name`, `phone`, `message`, `source`, `meta`, `created_at`; `pushed_at` (timestamptz — час успішного пушу, NULL = не надіслано) |
 
 ## Впроваджені рекомендації ревю
 
@@ -61,11 +60,22 @@ Data-layer вибирає, який зріз повернути; рендер-к
 - **S5:** підтверджено — middleware без БД, tenant виводиться з `Host`; existence-check
   у сторінці через кешований read (KV/Edge Config **не** будуємо в MVP).
 
+## Shipped-нотатки (оновлено 2026-07-07)
+
+### `leads` таблиця (§5.6, журнал #33)
+`leads(id, tenant_id, name, phone, message, source, meta, pushed_at, created_at)` — міграція `0002_leads.sql`. `/api/leads` резолвить `tenant_id` з `Host`-заголовку (ніколи з body); honeypot + origin check. Запис створюється завжди; `pushed_at` виставляється лише після успішного Telegram-пушу (best-effort, NULL = не надіслано).
+
+### Telegram-колонки в `tenants` (§5.6, журнал #33)
+- `telegram_connect_token` — одноразовий токен для deep-link `/start <token>`. Генерується при натисканні «Підключити Telegram» у дашборді; очищується після валідації ботом.
+- `telegram_chat_id` — `chat_id` власника; зберігається ботом після `/start`. Null = Telegram не підключений.
+
+### `conversations.facts_state` (§4.9, журнал #37)
+`facts_state: { facts: Record<string, unknown>, verticalId: string, ready: boolean }`. `facts` = поточний стан slot-filling; `verticalId` = класифікована вертикаль (прокидається через усі turns); `ready` = агент вирішив «достатньо» (не детермінований чекліст). Resume через localStorage: при відновленні сесії `facts_state` підвантажується, транскрипт `messages` — вторинний.
+
+### O1 вирішено в практиці (журнал #37)
+Placeholder tenant з `host=null` створюється на старті чату; `host` призначається після підтвердження піддомену. `tenants.host nullable` тримає цю модель без змін схеми. Фінальний флоу таким чином стабілізовано.
+
 ## Досі відкрите (потребує власника)
 
-- **O1 — момент створення tenant:** `conversations.tenant_id` потрібен до вибору
-  піддомену. Схема це **не блокує** (`tenants.host` nullable): tenant можна
-  створити на старті чату, host призначити пізніше апдейтом. Фінальний флоу —
-  за власником (рішення для Фази 3).
 - **O2 — rate-limit на створення tenant** (§11 «мінімум із MVP»): для тесту на
-  друзях відкладається свідомо; kill-switch = `status='suspended'`.
+  друзях відкладається свідомо; kill-switch = `status='suspended'` → 404 (shipped 2026-07-07).
