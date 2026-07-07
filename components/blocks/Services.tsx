@@ -47,7 +47,7 @@ export default function Services({ data }: { data: BlockProps["services"] }) {
                 {item.description && (
                   <p
                     className="flex-1 text-base leading-relaxed"
-                    style={{ color: "var(--color-muted)" }}
+                    style={{ color: "var(--color-muted-foreground)" }}
                   >
                     {item.description}
                   </p>

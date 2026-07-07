@@ -52,7 +52,7 @@ export default function Switchback({ data }: { data: BlockProps["switchback"] })
                   </h3>
                   <p
                     className="text-lg leading-relaxed"
-                    style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)" }}
+                    style={{ color: "var(--color-muted-foreground)", fontFamily: "var(--font-body)" }}
                   >
                     {item.body}
                   </p>

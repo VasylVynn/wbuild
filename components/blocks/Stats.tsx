@@ -34,7 +34,7 @@ export default function Stats({ data }: { data: BlockProps["stats"] }) {
               </span>
               <span
                 className="text-base leading-snug"
-                style={{ color: "var(--color-muted)" }}
+                style={{ color: "var(--color-muted-foreground)" }}
               >
                 {item.label}
               </span>

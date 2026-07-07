@@ -64,6 +64,9 @@ export function themeToCssVars(theme: Theme): CSSProperties {
     "--color-background": theme.colors.background,
     "--color-foreground": theme.colors.foreground,
     "--color-muted": theme.colors.muted,
+    // Readable secondary-text color (muted is a light tint for borders/fills,
+    // NOT for text). Derived from foreground so contrast holds on every theme.
+    "--color-muted-foreground": `color-mix(in srgb, ${theme.colors.foreground} 64%, ${theme.colors.background})`,
     "--color-accent": theme.colors.accent,
     "--font-heading": FONT_STACK[theme.fonts.heading],
     "--font-body": FONT_STACK[theme.fonts.body],

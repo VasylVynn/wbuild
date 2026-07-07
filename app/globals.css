@@ -7,6 +7,11 @@
  * one tenant never leaks into another.
  */
 
+/* Force light rendering everywhere — sites never adapt to the OS dark mode. */
+:root {
+  color-scheme: light;
+}
+
 body {
   font-family: var(--font-body, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
 }

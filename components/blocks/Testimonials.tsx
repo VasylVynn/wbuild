@@ -47,7 +47,7 @@ export default function Testimonials({ data }: { data: BlockProps["testimonials"
                 {item.role && (
                   <p
                     className="text-sm"
-                    style={{ color: "var(--color-muted)" }}
+                    style={{ color: "var(--color-muted-foreground)" }}
                   >
                     {item.role}
                   </p>

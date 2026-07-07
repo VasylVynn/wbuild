@@ -40,7 +40,7 @@ export default function Faq({ data }: { data: BlockProps["faq"] }) {
                   {/* Simple +/- indicator — no JS, pure CSS via open attribute */}
                   <span
                     className="shrink-0 text-2xl font-light"
-                    style={{ color: "var(--color-muted)" }}
+                    style={{ color: "var(--color-muted-foreground)" }}
                     aria-hidden="true"
                   >
                     +
@@ -49,7 +49,7 @@ export default function Faq({ data }: { data: BlockProps["faq"] }) {
 
                 <p
                   className="pb-6 text-base leading-relaxed"
-                  style={{ color: "var(--color-muted)", fontFamily: "var(--font-body)" }}
+                  style={{ color: "var(--color-muted-foreground)", fontFamily: "var(--font-body)" }}
                 >
                   {item.answer}
                 </p>
