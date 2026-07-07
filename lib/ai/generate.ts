@@ -169,11 +169,15 @@ function assemble(raw: BlockInstance[], facts: FloristFacts): StoredBlock[] {
   return ordered.map((b) => groundAndPlace(b, facts, seen));
 }
 
-/** True unless the block is an image-only block left with no usable image URL. */
+/**
+ * Whether an image-only block may be kept. There is NO trusted image source
+ * until photo upload (Phase 4): the model would otherwise invent stock URLs,
+ * which §4.8 forbids (never fabricate imagery — broken/generic images kill
+ * trust). So drop gallery/switchback for now; composition still varies via the
+ * text blocks. These section types re-activate once real photos exist.
+ */
 function hasUsableImages(b: BlockInstance): boolean {
-  if (b.type === "gallery") return b.props.images.some((i) => i.url.trim().length > 0);
-  if (b.type === "switchback") return b.props.items.some((i) => i.imageUrl.trim().length > 0);
-  return true;
+  return b.type !== "gallery" && b.type !== "switchback";
 }
 
 function computePlacement(type: BlockType, seen: Partial<Record<BlockType, number>>): BlockPlacement {
@@ -199,6 +203,11 @@ function groundAndPlace(
   seen: Partial<Record<BlockType, number>>,
 ): StoredBlock {
   const placement = computePlacement(b.type, seen);
+
+  // Strip any hero background image the model invented (no trusted source yet).
+  if (b.type === "hero" && b.props.imageUrl) {
+    return { ...b, props: { ...b.props, imageUrl: undefined }, ...placement };
+  }
 
   // Grounding (§4.4): the contact facts are known — force them verbatim so a
   // reworded/hallucinated phone or address can never reach the published site.

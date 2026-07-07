@@ -1,5 +1,6 @@
 import "server-only";
 import { getServiceClient } from "@/lib/supabase/server";
+import { revalidateTenant } from "@/lib/cache";
 import { generateSite } from "@/lib/ai/generate";
 import type { FloristFacts } from "@/lib/verticals/florist";
 
@@ -65,6 +66,10 @@ export async function generateAndPublish(
   );
 
   if (pErr) throw new Error(`page upsert failed: ${pErr.message}`);
+
+  // §5.5 / §9.1 — purge the tenant cache so the new content is served, not a
+  // stale render.
+  if (publish) await revalidateTenant(host);
 
   return { host, themePresetId: site.themePresetId, composition: site.blocks.map((b) => b.type) };
 }
