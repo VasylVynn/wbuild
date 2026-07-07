@@ -74,6 +74,9 @@ export async function getTenantByHost(host: string): Promise<Tenant | null> {
   const sb = getServiceClient();
   const { data, error } = await sb.from("tenants").select("*").eq("host", host).maybeSingle();
   if (error || !data) return null;
+  // Kill-switch (§11): a suspended tenant must NOT serve publicly. (Cached
+  // pages also need a purge on suspend — see revalidateTenant.)
+  if ((data as TenantRow).status === "suspended") return null;
   return mapTenant(data as TenantRow);
 }
 

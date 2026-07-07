@@ -21,6 +21,12 @@ export default function Dashboard() {
         >
           Мої сайти
         </Link>
+        <Link
+          href="/leads"
+          className="inline-block rounded-full border border-neutral-300 px-8 py-4 text-lg font-medium text-neutral-800 transition hover:bg-neutral-100"
+        >
+          Заявки
+        </Link>
       </div>
     </main>
   );

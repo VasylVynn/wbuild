@@ -9,6 +9,7 @@ import Stats from "@/components/blocks/Stats";
 import Testimonials from "@/components/blocks/Testimonials";
 import Faq from "@/components/blocks/Faq";
 import Cta from "@/components/blocks/Cta";
+import LeadForm from "@/components/blocks/LeadForm";
 import Contacts from "@/components/blocks/Contacts";
 
 /**
@@ -29,5 +30,6 @@ export const blockRegistry: {
   testimonials: Testimonials,
   faq: Faq,
   cta: Cta,
+  lead_form: LeadForm,
   contacts: Contacts,
 };

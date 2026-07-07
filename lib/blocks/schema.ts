@@ -135,6 +135,17 @@ export const faqSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// lead_form — the ONLY block with a server-side submit handler (§5.6). It is
+// force-injected into every generated site (never offered to the model) and
+// posts to /api/leads, which pushes the lead to the owner's Telegram.
+// ---------------------------------------------------------------------------
+export const leadFormSchema = z.object({
+  title: z.string().optional(),
+  subtitle: z.string().optional(),
+  buttonLabel: z.string().optional(),
+});
+
+// ---------------------------------------------------------------------------
 // Registry of prop schemas, keyed by block type.
 // ---------------------------------------------------------------------------
 export const blockSchemas = {
@@ -147,6 +158,7 @@ export const blockSchemas = {
   testimonials: testimonialsSchema,
   faq: faqSchema,
   cta: ctaSchema,
+  lead_form: leadFormSchema,
   contacts: contactsSchema,
 } as const;
 
@@ -176,6 +188,7 @@ export const blockInstanceSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("testimonials"), props: testimonialsSchema }),
   z.object({ type: z.literal("faq"), props: faqSchema }),
   z.object({ type: z.literal("cta"), props: ctaSchema }),
+  z.object({ type: z.literal("lead_form"), props: leadFormSchema }),
   z.object({ type: z.literal("contacts"), props: contactsSchema }),
 ]);
 export type BlockInstance = z.infer<typeof blockInstanceSchema>;
@@ -237,5 +250,6 @@ export const factPaths: Record<BlockType, string[]> = {
   testimonials: ["items[].quote", "items[].author", "items[].role"],
   faq: [], // creative — kept grounded by prompt
   cta: [], // creative marketing copy
+  lead_form: [], // labels only; submitted data goes to /api/leads, not props
   contacts: ["phone", "address", "hours", "email"],
 };

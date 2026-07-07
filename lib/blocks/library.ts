@@ -23,6 +23,12 @@ export interface BlockLibraryEntry {
   inNav: boolean;
   /** Nav label used when inNav (Ukrainian). */
   navLabel?: string;
+  /**
+   * Force-injected by code into every page — NEVER offered to the model
+   * (carries server-side wiring; presence is an invariant, not a creative
+   * choice — §4.2/§5.6).
+   */
+  autoInjected?: boolean;
 }
 
 export const blockLibrary: Record<BlockType, BlockLibraryEntry> = {
@@ -100,6 +106,16 @@ export const blockLibrary: Record<BlockType, BlockLibraryEntry> = {
     role: "middle",
     maxPerPage: 1,
     inNav: false,
+  },
+  lead_form: {
+    label: "Форма заявки",
+    description:
+      "Проста форма «Залишити заявку» (ім'я, телефон, повідомлення) — заявка падає власнику в Telegram. Додається автоматично на кожен сайт перед контактами.",
+    role: "middle",
+    maxPerPage: 1,
+    inNav: true,
+    navLabel: "Заявка",
+    autoInjected: true,
   },
   contacts: {
     label: "Контакти",

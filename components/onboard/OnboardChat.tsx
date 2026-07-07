@@ -2,8 +2,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { ChatMsg } from "@/lib/ai/onboard";
-import type { FloristFacts } from "@/lib/verticals/florist";
 import { onboardAction, finalizeAction } from "@/app/app/new/actions";
+import {
+  startConversation,
+  saveTurn,
+  loadConversation,
+} from "@/app/app/new/persist-actions";
+import type { FloristFacts } from "@/lib/verticals/florist";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,11 +59,29 @@ export function OnboardChat() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Holds the persisted conversation id after first user send; null = not yet created
+  const convIdRef = useRef<string | null>(null);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typing]);
+
+  // On mount: resume a previously persisted conversation from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem("vitryna_conv_id");
+    if (!stored) return;
+
+    loadConversation(stored).then((data) => {
+      // Only restore when there is actual back-and-forth (>1 means user spoke)
+      if (!data || data.messages.length <= 1) return;
+      convIdRef.current = stored;
+      setMessages(data.messages);
+      setFacts(data.facts as Partial<FloristFacts>);
+      setVerticalId(data.verticalId);
+      setReady(data.ready);
+    });
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Chat handlers
@@ -75,13 +98,34 @@ export function OnboardChat() {
     setLoading(true);
     setTyping(true);
 
+    // Lazily create the DB row on the first user send (avoids empty rows)
+    if (convIdRef.current === null) {
+      const started = await startConversation();
+      if (started) {
+        convIdRef.current = started.conversationId;
+        localStorage.setItem("vitryna_conv_id", started.conversationId);
+      }
+    }
+
     try {
       const result = await onboardAction(nextMessages, facts, verticalId);
       const assistantMsg: ChatMsg = { role: "assistant", content: result.message };
-      setMessages((prev) => [...prev, assistantMsg]);
+      const finalMessages = [...nextMessages, assistantMsg];
+      setMessages(finalMessages);
       setFacts(result.facts);
       setReady(result.ready);
       setVerticalId(result.verticalId);
+
+      // Persist turn fire-and-forget — never blocks the UI
+      if (convIdRef.current) {
+        void saveTurn(
+          convIdRef.current,
+          finalMessages,
+          result.facts,
+          result.verticalId,
+          result.ready,
+        );
+      }
     } finally {
       setLoading(false);
       setTyping(false);
@@ -153,6 +197,8 @@ export function OnboardChat() {
       if (result.ok) {
         setSiteUrl(result.url);
         setPhase("done");
+        // Conversation is complete — clear localStorage so next visit starts fresh
+        localStorage.removeItem("vitryna_conv_id");
       } else {
         setErrorMsg(result.error);
         setPhase("error");

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { getVertical } from "@/lib/verticals/registry";
 import { ROOT_DOMAIN } from "@/lib/config";
+import TelegramConnect from "@/components/dashboard/TelegramConnect";
 
 // Always show the current list — new sites appear immediately.
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ interface SiteRow {
   vertical: string;
   brand: { businessName?: string } | null;
   created_at: string;
+  telegram_chat_id: string | null;
 }
 
 async function listSites(): Promise<SiteRow[]> {
@@ -20,7 +22,7 @@ async function listSites(): Promise<SiteRow[]> {
   const sb = getServiceClient();
   const { data, error } = await sb
     .from("tenants")
-    .select("id, host, status, vertical, brand, created_at")
+    .select("id, host, status, vertical, brand, created_at, telegram_chat_id")
     .order("created_at", { ascending: false });
   if (error || !data) return [];
   return (data as SiteRow[]).filter((s) => !!s.host);
@@ -74,7 +76,7 @@ export default async function SitesPage() {
             return (
               <li
                 key={s.id}
-                className="flex items-center justify-between gap-4 rounded-2xl border border-neutral-200 bg-white px-5 py-4"
+                className="flex items-start justify-between gap-4 rounded-2xl border border-neutral-200 bg-white px-5 py-4"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -87,14 +89,28 @@ export default async function SitesPage() {
                     {s.host} · {getVertical(s.vertical).label}
                   </div>
                 </div>
-                <a
-                  href={urlFor(s.host!)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-100"
-                >
-                  Відкрити ↗
-                </a>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/edit/${encodeURIComponent(s.host!)}`}
+                      className="rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-100"
+                    >
+                      Редагувати
+                    </Link>
+                    <a
+                      href={urlFor(s.host!)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-100"
+                    >
+                      Відкрити ↗
+                    </a>
+                  </div>
+                  <TelegramConnect
+                    tenantId={s.id}
+                    connected={!!s.telegram_chat_id}
+                  />
+                </div>
               </li>
             );
           })}

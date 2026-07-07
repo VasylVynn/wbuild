@@ -38,6 +38,8 @@ export interface GeneratedSite {
 
 function buildLibraryDoc(): string {
   return (Object.keys(blockLibrary) as BlockType[])
+    // autoInjected blocks (lead_form) are added by code, never offered to the model.
+    .filter((t) => !blockLibrary[t].autoInjected)
     .map((t) => {
       const e = blockLibrary[t];
       return `- ${t} (${e.label}; роль: ${e.role}; макс ${e.maxPerPage}× на сторінку): ${e.description}`;
@@ -150,7 +152,7 @@ function assemble(raw: BlockInstance[], facts: BusinessFacts): StoredBlock[] {
 
   const perType: Partial<Record<BlockType, number>> = {};
   const middle = raw
-    .filter((b) => b.type !== "hero" && b.type !== "contacts")
+    .filter((b) => b.type !== "hero" && b.type !== "contacts" && b.type !== "lead_form")
     // Drop image-only blocks: no trusted photo source until upload (Phase 4);
     // the model would otherwise invent URLs (§4.8).
     .filter(hasUsableImages)
@@ -161,9 +163,22 @@ function assemble(raw: BlockInstance[], facts: BusinessFacts): StoredBlock[] {
     })
     .slice(0, COMPOSITION_RULES.maxMiddle);
 
+  // The lead funnel is the product's value core (§5.6): force-inject the
+  // lead_form on EVERY site, right before the contacts closer. Presence is an
+  // invariant enforced by code, never a model choice.
+  const leadForm: BlockInstance = {
+    type: "lead_form",
+    props: {
+      title: "Залишити заявку",
+      subtitle: "Заповніть форму — і ми звʼяжемось з вами найближчим часом.",
+      buttonLabel: "Надіслати заявку",
+    },
+  };
+
   const ordered: BlockInstance[] = [
     ...(hero ? [hero] : []),
     ...middle,
+    leadForm,
     ...(contacts ? [contacts] : []),
   ];
 
@@ -180,6 +195,9 @@ function computePlacement(type: BlockType, seen: Partial<Record<BlockType, numbe
   const lib = blockLibrary[type];
   if (type === "contacts") {
     return { anchor: "#contacts", navLabel: lib.navLabel, showInNav: true, hidden: false };
+  }
+  if (type === "lead_form") {
+    return { anchor: "#lead", navLabel: lib.navLabel, showInNav: true, hidden: false };
   }
   if (lib.role === "middle" && lib.inNav) {
     const n = (seen[type] = (seen[type] ?? 0) + 1);
