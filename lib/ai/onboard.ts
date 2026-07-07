@@ -9,40 +9,40 @@ import { validateFacts } from "@/lib/onboard/validate";
 
 /**
  * Onboarding agent (brief §4.9 + owner feedback). The chat is only the
- * interface; the source of truth is a structured facts object. Beyond
- * slot-filling, the agent is a DOMAIN ADVISOR: it classifies the vertical from
- * the conversation, uses that vertical's guidance to proactively (and simply)
- * suggest what belongs on the site, asks niche-specific clarifying questions,
- * and VALIDATES facts (deterministic validators emit issues → one gentle
- * confirming question per turn). Generation runs from the CONFIRMED facts.
+ * interface; the source of truth is a structured facts object. The agent is a
+ * DOMAIN ADVISOR: classifies the vertical, proactively suggests what belongs on
+ * the site, asks niche-specific questions, and validates facts.
+ *
+ * IMPORTANT: the user-facing message is normal assistant TEXT; the tool carries
+ * ONLY structured data. Putting the message inside the tool's JSON caused
+ * escaping artifacts (literal "\n") and mid-character truncation in Cyrillic
+ * tool arguments — text output avoids both.
  */
 
 export type ChatMsg = { role: "user" | "assistant"; content: string };
 
 const factsPatchSchema = businessFactsSchema.partial();
 
-const turnOutputSchema = z.object({
+const saveFactsSchema = z.object({
   verticalId: z.enum(VERTICAL_IDS as [string, ...string[]]),
   factsPatch: factsPatchSchema,
-  message: z.string(),
   status: z.enum(["collecting", "ready"]),
 });
 
-const respondTool = {
-  name: "respond",
-  description: "Оновити зібрані факти, визначити тип бізнесу й відповісти користувачу.",
+const saveFactsTool = {
+  name: "save_facts",
+  description: "Зберегти структуровані дані з розмови: тип бізнесу, нові факти й статус готовності.",
   input_schema: z.toJSONSchema(
     z.object({
       verticalId: z
         .enum(VERTICAL_IDS as [string, ...string[]])
-        .describe("Твоя оцінка типу бізнесу зі списку; generic, якщо не підходить жоден."),
+        .describe("Тип бізнесу зі списку; generic, якщо не підходить жоден."),
       factsPatch: factsPatchSchema.describe(
-        "Факти з ОСТАННЬОГО повідомлення користувача — лише нові/змінені поля; масиви цілком.",
+        "Лише НОВІ або змінені поля з останнього повідомлення користувача; масиви цілком.",
       ),
-      message: z.string().describe("Тепла коротка відповідь українською — підтверджує/радить/питає далі."),
-      status: z.enum(["collecting", "ready"]).describe(
-        "ready — лише коли зібрано достатньо для ЯКІСНОГО сайту, АБО користувач попросив 'просто згенеруй'.",
-      ),
+      status: z
+        .enum(["collecting", "ready"])
+        .describe("ready — коли зібрано достатньо для якісного сайту або користувач попросив 'просто згенеруй'."),
     }),
   ),
 } as unknown as Anthropic.Tool;
@@ -73,14 +73,22 @@ function buildSystem(vertical: VerticalConfig, issueNotes: string[]): string {
 Факти, які варто зібрати (це проста розмова, НЕ анкета):
 ${fieldList(vertical)}
 
-ПРАВИЛА:
+ЯК ВІДПОВІДАТИ:
+- Пиши користувачу звичайним теплим текстом українською. Списки — звичайними переносами рядків. НЕ пиши JSON і НЕ екрануй символи.
+- ПІСЛЯ тексту ЗАВЖДИ виклич інструмент save_facts зі структурованими даними (verticalId, factsPatch, status).
+
+ПРАВИЛА РОЗМОВИ:
 - Питай БАТЧАМИ, тривіальне групуй ("назва, місто і телефон — одним повідомленням").
-- З кожного повідомлення витягуй факти у factsPatch (лише нові/змінені поля). last-wins при виправленні.
+- З кожного повідомлення витягуй у factsPatch лише НОВІ/змінені поля. last-wins при виправленні.
 - Ти БІЗНЕС-АНАЛІТИК + ПОРАДНИК: проактивно пропонуй, що варто додати (послуги з орієнтовними цінами, години, як замовити/звернутися, відгуки). Якщо людина не знає — запропонуй конкретне й типове для її ніші, коротко.
 - Уточнюй нішеві деталі (напр. для юриста — спеціалізацію) перш ніж радити далі.
-- НЕ вигадуй фактів за користувача. Порожній factsPatch — нормально. verticalId — твоя оцінка типу бізнесу.
-- status "ready" — лише коли зібрано достатньо для ЯКІСНОГО сайту (не просто 3 поля), АБО користувач явно каже "просто згенеруй". Не зупиняйся на мінімумі, але й не допитуй нескінченно.
-- ЩОРАЗУ викликай інструмент respond.${issuesBlock}`;
+- НЕ вигадуй фактів за користувача.
+- status "ready" — лише коли зібрано достатньо для ЯКІСНОГО сайту, АБО користувач явно каже "просто згенеруй".${issuesBlock}`;
+}
+
+function sanitize(msg: string): string {
+  // Defensive: drop broken-UTF8 replacement chars; convert any literal "\n".
+  return msg.replace(/�/g, "").replace(/\\n/g, "\n").trim();
 }
 
 export async function onboardTurn(
@@ -91,12 +99,8 @@ export async function onboardTurn(
   const client = getAnthropic();
 
   // Vertical guidance comes from the MODEL's own classification, threaded from
-  // the previous turn (generic until it decides). Avoids naive keyword misfires
-  // like matching "квіт" inside "не квіткарня".
+  // the previous turn (generic until it decides).
   const vertical = getVertical(currentVerticalId);
-
-  // Deterministic validation of already-collected facts → issues the agent
-  // must confirm (grounding protects against model fabrication, not user garbage).
   const issues = validateFacts(currentFacts, vertical);
 
   const all: Anthropic.MessageParam[] = history.map((m) => ({ role: m.role, content: m.content }));
@@ -113,26 +117,33 @@ export async function onboardTurn(
 
   const res = await client.messages.create({
     model: CHAT_MODEL,
-    max_tokens: 2000,
+    max_tokens: 3000,
     system: `${buildSystem(vertical, issues.map((i) => i.note))}\n\nПоточні зібрані факти (JSON): ${JSON.stringify(currentFacts)}`,
-    tools: [respondTool],
-    tool_choice: { type: "tool", name: "respond" },
+    tools: [saveFactsTool],
+    tool_choice: { type: "auto" },
     messages,
   });
 
-  const tu = res.content.find((b) => b.type === "tool_use");
-  if (!tu || tu.type !== "tool_use") {
-    return { message: "Вибачте, повторіть, будь ласка?", facts: currentFacts, verticalId: vertical.id, ready: false };
-  }
-  const parsed = turnOutputSchema.safeParse(tu.input);
-  if (!parsed.success) {
-    return { message: "Розкажіть ще трохи про свій бізнес?", facts: currentFacts, verticalId: vertical.id, ready: false };
+  const textMsg = res.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+
+  let facts: Partial<BusinessFacts> = currentFacts;
+  let verticalId = vertical.id;
+  let ready = false;
+
+  const toolUse = res.content.find((b) => b.type === "tool_use");
+  if (toolUse && toolUse.type === "tool_use") {
+    const parsed = saveFactsSchema.safeParse(toolUse.input);
+    if (parsed.success) {
+      facts = { ...currentFacts, ...parsed.data.factsPatch };
+      verticalId = VERTICAL_IDS.includes(parsed.data.verticalId) ? parsed.data.verticalId : vertical.id;
+      ready = parsed.data.status === "ready";
+    }
   }
 
-  const merged: Partial<BusinessFacts> = { ...currentFacts, ...parsed.data.factsPatch };
-  const verticalId = VERTICAL_IDS.includes(parsed.data.verticalId) ? parsed.data.verticalId : vertical.id;
-  // ready is the model's decision ONLY (fixes the old `|| requiredFilled` bug
-  // that auto-stopped collection the instant 3 fields were present). The
-  // confirmation form still enforces required fields before generation.
-  return { message: parsed.data.message, facts: merged, verticalId, ready: parsed.data.status === "ready" };
+  const message = sanitize(textMsg) || "Розкажіть, будь ласка, ще трохи про ваш бізнес?";
+  return { message, facts, verticalId, ready };
 }
