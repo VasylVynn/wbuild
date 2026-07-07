@@ -19,9 +19,10 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     history?: ChatMsg[];
     facts?: Partial<FloristFacts>;
+    verticalId?: string;
   };
   try {
-    const result = await onboardTurn(body.history ?? [], body.facts ?? {});
+    const result = await onboardTurn(body.history ?? [], body.facts ?? {}, body.verticalId);
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json(

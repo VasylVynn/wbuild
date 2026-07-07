@@ -11,8 +11,9 @@ import type { BusinessFacts } from "@/lib/verticals/schema";
 export async function onboardAction(
   history: ChatMsg[],
   facts: Partial<BusinessFacts>,
+  verticalId?: string,
 ): Promise<OnboardTurnResult> {
-  return onboardTurn(history, facts);
+  return onboardTurn(history, facts, verticalId);
 }
 
 export type FinalizeResult = { ok: true; host: string; url: string } | { ok: false; error: string };

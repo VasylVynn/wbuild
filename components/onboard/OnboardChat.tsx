@@ -16,7 +16,7 @@ type ServiceRow = { name: string; price: string };
 const GREETING: ChatMsg = {
   role: "assistant",
   content:
-    "Вітаю! 🌸 Я допоможу створити сайт для вашого квіткового бізнесу. Розкажіть трохи — як називається ваш магазин, у якому місті, і який телефон для звʼязку?",
+    "Вітаю! 👋 Я допоможу створити сайт для вашого бізнесу. Розкажіть трохи — що це за бізнес, у якому місті, і який телефон для звʼязку?",
 };
 
 // ---------------------------------------------------------------------------
@@ -28,6 +28,7 @@ export function OnboardChat() {
   const [messages, setMessages] = useState<ChatMsg[]>([GREETING]);
   const [facts, setFacts] = useState<Partial<FloristFacts>>({});
   const [ready, setReady] = useState(false);
+  const [verticalId, setVerticalId] = useState<string | undefined>(undefined);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
 
@@ -75,11 +76,12 @@ export function OnboardChat() {
     setTyping(true);
 
     try {
-      const result = await onboardAction(nextMessages, facts);
+      const result = await onboardAction(nextMessages, facts, verticalId);
       const assistantMsg: ChatMsg = { role: "assistant", content: result.message };
       setMessages((prev) => [...prev, assistantMsg]);
       setFacts(result.facts);
       setReady(result.ready);
+      setVerticalId(result.verticalId);
     } finally {
       setLoading(false);
       setTyping(false);
@@ -147,7 +149,7 @@ export function OnboardChat() {
     setPhase("generating");
 
     try {
-      const result = await finalizeAction(fullFacts);
+      const result = await finalizeAction(fullFacts, verticalId);
       if (result.ok) {
         setSiteUrl(result.url);
         setPhase("done");
@@ -178,7 +180,7 @@ export function OnboardChat() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-20 flex flex-col items-center gap-6 text-center">
         <div className="text-6xl" style={{ animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite" }}>
-          🌸
+          ✨
         </div>
         <h2 className="text-2xl font-semibold text-neutral-800">Генеруємо ваш сайт…</h2>
         <p className="text-neutral-500 text-lg">Це може зайняти до 30 секунд</p>
@@ -245,7 +247,7 @@ export function OnboardChat() {
               type="text"
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
-              placeholder="Квіти від Марії"
+              placeholder="Назва вашого бізнесу"
               className={inputCls(!!formErrors.businessName)}
             />
           </FormField>

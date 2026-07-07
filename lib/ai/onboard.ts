@@ -3,7 +3,7 @@ import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, CHAT_MODEL } from "./anthropic";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
-import { getVertical, classifyVertical, VERTICAL_IDS } from "@/lib/verticals/registry";
+import { getVertical, VERTICAL_IDS } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
 import { validateFacts } from "@/lib/onboard/validate";
 
@@ -86,11 +86,14 @@ ${fieldList(vertical)}
 export async function onboardTurn(
   history: ChatMsg[],
   currentFacts: Partial<BusinessFacts>,
+  currentVerticalId?: string,
 ): Promise<OnboardTurnResult> {
   const client = getAnthropic();
 
-  // Vertical guidance for THIS turn is derived from the conversation so far.
-  const vertical = getVertical(classifyVertical(history.map((m) => m.content).join(" ")));
+  // Vertical guidance comes from the MODEL's own classification, threaded from
+  // the previous turn (generic until it decides). Avoids naive keyword misfires
+  // like matching "квіт" inside "не квіткарня".
+  const vertical = getVertical(currentVerticalId);
 
   // Deterministic validation of already-collected facts → issues the agent
   // must confirm (grounding protects against model fabrication, not user garbage).
