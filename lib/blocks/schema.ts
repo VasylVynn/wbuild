@@ -79,13 +79,74 @@ export const contactsSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// richText — heading + body copy ("about", intro, philosophy)
+// ---------------------------------------------------------------------------
+export const richTextSchema = z.object({
+  title: z.string().optional(),
+  body: z.string().min(1),
+  align: z.enum(["left", "center"]).optional(),
+});
+
+// ---------------------------------------------------------------------------
+// switchback — alternating image/text rows (zig-zag) for storytelling
+// ---------------------------------------------------------------------------
+export const switchbackItemSchema = z.object({
+  heading: z.string().min(1),
+  body: z.string().min(1),
+  imageUrl: assetUrl,
+});
+export const switchbackSchema = z.object({
+  title: z.string().optional(),
+  items: z.array(switchbackItemSchema).min(1),
+});
+
+// ---------------------------------------------------------------------------
+// stats — short number/label accents (ONLY when grounded; never invent numbers)
+// ---------------------------------------------------------------------------
+export const statItemSchema = z.object({
+  value: z.string().min(1),
+  label: z.string().min(1),
+});
+export const statsSchema = z.object({
+  title: z.string().optional(),
+  items: z.array(statItemSchema).min(1),
+});
+
+// ---------------------------------------------------------------------------
+// cta — a call-to-action band (usually links to #contacts)
+// ---------------------------------------------------------------------------
+export const ctaSchema = z.object({
+  title: z.string().min(1),
+  subtitle: z.string().optional(),
+  buttonLabel: z.string().min(1),
+  buttonHref: z.string().optional(),
+});
+
+// ---------------------------------------------------------------------------
+// faq — question / answer list
+// ---------------------------------------------------------------------------
+export const faqItemSchema = z.object({
+  question: z.string().min(1),
+  answer: z.string().min(1),
+});
+export const faqSchema = z.object({
+  title: z.string().optional(),
+  items: z.array(faqItemSchema).min(1),
+});
+
+// ---------------------------------------------------------------------------
 // Registry of prop schemas, keyed by block type.
 // ---------------------------------------------------------------------------
 export const blockSchemas = {
   hero: heroSchema,
+  richText: richTextSchema,
+  switchback: switchbackSchema,
   services: servicesSchema,
   gallery: gallerySchema,
+  stats: statsSchema,
   testimonials: testimonialsSchema,
+  faq: faqSchema,
+  cta: ctaSchema,
   contacts: contactsSchema,
 } as const;
 
@@ -107,9 +168,14 @@ export type BlockProps = {
 // ---------------------------------------------------------------------------
 export const blockInstanceSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("hero"), props: heroSchema }),
+  z.object({ type: z.literal("richText"), props: richTextSchema }),
+  z.object({ type: z.literal("switchback"), props: switchbackSchema }),
   z.object({ type: z.literal("services"), props: servicesSchema }),
   z.object({ type: z.literal("gallery"), props: gallerySchema }),
+  z.object({ type: z.literal("stats"), props: statsSchema }),
   z.object({ type: z.literal("testimonials"), props: testimonialsSchema }),
+  z.object({ type: z.literal("faq"), props: faqSchema }),
+  z.object({ type: z.literal("cta"), props: ctaSchema }),
   z.object({ type: z.literal("contacts"), props: contactsSchema }),
 ]);
 export type BlockInstance = z.infer<typeof blockInstanceSchema>;
@@ -163,8 +229,13 @@ export function parseBlockProps(
 // ---------------------------------------------------------------------------
 export const factPaths: Record<BlockType, string[]> = {
   hero: [], // hero copy is all creative for MVP
+  richText: [], // creative prose
+  switchback: [], // creative storytelling + assets
   services: ["items[].name", "items[].price"],
   gallery: [], // images are assets, not text facts
+  stats: [], // creative — but the prompt forbids inventing numbers
   testimonials: ["items[].quote", "items[].author", "items[].role"],
+  faq: [], // creative — kept grounded by prompt
+  cta: [], // creative marketing copy
   contacts: ["phone", "address", "hours", "email"],
 };
