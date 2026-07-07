@@ -2,108 +2,116 @@ import "server-only";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, CHAT_MODEL } from "./anthropic";
-import {
-  floristFactsSchema,
-  floristRequiredFields,
-  floristFieldMeta,
-  type FloristFacts,
-} from "@/lib/verticals/florist";
+import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
+import { getVertical, classifyVertical, VERTICAL_IDS } from "@/lib/verticals/registry";
+import type { VerticalConfig } from "@/lib/verticals/types";
+import { validateFacts } from "@/lib/onboard/validate";
 
 /**
- * Onboarding slot-filling agent (brief §4.9). The chat is ONLY the interface;
- * the source of truth is a structured facts object per the vertical field-schema.
- * Each turn the model extracts facts from the latest user message, replies
- * warmly (batched questions, not 15 one-by-one), and signals readiness. "Enough
- * info" = required fields filled (computed in code, not trusted to the model).
- * Generation runs from the CONFIRMED facts, never the transcript.
+ * Onboarding agent (brief §4.9 + owner feedback). The chat is only the
+ * interface; the source of truth is a structured facts object. Beyond
+ * slot-filling, the agent is a DOMAIN ADVISOR: it classifies the vertical from
+ * the conversation, uses that vertical's guidance to proactively (and simply)
+ * suggest what belongs on the site, asks niche-specific clarifying questions,
+ * and VALIDATES facts (deterministic validators emit issues → one gentle
+ * confirming question per turn). Generation runs from the CONFIRMED facts.
  */
 
 export type ChatMsg = { role: "user" | "assistant"; content: string };
 
-const factsPatchSchema = floristFactsSchema.partial();
-
-const respondTool = {
-  name: "respond",
-  description: "Оновити зібрані факти й відповісти користувачу однією реплікою.",
-  input_schema: z.toJSONSchema(
-    z.object({
-      factsPatch: factsPatchSchema.describe(
-        "Факти, витягнуті З ОСТАННЬОГО повідомлення користувача — лише нові або змінені поля; масиви передавай цілком.",
-      ),
-      message: z
-        .string()
-        .describe("Тепла коротка відповідь українською: підтвердь почуте й запитай наступне батчем."),
-      status: z
-        .enum(["collecting", "ready"])
-        .describe("ready — коли зібрано достатньо або користувач попросив 'просто згенеруй'."),
-    }),
-  ),
-} as unknown as Anthropic.Tool;
+const factsPatchSchema = businessFactsSchema.partial();
 
 const turnOutputSchema = z.object({
+  verticalId: z.enum(VERTICAL_IDS as [string, ...string[]]),
   factsPatch: factsPatchSchema,
   message: z.string(),
   status: z.enum(["collecting", "ready"]),
 });
 
-export function requiredFilled(facts: Partial<FloristFacts>): boolean {
-  return floristRequiredFields.every((f) => {
-    const v = facts[f];
-    return v !== undefined && v !== null && String(v).trim().length > 0;
-  });
-}
-
-function fieldList(): string {
-  return (Object.keys(floristFieldMeta) as (keyof FloristFacts)[])
-    .map((k) => {
-      const meta = floristFieldMeta[k];
-      const req = floristRequiredFields.includes(k) ? " (обов'язкове)" : "";
-      return `- ${String(k)}: ${meta.label}${req}`;
-    })
-    .join("\n");
-}
-
-const SYSTEM = `Ти — привітний помічник, який допомагає власнику квіткового бізнесу зробити сайт. Спілкуйся тепло, просто, живою українською — як з людиною, що не любить технічних форм.
-
-ТВОЯ МЕТА: у розмові зібрати факти про бізнес (нижче), щоб згенерувати сайт. Це НЕ анкета — це розмова.
-
-ПОЛЯ, які треба зібрати:
-${fieldList()}
-
-ПРАВИЛА:
-- Питай БАТЧАМИ, не по одному питанню × 15. Тривіальне групуй ("назва, місто і телефон — одним повідомленням").
-- З КОЖНОГО повідомлення користувача витягуй факти у factsPatch (лише нові/змінені поля).
-- last-wins: якщо користувач виправляє ("ой, телефон інший") — онови це поле.
-- Коли обов'язкові поля (назва, місто, телефон) зібрані — став status "ready", але привітно запропонуй додати послуги, години, відгуки, якщо він хоче.
-- Ескейп-хетч: якщо користувач каже "просто згенеруй" / "давай вже" — став status "ready" одразу, з тим що є.
-- НЕ вигадуй фактів за користувача. Порожній factsPatch — нормально.
-- ЩОРАЗУ викликай інструмент respond.`;
+const respondTool = {
+  name: "respond",
+  description: "Оновити зібрані факти, визначити тип бізнесу й відповісти користувачу.",
+  input_schema: z.toJSONSchema(
+    z.object({
+      verticalId: z
+        .enum(VERTICAL_IDS as [string, ...string[]])
+        .describe("Твоя оцінка типу бізнесу зі списку; generic, якщо не підходить жоден."),
+      factsPatch: factsPatchSchema.describe(
+        "Факти з ОСТАННЬОГО повідомлення користувача — лише нові/змінені поля; масиви цілком.",
+      ),
+      message: z.string().describe("Тепла коротка відповідь українською — підтверджує/радить/питає далі."),
+      status: z.enum(["collecting", "ready"]).describe(
+        "ready — лише коли зібрано достатньо для ЯКІСНОГО сайту, АБО користувач попросив 'просто згенеруй'.",
+      ),
+    }),
+  ),
+} as unknown as Anthropic.Tool;
 
 export interface OnboardTurnResult {
   message: string;
-  facts: Partial<FloristFacts>;
+  facts: Partial<BusinessFacts>;
+  verticalId: string;
   ready: boolean;
+}
+
+function fieldList(v: VerticalConfig): string {
+  return Object.entries(v.fields)
+    .map(([k, m]) => `- ${k}: ${m?.label ?? k}${m?.required ? " (обов'язкове)" : ""}`)
+    .join("\n");
+}
+
+function buildSystem(vertical: VerticalConfig, issueNotes: string[]): string {
+  const issuesBlock = issueNotes.length
+    ? `\n\nПЕРЕВІР непевні дані (постав МАКСИМУМ ОДНЕ м'яке підтверджувальне питання за хід, природним відлунням, без жаргону):\n${issueNotes.map((n) => `- ${n}`).join("\n")}`
+    : "";
+
+  return `Ти — досвідчений консультант, що допомагає власнику бізнесу зробити сайт. Ти не просто збираєш дані — ти РАДИШ простою мовою, що корисно вказати на сайті саме для його ніші. Людина часто не знає, що писати — м'яко підказуй їй.
+
+Тип бізнесу (визначено з розмови): ${vertical.label} — ${vertical.personaHint}.
+Порада для цієї ніші: ${vertical.advisorGuidance}
+
+Факти, які варто зібрати (це проста розмова, НЕ анкета):
+${fieldList(vertical)}
+
+ПРАВИЛА:
+- Питай БАТЧАМИ, тривіальне групуй ("назва, місто і телефон — одним повідомленням").
+- З кожного повідомлення витягуй факти у factsPatch (лише нові/змінені поля). last-wins при виправленні.
+- Ти БІЗНЕС-АНАЛІТИК + ПОРАДНИК: проактивно пропонуй, що варто додати (послуги з орієнтовними цінами, години, як замовити/звернутися, відгуки). Якщо людина не знає — запропонуй конкретне й типове для її ніші, коротко.
+- Уточнюй нішеві деталі (напр. для юриста — спеціалізацію) перш ніж радити далі.
+- НЕ вигадуй фактів за користувача. Порожній factsPatch — нормально. verticalId — твоя оцінка типу бізнесу.
+- status "ready" — лише коли зібрано достатньо для ЯКІСНОГО сайту (не просто 3 поля), АБО користувач явно каже "просто згенеруй". Не зупиняйся на мінімумі, але й не допитуй нескінченно.
+- ЩОРАЗУ викликай інструмент respond.${issuesBlock}`;
 }
 
 export async function onboardTurn(
   history: ChatMsg[],
-  currentFacts: Partial<FloristFacts>,
+  currentFacts: Partial<BusinessFacts>,
 ): Promise<OnboardTurnResult> {
   const client = getAnthropic();
 
-  // Messages must start with a user turn — a UI greeting is assistant-first, so
-  // trim to the first user message.
+  // Vertical guidance for THIS turn is derived from the conversation so far.
+  const vertical = getVertical(classifyVertical(history.map((m) => m.content).join(" ")));
+
+  // Deterministic validation of already-collected facts → issues the agent
+  // must confirm (grounding protects against model fabrication, not user garbage).
+  const issues = validateFacts(currentFacts, vertical);
+
   const all: Anthropic.MessageParam[] = history.map((m) => ({ role: m.role, content: m.content }));
   const firstUser = all.findIndex((m) => m.role === "user");
   const messages = firstUser >= 0 ? all.slice(firstUser) : all;
   if (messages.length === 0) {
-    return { message: "Розкажіть трохи про ваш бізнес — як називається і в якому місті?", facts: currentFacts, ready: false };
+    return {
+      message: "Розкажіть трохи про ваш бізнес — що це за справа, у якому місті, і який телефон?",
+      facts: currentFacts,
+      verticalId: vertical.id,
+      ready: false,
+    };
   }
 
   const res = await client.messages.create({
     model: CHAT_MODEL,
     max_tokens: 2000,
-    system: `${SYSTEM}\n\nПоточні зібрані факти (JSON): ${JSON.stringify(currentFacts)}`,
+    system: `${buildSystem(vertical, issues.map((i) => i.note))}\n\nПоточні зібрані факти (JSON): ${JSON.stringify(currentFacts)}`,
     tools: [respondTool],
     tool_choice: { type: "tool", name: "respond" },
     messages,
@@ -111,14 +119,17 @@ export async function onboardTurn(
 
   const tu = res.content.find((b) => b.type === "tool_use");
   if (!tu || tu.type !== "tool_use") {
-    return { message: "Вибачте, повторіть, будь ласка?", facts: currentFacts, ready: requiredFilled(currentFacts) };
+    return { message: "Вибачте, повторіть, будь ласка?", facts: currentFacts, verticalId: vertical.id, ready: false };
   }
   const parsed = turnOutputSchema.safeParse(tu.input);
   if (!parsed.success) {
-    return { message: "Розкажіть ще трохи про свій бізнес?", facts: currentFacts, ready: requiredFilled(currentFacts) };
+    return { message: "Розкажіть ще трохи про свій бізнес?", facts: currentFacts, verticalId: vertical.id, ready: false };
   }
 
-  const merged: Partial<FloristFacts> = { ...currentFacts, ...parsed.data.factsPatch };
-  const ready = parsed.data.status === "ready" || requiredFilled(merged);
-  return { message: parsed.data.message, facts: merged, ready };
+  const merged: Partial<BusinessFacts> = { ...currentFacts, ...parsed.data.factsPatch };
+  const verticalId = VERTICAL_IDS.includes(parsed.data.verticalId) ? parsed.data.verticalId : vertical.id;
+  // ready is the model's decision ONLY (fixes the old `|| requiredFilled` bug
+  // that auto-stopped collection the instant 3 fields were present). The
+  // confirmation form still enforces required fields before generation.
+  return { message: parsed.data.message, facts: merged, verticalId, ready: parsed.data.status === "ready" };
 }

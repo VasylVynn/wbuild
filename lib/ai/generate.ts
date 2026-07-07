@@ -10,20 +10,18 @@ import {
   type StoredBlock,
 } from "@/lib/blocks/schema";
 import { blockLibrary, COMPOSITION_RULES } from "@/lib/blocks/library";
-import { THEME_PRESET_IDS, themePresets, resolveTheme } from "@/lib/theme/presets";
+import { themePresets, resolveTheme, THEME_PRESET_IDS } from "@/lib/theme/presets";
 import type { Theme } from "@/lib/theme/tokens";
-import type { FloristFacts } from "@/lib/verticals/florist";
+import { getVertical } from "@/lib/verticals/registry";
+import type { VerticalConfig } from "@/lib/verticals/types";
+import type { BusinessFacts } from "@/lib/verticals/schema";
 
 /**
- * Phase 2 — AI composition (brief §4.1–4.4, extended per owner decision to
- * compose from a block library instead of a fixed preset). The model returns a
- * structured object via TOOL USE (the brief's base mechanism, §4.3): a theme
- * choice + an ordered array of blocks picked from the registry. We validate the
- * tool arguments against blockInstanceSchema (Zod) and retry on mismatch — so
- * structure is composed, never hallucinated. Structured-outputs constrained
- * decoding is avoided here because a 10-variant union compiles to too large a
- * grammar. Composition rules, grounding, and nav placement are enforced in code
- * AFTER generation, not trusted to the model.
+ * Phase 2 — AI composition (brief §4.1–4.4), vertical-aware. The model composes
+ * a page from the block library via TOOL USE (structured-outputs strict mode
+ * rejects the 10-variant union — "grammar too large"). It picks a theme from the
+ * VERTICAL's allowed presets and gets the vertical's tone hint. Composition
+ * rules, grounding, and nav placement are enforced in code afterwards.
  */
 
 const generationSchema = z.object({
@@ -47,45 +45,47 @@ function buildLibraryDoc(): string {
     .join("\n");
 }
 
-function buildThemeDoc(): string {
-  return THEME_PRESET_IDS.map((id) => `- ${id}: ${themePresets[id].label} — ${themePresets[id].mood}`).join(
-    "\n",
-  );
+function buildThemeDoc(vertical: VerticalConfig): string {
+  return vertical.themePresetIds
+    .map((id) => `- ${id}: ${themePresets[id].label} — ${themePresets[id].mood}`)
+    .join("\n");
 }
 
-const SYSTEM = `Ти — досвідчений веб-дизайнер і копірайтер, що збирає односторінковий сайт українському локальному бізнесу (квіткарня).
-Ти НЕ пишеш HTML. Ти КОМПОНУЄШ сторінку з фіксованої бібліотеки блоків: обираєш, які блоки і в якому порядку використати, і заповнюєш їхній вміст. Виклич інструмент build_site з результатом.
+function buildSystem(vertical: VerticalConfig): string {
+  return `Ти — досвідчений веб-дизайнер і копірайтер, що збирає односторінковий сайт українському бізнесу: ${vertical.label} (${vertical.personaHint}).
+Тон і акценти: ${vertical.genHint}.
+Ти НЕ пишеш HTML. Ти КОМПОНУЄШ сторінку з фіксованої бібліотеки блоків: обираєш, які блоки і в якому порядку, і заповнюєш їхній вміст. Виклич інструмент build_site.
 
 ПРАВИЛА КОМПОЗИЦІЇ (обов'язкові):
 - Перший блок — завжди hero. Останній — завжди contacts.
-- Між ними — від ${COMPOSITION_RULES.minMiddle} до ${COMPOSITION_RULES.maxMiddle} блоків із бібліотеки; набір і порядок обираєш сам під конкретний бізнес.
+- Між ними — від ${COMPOSITION_RULES.minMiddle} до ${COMPOSITION_RULES.maxMiddle} блоків із бібліотеки; набір і порядок обираєш під конкретний бізнес.
 - Не використовуй жоден тип блоку частіше за його ліміт "макс ×".
 - Різні бізнеси мають отримувати РІЗНІ набори й порядок блоків — не роби однаковий шаблон.
 
-GROUNDING (критично для довіри клієнта):
-- Факти — назва, телефон, адреса, години роботи, ціни й назви послуг, тексти відгуків та їхні автори — копіюй ТОЧНО з наданих даних. НЕ вигадуй і не змінюй їх.
-- Маркетинговий текст (заголовки, слогани, описи секцій, заклики до дії) — пиши сам, тепло, живою українською.
-- НІКОЛИ не вигадуй числа (роки досвіду, кількість клієнтів) у блоці stats: додавай його лише якщо конкретне число реально є у фактах, інакше пропусти.
-- Для зображень використовуй ЛИШЕ надані URL; не вигадуй посилань на фото.
+GROUNDING (критично для довіри):
+- Факти — назва, телефон, адреса, години, ціни й назви послуг, відгуки — копіюй ТОЧНО з наданих даних. НЕ вигадуй і не змінюй їх.
+- Маркетинговий текст (заголовки, слогани, описи, заклики) — пиши сам, тепло, живою українською, доречно для ніші.
+- НІКОЛИ не вигадуй числа у stats — лише якщо є у фактах.
+- Не вигадуй посилань на зображення.
 
-ТЕМА: обери themePresetId, що найкраще пасує настрою бренду.`;
+ТЕМА: обери themePresetId ЛИШЕ зі списку доступних, що найкраще пасує бренду.`;
+}
 
-// Tool input schema, derived from the Zod schema (non-strict tool use — the
-// model uses it as guidance; we validate the arguments ourselves afterwards).
 const buildSiteTool = {
   name: "build_site",
   description: "Зібрати односторінковий сайт: обрати тему (themePresetId) і скомпонувати масив blocks.",
   input_schema: z.toJSONSchema(generationSchema),
 } as unknown as Anthropic.Tool;
 
-export async function generateSite(facts: FloristFacts): Promise<GeneratedSite> {
+export async function generateSite(facts: BusinessFacts, verticalId?: string): Promise<GeneratedSite> {
   const client = getAnthropic();
+  const vertical = getVertical(verticalId);
 
   const userPrompt = `Бібліотека блоків:
 ${buildLibraryDoc()}
 
-Доступні теми:
-${buildThemeDoc()}
+Доступні теми (обери лише з цих):
+${buildThemeDoc(vertical)}
 
 Факти бізнесу (JSON):
 ${JSON.stringify(facts, null, 2)}
@@ -108,7 +108,7 @@ ${JSON.stringify(facts, null, 2)}
     const res = await client.messages.create({
       model: GEN_MODEL,
       max_tokens: 16000,
-      system: SYSTEM,
+      system: buildSystem(vertical),
       tools: [buildSiteTool],
       tool_choice: { type: "tool", name: "build_site" },
       messages,
@@ -122,9 +122,13 @@ ${JSON.stringify(facts, null, 2)}
 
     const parsed = generationSchema.safeParse(toolUse.input);
     if (parsed.success) {
+      // Keep the model's theme only if it's allowed for this vertical.
+      const themePresetId = vertical.themePresetIds.includes(parsed.data.themePresetId)
+        ? parsed.data.themePresetId
+        : vertical.themePresetIds[0];
       return {
-        theme: resolveTheme(parsed.data.themePresetId),
-        themePresetId: parsed.data.themePresetId,
+        theme: resolveTheme(themePresetId),
+        themePresetId,
         blocks: assemble(parsed.data.blocks, facts),
       };
     }
@@ -140,17 +144,15 @@ ${JSON.stringify(facts, null, 2)}
 // ---------------------------------------------------------------------------
 // Post-generation: enforce composition, ground facts, project nav placement.
 // ---------------------------------------------------------------------------
-function assemble(raw: BlockInstance[], facts: FloristFacts): StoredBlock[] {
+function assemble(raw: BlockInstance[], facts: BusinessFacts): StoredBlock[] {
   const hero = raw.find((b) => b.type === "hero");
   const contacts = raw.find((b) => b.type === "contacts");
 
-  // Middle = everything else, capped by per-type maxPerPage and by maxMiddle.
   const perType: Partial<Record<BlockType, number>> = {};
   const middle = raw
     .filter((b) => b.type !== "hero" && b.type !== "contacts")
-    // Drop image-only blocks that ended up with no real images (facts had none;
-    // the model correctly refused to invent URLs — §4.8 — leaving them empty).
-    // Real photos arrive with upload (Phase 4); until then, no blank sections.
+    // Drop image-only blocks: no trusted photo source until upload (Phase 4);
+    // the model would otherwise invent URLs (§4.8).
     .filter(hasUsableImages)
     .filter((b) => {
       const used = (perType[b.type] ?? 0) + 1;
@@ -169,13 +171,7 @@ function assemble(raw: BlockInstance[], facts: FloristFacts): StoredBlock[] {
   return ordered.map((b) => groundAndPlace(b, facts, seen));
 }
 
-/**
- * Whether an image-only block may be kept. There is NO trusted image source
- * until photo upload (Phase 4): the model would otherwise invent stock URLs,
- * which §4.8 forbids (never fabricate imagery — broken/generic images kill
- * trust). So drop gallery/switchback for now; composition still varies via the
- * text blocks. These section types re-activate once real photos exist.
- */
+/** Image-only blocks are dropped until a trusted photo source exists (§4.8). */
 function hasUsableImages(b: BlockInstance): boolean {
   return b.type !== "gallery" && b.type !== "switchback";
 }
@@ -199,18 +195,16 @@ function computePlacement(type: BlockType, seen: Partial<Record<BlockType, numbe
 
 function groundAndPlace(
   b: BlockInstance,
-  facts: FloristFacts,
+  facts: BusinessFacts,
   seen: Partial<Record<BlockType, number>>,
 ): StoredBlock {
   const placement = computePlacement(b.type, seen);
 
-  // Strip any hero background image the model invented (no trusted source yet).
   if (b.type === "hero" && b.props.imageUrl) {
     return { ...b, props: { ...b.props, imageUrl: undefined }, ...placement };
   }
 
-  // Grounding (§4.4): the contact facts are known — force them verbatim so a
-  // reworded/hallucinated phone or address can never reach the published site.
+  // Grounding (§4.4): contact facts are known — force them verbatim.
   if (b.type === "contacts") {
     return {
       ...b,

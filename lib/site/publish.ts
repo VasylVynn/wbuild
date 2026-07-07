@@ -2,25 +2,29 @@ import "server-only";
 import { getServiceClient } from "@/lib/supabase/server";
 import { revalidateTenant } from "@/lib/cache";
 import { generateSite } from "@/lib/ai/generate";
-import type { FloristFacts } from "@/lib/verticals/florist";
+import { getVertical } from "@/lib/verticals/registry";
+import type { BusinessFacts } from "@/lib/verticals/schema";
 
 /**
- * Generate a site from facts (Phase 2) and persist it as a tenant + home page in
- * Supabase. Shared by the dev endpoint and the onboarding finalize action.
- * Writes draft always; also published when `publish` (the visitor sees it).
+ * Generate a site from facts for a vertical (Phase 2) and persist it as a
+ * tenant + home page in Supabase. Shared by the dev endpoint and onboarding
+ * finalize. Purges the tenant cache on publish (§5.5/§9.1).
  */
 export interface PublishResult {
   host: string;
   themePresetId: string;
+  verticalId: string;
   composition: string[];
 }
 
 export async function generateAndPublish(
-  facts: FloristFacts,
+  facts: BusinessFacts,
   host: string,
+  verticalId?: string,
   publish = true,
 ): Promise<PublishResult> {
-  const site = await generateSite(facts);
+  const vertical = getVertical(verticalId);
+  const site = await generateSite(facts, vertical.id);
   const sb = getServiceClient();
 
   const { data: tenant, error: tErr } = await sb
@@ -41,7 +45,7 @@ export async function generateAndPublish(
         facts,
         draft_theme: site.theme,
         published_theme: publish ? site.theme : null,
-        vertical: "florist",
+        vertical: vertical.id,
       },
       { onConflict: "host" },
     )
@@ -67,9 +71,12 @@ export async function generateAndPublish(
 
   if (pErr) throw new Error(`page upsert failed: ${pErr.message}`);
 
-  // §5.5 / §9.1 — purge the tenant cache so the new content is served, not a
-  // stale render.
-  if (publish) await revalidateTenant(host);
+  if (publish) await revalidateTenant(host); // §5.5 / §9.1 purge-on-publish
 
-  return { host, themePresetId: site.themePresetId, composition: site.blocks.map((b) => b.type) };
+  return {
+    host,
+    themePresetId: site.themePresetId,
+    verticalId: vertical.id,
+    composition: site.blocks.map((b) => b.type),
+  };
 }
