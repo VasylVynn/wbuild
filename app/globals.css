@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+/*
+ * Minimal base. Per-tenant colors/fonts are NOT global theme tokens — they are
+ * CSS custom properties (--color-*, --font-*) set on the tenant shell wrapper
+ * (see lib/theme/tokens.ts). Blocks read those vars directly, so the design of
+ * one tenant never leaks into another.
+ */
+
+body {
+  font-family: var(--font-body, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+}
