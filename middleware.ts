@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isPlatformHost, stripPort } from "@/lib/config";
+import { isPlatformHost, isDashboardHost, stripPort } from "@/lib/config";
 
 /**
  * First step of every request: split platform from tenant (brief §2.5).
@@ -25,6 +25,16 @@ export function middleware(req: NextRequest): NextResponse {
   if (isPlatformHost(host)) {
     // The internal tenant namespace must not be reachable on platform hosts.
     if (pathname === "/s" || pathname.startsWith("/s/")) {
+      return NextResponse.rewrite(new URL("/_platform-404", req.url));
+    }
+    // Dashboard/editor lives on app.<root>, served under the /app namespace.
+    if (isDashboardHost(host)) {
+      if (pathname === "/app" || pathname.startsWith("/app/")) return NextResponse.next();
+      const dest = pathname === "/" ? "/app" : `/app${pathname}`;
+      return NextResponse.rewrite(new URL(dest, req.url));
+    }
+    // Root / www: don't expose the /app namespace directly.
+    if (pathname === "/app" || pathname.startsWith("/app/")) {
       return NextResponse.rewrite(new URL("/_platform-404", req.url));
     }
     return NextResponse.next();

@@ -6,11 +6,13 @@ import Anthropic from "@anthropic-ai/sdk";
  * throws when actually used, so the app runs without it until Phase 2 features
  * are exercised.
  *
- * Model is pinned to Opus 4.8 (the claude-api skill's mandated default). It is a
- * single constant so it can be switched to a cheaper tier (e.g. claude-sonnet-4-6)
- * for per-tenant generation at scale — an owner cost decision, not a silent one.
+ * Models are single constants so the tier is an explicit owner decision. Owner
+ * chose Sonnet 4.6 (2026-07-07): ~3× cheaper than Opus, strong enough for
+ * structured generation and slot-filling chat. Bump to claude-opus-4-8 if
+ * first-generation quality needs it.
  */
-export const GEN_MODEL = "claude-opus-4-8";
+export const GEN_MODEL = "claude-sonnet-4-6"; // site generation (Phase 2)
+export const CHAT_MODEL = "claude-sonnet-4-6"; // onboarding agent (Phase 3)
 
 let cached: Anthropic | null = null;
 
