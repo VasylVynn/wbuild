@@ -173,16 +173,23 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   // «Хочу кастомні зміни» — quiet upsell channel (current-cycle п.5): free-text
   // request goes to the platform team, the owner just gets a thank-you.
   const submitCustomRequest = async () => {
+    if (customSubmitting) return;
     setCustomSubmitting(true);
     setCustomError(null);
-    const res = await customRequestAction(host, customMessage);
-    setCustomSubmitting(false);
-    if (res.ok) {
-      setCustomOpen(false);
-      setCustomMessage("");
-      notify({ text: "Дякуємо! Ми звʼяжемось з вами найближчим часом." });
-    } else {
-      setCustomError(res.error ?? "Не вдалося надіслати. Спробуйте ще раз.");
+    try {
+      const res = await customRequestAction(host, customMessage);
+      if (res.ok) {
+        setCustomOpen(false);
+        setCustomMessage("");
+        notify({ text: "Дякуємо! Ми звʼяжемось з вами найближчим часом." });
+      } else {
+        setCustomError(res.error ?? "Не вдалося надіслати. Спробуйте ще раз.");
+      }
+    } catch {
+      // A thrown action (network drop) must not leave the button stuck busy.
+      setCustomError("Не вдалося звʼязатися з сервером. Спробуйте ще раз.");
+    } finally {
+      setCustomSubmitting(false);
     }
   };
 

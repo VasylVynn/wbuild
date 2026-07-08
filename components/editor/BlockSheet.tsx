@@ -74,7 +74,10 @@ export default function BlockSheet({
     try {
       const res = await aiEditBlockAction(host, { type: block.type, props: draft }, instruction);
       if (res.ok) {
-        setDraft((d) => ({ ...d, ...(res.props as Draft) }));
+        // REPLACE, don't merge: returned props are schema-complete, and a merge
+        // would resurrect fields the model intentionally dropped («прибери
+        // підзаголовок» omits subtitle — spreading the old draft would keep it).
+        setDraft(res.props as Draft);
         setAiInstruction("");
         setAiDone(true);
       } else {
