@@ -1,6 +1,7 @@
 "use server";
 
 import { getServiceClient } from "@/lib/supabase/server";
+import { requireMember } from "@/lib/tenant/membership";
 import { revalidateTenant } from "@/lib/cache";
 import { parseBlockProps, type StoredBlock } from "@/lib/blocks/schema";
 import { blockPlacementSchema } from "@/lib/blocks/schema";
@@ -29,6 +30,8 @@ export interface EditorData {
 }
 
 export async function getEditorData(host: string): Promise<EditorData | null> {
+  // Ownership gate (§3.1): a non-member gets null → the page 404s.
+  if (!(await requireMember({ host })).ok) return null;
   const sb = getServiceClient();
   const { data: t } = await sb
     .from("tenants")
@@ -81,6 +84,8 @@ export async function saveDraftBlocks(
   blocks: StoredBlock[],
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    const gate = await requireMember({ host }); // §3.1
+    if (!gate.ok) return { ok: false, error: gate.error };
     const valid = validateBlocks(blocks);
     const sb = getServiceClient();
     const { data: t } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
@@ -108,6 +113,8 @@ export async function switchTheme(
   host: string,
   presetId: string,
 ): Promise<{ ok: boolean; theme?: Theme; error?: string }> {
+  const gate = await requireMember({ host }); // §3.1
+  if (!gate.ok) return { ok: false, error: gate.error };
   if (!(presetId in themePresets)) return { ok: false, error: "unknown preset" };
   const theme = resolveTheme(presetId as ThemePresetId);
   const sb = getServiceClient();
@@ -125,6 +132,8 @@ export async function regenerateSite(
   host: string,
 ): Promise<{ ok: boolean; blocks?: StoredBlock[]; theme?: Theme; error?: string }> {
   try {
+    const gate = await requireMember({ host }); // §3.1
+    if (!gate.ok) return { ok: false, error: gate.error };
     const sb = getServiceClient();
     const { data: t } = await sb
       .from("tenants")
@@ -159,6 +168,8 @@ export async function regenerateSite(
 
 /** «Опублікувати»: draft → published atomically-ish + cache purge (§5.5/§9.1). */
 export async function publishSite(host: string): Promise<{ ok: boolean; error?: string }> {
+  const gate = await requireMember({ host }); // §3.1
+  if (!gate.ok) return { ok: false, error: gate.error };
   const sb = getServiceClient();
   const { data: t } = await sb
     .from("tenants")

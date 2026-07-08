@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
+import { myTenantIds } from "@/lib/tenant/membership";
 
 // Always show fresh leads — no caching.
 export const dynamic = "force-dynamic";
@@ -16,12 +17,20 @@ interface LeadRow {
 
 async function listLeads(): Promise<LeadRow[]> {
   if (!isSupabaseConfigured()) return [];
+
+  // Only leads for the user's own sites (§3.1). null = auth off → all
+  // (degradation); [] = signed in with no sites.
+  const ids = await myTenantIds();
+  if (ids !== null && ids.length === 0) return [];
+
   const sb = getServiceClient();
-  const { data, error } = await sb
+  let query = sb
     .from("leads")
     .select("id, name, phone, message, pushed_at, created_at, tenants(host, brand)")
     .order("created_at", { ascending: false })
     .limit(200);
+  if (ids !== null) query = query.in("tenant_id", ids);
+  const { data, error } = await query;
   if (error || !data) return [];
   return data as unknown as LeadRow[];
 }

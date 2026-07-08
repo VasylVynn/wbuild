@@ -8,7 +8,7 @@ import {
   regenerateSite,
   publishSite,
   type EditorData,
-} from "@/app/app/edit/actions";
+} from "@/app/app/(protected)/edit/actions";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
 import type { StoredBlock } from "@/lib/blocks/schema";

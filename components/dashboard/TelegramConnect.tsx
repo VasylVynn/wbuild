@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getTelegramConnectLink } from "@/app/app/sites/actions";
+import { getTelegramConnectLink } from "@/app/app/(protected)/sites/actions";
 
 interface TelegramConnectProps {
   tenantId: string;

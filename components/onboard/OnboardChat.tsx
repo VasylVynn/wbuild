@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import type { ChatMsg } from "@/lib/ai/onboard";
 import { onboardAction, finalizeAction } from "@/app/app/new/actions";
 import {
@@ -56,6 +57,8 @@ export function OnboardChat() {
   // --- Done / error state ---
   const [siteUrl, setSiteUrl] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  // Set when the site was created anonymously and awaits a claim after sign-up.
+  const [unclaimed, setUnclaimed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -196,6 +199,12 @@ export function OnboardChat() {
       const result = await finalizeAction(fullFacts, verticalId);
       if (result.ok) {
         setSiteUrl(result.url);
+        // Anonymous creation (§3.1): stash the one-time claim token so the sites
+        // page can bind ownership after the owner registers.
+        if (result.claimToken) {
+          persistClaim(result.host, result.claimToken);
+          setUnclaimed(true);
+        }
         setPhase("done");
         // Conversation is complete — clear localStorage so next visit starts fresh
         localStorage.removeItem("vitryna_conv_id");
@@ -253,6 +262,16 @@ export function OnboardChat() {
         >
           {siteUrl}
         </a>
+        {unclaimed && (
+          <p className="mt-2 text-base text-neutral-500">
+            <Link
+              href="/login"
+              className="font-medium text-neutral-800 underline underline-offset-4 hover:text-neutral-600"
+            >
+              Зареєструйтесь, щоб керувати сайтом
+            </Link>
+          </p>
+        )}
       </div>
     );
   }
@@ -478,6 +497,23 @@ export function OnboardChat() {
 // ---------------------------------------------------------------------------
 // Small local sub-components
 // ---------------------------------------------------------------------------
+
+/**
+ * Append a {host, token} pair to localStorage `vitryna_claims` (§3.1). The
+ * sites page reads this after the owner registers and binds ownership.
+ */
+function persistClaim(host: string, token: string): void {
+  try {
+    const raw = localStorage.getItem("vitryna_claims");
+    const list: unknown = raw ? JSON.parse(raw) : [];
+    const arr = Array.isArray(list) ? list : [];
+    arr.push({ host, token });
+    localStorage.setItem("vitryna_claims", JSON.stringify(arr));
+  } catch {
+    // localStorage unavailable (private mode) — the site still works, only the
+    // one-click claim is lost; the owner can re-create or contact support.
+  }
+}
 
 function ChatBubble({ msg }: { msg: ChatMsg }) {
   const isUser = msg.role === "user";

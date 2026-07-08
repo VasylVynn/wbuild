@@ -7,6 +7,8 @@ import { generateAndPublish } from "@/lib/site/publish";
 import { classifyVertical } from "@/lib/verticals/registry";
 import { ROOT_DOMAIN } from "@/lib/config";
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
+import { getServiceClient } from "@/lib/supabase/server";
+import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 
 /**
@@ -47,7 +49,9 @@ export async function onboardAction(
   return onboardTurn(history, facts, verticalId);
 }
 
-export type FinalizeResult = { ok: true; host: string; url: string } | { ok: false; error: string };
+export type FinalizeResult =
+  | { ok: true; host: string; url: string; claimToken?: string }
+  | { ok: false; error: string };
 
 /** Confirmed facts → generate + publish the site → return its live URL. */
 export async function finalizeAction(
@@ -71,7 +75,29 @@ export async function finalizeAction(
     const isProd = process.env.NODE_ENV === "production";
     const port = ROOT_DOMAIN.includes(":") ? `:${ROOT_DOMAIN.split(":")[1]}` : "";
     const url = `${isProd ? "https" : "http"}://${host}${isProd ? "" : port}`;
-    return { ok: true, host, url };
+
+    // Ownership (§3.1). Onboarding is anonymous, so tie the new site to whoever
+    // created it: a logged-in creator becomes owner immediately; an anonymous
+    // one gets a one-time claim_token to bind the site after they register.
+    // Skipped entirely when auth is off (open dashboard — degradation).
+    let claimToken: string | undefined;
+    if (isAuthConfigured()) {
+      const sb = getServiceClient();
+      const { data: t } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
+      if (t) {
+        const user = await getUser();
+        if (user) {
+          await sb
+            .from("tenant_members")
+            .insert({ tenant_id: t.id, user_id: user.id, role: "owner" });
+        } else {
+          claimToken = crypto.randomUUID().replace(/-/g, "");
+          await sb.from("tenants").update({ claim_token: claimToken }).eq("id", t.id);
+        }
+      }
+    }
+
+    return { ok: true, host, url, ...(claimToken && { claimToken }) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

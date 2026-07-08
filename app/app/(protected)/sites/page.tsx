@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
+import { myTenantIds } from "@/lib/tenant/membership";
 import { getVertical } from "@/lib/verticals/registry";
 import { ROOT_DOMAIN } from "@/lib/config";
 import TelegramConnect from "@/components/dashboard/TelegramConnect";
+import ClaimSites from "@/components/dashboard/ClaimSites";
 
 // Always show the current list — new sites appear immediately.
 export const dynamic = "force-dynamic";
@@ -19,11 +21,19 @@ interface SiteRow {
 
 async function listSites(): Promise<SiteRow[]> {
   if (!isSupabaseConfigured()) return [];
+
+  // Scope to the current user's sites (§3.1). null = auth off → show all
+  // (degradation); [] = signed in with no sites yet.
+  const ids = await myTenantIds();
+  if (ids !== null && ids.length === 0) return [];
+
   const sb = getServiceClient();
-  const { data, error } = await sb
+  let query = sb
     .from("tenants")
     .select("id, host, status, vertical, brand, created_at, telegram_chat_id")
     .order("created_at", { ascending: false });
+  if (ids !== null) query = query.in("id", ids);
+  const { data, error } = await query;
   if (error || !data) return [];
   return (data as SiteRow[]).filter((s) => !!s.host);
 }
@@ -43,6 +53,8 @@ export default async function SitesPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl px-6 py-12">
+      {/* Binds sites created anonymously before the user registered (§3.1). */}
+      <ClaimSites />
       <div className="mb-8 flex items-center justify-between gap-4">
         <div>
           <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-800">
