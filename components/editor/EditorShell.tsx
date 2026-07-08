@@ -42,8 +42,11 @@ const statusTone = (s: string): "ok" | "warn" | "neutral" =>
 // own props type; for a dynamic block we widen the component to accept the
 // stored props object (validation already happened server-side).
 function BlockView({ block }: { block: StoredBlock }) {
-  const Comp = blockRegistry[block.type] as unknown as ComponentType<{ data: unknown }>;
-  return <Comp data={block.props} />;
+  const Comp = blockRegistry[block.type] as unknown as ComponentType<{
+    data: unknown;
+    skin?: string;
+  }>;
+  return <Comp data={block.props} skin={block.skin} />;
 }
 
 type Toast = { text: string; href?: string };
@@ -51,7 +54,7 @@ type Toast = { text: string; href?: string };
 /** Immutably patch a stored block (props and/or hidden), keeping its type. */
 function patchBlock(
   block: StoredBlock,
-  patch: Partial<{ props: unknown; hidden: boolean }>,
+  patch: Partial<{ props: unknown; hidden: boolean; skin: string }>,
 ): StoredBlock {
   return { ...block, ...patch } as unknown as StoredBlock;
 }
@@ -113,6 +116,15 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
 
   const toggleHidden = (index: number) => {
     const next = blocks.map((b, i) => (i === index ? patchBlock(b, { hidden: !b.hidden }) : b));
+    setBlocks(next);
+    setDirty(true);
+    void persist(next);
+  };
+
+  // Switch a block's layout skin (content untouched); mirrors hide/reorder —
+  // update local state and persist to the draft, no save button needed.
+  const handleSkinChange = (index: number, skin: string) => {
+    const next = blocks.map((b, i) => (i === index ? patchBlock(b, { skin }) : b));
     setBlocks(next);
     setDirty(true);
     void persist(next);
@@ -324,6 +336,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           host={host}
           saving={saving}
           onSave={(props) => void handleSaveBlock(selectedIndex, props)}
+          onSkinChange={(skin) => handleSkinChange(selectedIndex, skin)}
           onClose={() => setSelectedIndex(null)}
         />
       )}

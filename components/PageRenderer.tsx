@@ -25,10 +25,13 @@ export function PageRenderer({ blocks }: { blocks: StoredBlock[] }) {
             return <UnknownBlock key={i} type={block.type} />;
           }
           const id = block.anchor?.replace(/^#/, "");
-          const Component = blockRegistry[parsed.type] as ComponentType<{ data: unknown }>;
+          const Component = blockRegistry[parsed.type] as ComponentType<{
+            data: unknown;
+            skin?: string;
+          }>;
           return (
             <section key={i} id={id}>
-              <Component data={parsed.props} />
+              <Component data={parsed.props} skin={block.skin} />
             </section>
           );
         })}

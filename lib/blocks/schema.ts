@@ -214,6 +214,8 @@ export const blockPlacementSchema = z.object({
   navLabel: z.string().optional(), // "Послуги"
   showInNav: z.boolean().default(false),
   hidden: z.boolean().default(false), // hide/show the whole section (§3)
+  // Presentation variant («скін») — layout-only, never content. Absent = default.
+  skin: z.string().optional(),
   // Per-block schema version for migrations (§4.6). Absent = v1.
   schemaVersion: z.number().int().optional(),
 });

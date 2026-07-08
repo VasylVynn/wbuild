@@ -19,7 +19,7 @@ import Contacts from "@/components/blocks/Contacts";
  * component/schema mismatch is a compile error.
  */
 export const blockRegistry: {
-  [K in BlockType]: ComponentType<{ data: BlockProps[K] }>;
+  [K in BlockType]: ComponentType<{ data: BlockProps[K]; skin?: string }>;
 } = {
   hero: Hero,
   richText: RichText,

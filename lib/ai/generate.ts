@@ -10,6 +10,7 @@ import {
   type StoredBlock,
 } from "@/lib/blocks/schema";
 import { blockLibrary, COMPOSITION_RULES } from "@/lib/blocks/library";
+import { randomSkin } from "@/lib/blocks/skins";
 import { themePresets, resolveTheme, THEME_PRESET_IDS } from "@/lib/theme/presets";
 import type { Theme } from "@/lib/theme/tokens";
 import { getVertical } from "@/lib/verticals/registry";
@@ -193,11 +194,14 @@ function hasUsableImages(b: BlockInstance): boolean {
 
 function computePlacement(type: BlockType, seen: Partial<Record<BlockType, number>>): BlockPlacement {
   const lib = blockLibrary[type];
+  // Generation-time skin lottery (п.3): same content, varied layout — different
+  // sites stop looking like one template. The editor can switch it any time.
+  const skin = randomSkin(type);
   if (type === "contacts") {
-    return { anchor: "#contacts", navLabel: lib.navLabel, showInNav: true, hidden: false };
+    return { anchor: "#contacts", navLabel: lib.navLabel, showInNav: true, hidden: false, skin };
   }
   if (type === "lead_form") {
-    return { anchor: "#lead", navLabel: lib.navLabel, showInNav: true, hidden: false };
+    return { anchor: "#lead", navLabel: lib.navLabel, showInNav: true, hidden: false, skin };
   }
   if (lib.role === "middle" && lib.inNav) {
     const n = (seen[type] = (seen[type] ?? 0) + 1);
@@ -206,9 +210,10 @@ function computePlacement(type: BlockType, seen: Partial<Record<BlockType, numbe
       navLabel: lib.navLabel,
       showInNav: true,
       hidden: false,
+      skin,
     };
   }
-  return { showInNav: false, hidden: false };
+  return { showInNav: false, hidden: false, skin };
 }
 
 function groundAndPlace(
