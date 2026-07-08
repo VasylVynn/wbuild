@@ -1,6 +1,8 @@
 "use server";
 
+import { headers } from "next/headers";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
+import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
 import type { ChatMsg } from "@/lib/ai/onboard";
 
 // Shape stored inside conversations.facts_state
@@ -24,6 +26,11 @@ export type ConversationData = {
  */
 export async function startConversation(): Promise<{ conversationId: string } | null> {
   if (!isSupabaseConfigured()) return null;
+
+  // Caps placeholder-row creation per IP. Callers already tolerate null (the
+  // chat continues without persistence), so a limited start degrades silently.
+  const limit = await checkRateLimit("conversation_start", ipFromHeaders(await headers()));
+  if (!limit.ok) return null;
 
   const db = getServiceClient();
 

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
+import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
 
 /**
  * Photo upload (§4.8 MVP): the CLIENT pre-processes (canvas re-encode strips
@@ -25,6 +26,15 @@ export async function POST(req: NextRequest) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "not configured" }, { status: 503 });
   }
+  // Volume cap per IP — Storage is unmetered otherwise (8MB × ∞ adds up).
+  const limit = await checkRateLimit("upload", ipFromHeaders(req.headers));
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "too many requests" },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } },
+    );
+  }
+
   const form = await req.formData().catch(() => null);
   if (!form) return NextResponse.json({ error: "bad form" }, { status: 400 });
 

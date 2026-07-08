@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { stripPort } from "@/lib/config";
+import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
 import { sendTelegramMessage, formatLeadMessage } from "@/lib/telegram/push";
 
 /**
@@ -29,6 +30,15 @@ export async function POST(req: NextRequest) {
     } catch {
       return NextResponse.json({ error: "bad origin" }, { status: 403 });
     }
+  }
+
+  // Frequency cap per IP — after the cheap header checks, before any DB work.
+  const limit = await checkRateLimit("lead", ipFromHeaders(req.headers));
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "too many requests" },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } },
+    );
   }
 
   const body = (await req.json().catch(() => null)) as {
