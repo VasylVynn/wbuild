@@ -8,8 +8,10 @@ import { z } from "zod";
  * Nothing may drift from this file.
  *
  * MVP vertical: florist. Preset `florist` = [hero, services, gallery,
- * testimonials, contacts]. `lead_form` is intentionally OUT of MVP (§15) —
- * contacts is TEXTUAL only (phone/address/hours as text, no form/buttons).
+ * testimonials, contacts]. `lead_form` is intentionally OUT of MVP (§15).
+ * contacts is textual (phone/address/hours/email) PLUS one-tap messenger
+ * buttons (call/Viber/Telegram) — see lib/blocks/contact-links.ts for the
+ * href normalization and components/blocks/Contacts.tsx for the buttons.
  */
 
 // A URL to an uploaded asset (R2 / Storage) or a curated placeholder.
@@ -68,7 +70,7 @@ export const testimonialsSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// contacts (textual — MVP; no form/buttons, see §15)
+// contacts (textual info + one-tap messenger buttons)
 // ---------------------------------------------------------------------------
 export const contactsSchema = z.object({
   title: z.string().optional(),
@@ -76,6 +78,10 @@ export const contactsSchema = z.object({
   address: z.string().optional(),
   hours: z.string().optional(),
   email: z.string().optional(),
+  // Freeform phone number, any formatting — normalized in contact-links.ts.
+  viber: z.string().optional(),
+  // Username (with/without "@") or a phone number — normalized in contact-links.ts.
+  telegram: z.string().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -251,5 +257,5 @@ export const factPaths: Record<BlockType, string[]> = {
   faq: [], // creative — kept grounded by prompt
   cta: [], // creative marketing copy
   lead_form: [], // labels only; submitted data goes to /api/leads, not props
-  contacts: ["phone", "address", "hours", "email"],
+  contacts: ["phone", "address", "hours", "email", "viber", "telegram"],
 };

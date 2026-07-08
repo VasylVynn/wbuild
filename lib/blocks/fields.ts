@@ -58,6 +58,8 @@ const LABELS: Record<string, string> = {
   address: "Адреса",
   hours: "Години роботи",
   email: "Email",
+  viber: "Viber (номер)",
+  telegram: "Telegram (нік або номер)",
 };
 
 const TEXTAREA_KEYS = new Set(["body", "description", "quote", "answer", "message", "subtitle"]);

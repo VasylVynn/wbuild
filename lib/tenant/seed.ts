@@ -250,16 +250,18 @@ export const seedPages: Page[] = [
       },
 
       // -----------------------------------------------------------------------
-      // Contacts (textual only — no form/buttons per §15)
+      // Contacts (textual info + one-tap messenger buttons)
       // -----------------------------------------------------------------------
       {
         type: "contacts",
         props: {
-          title:   "Контакти",
-          phone:   "+38 (067) 123-45-67",
-          address: "вул. Сербська, 15, Львів, 79000",
-          hours:   "Пн–Пт: 9:00–19:00, Сб–Нд: 9:00–17:00",
-          email:   "info@kvity.lviv.ua",
+          title:    "Контакти",
+          phone:    "+38 (067) 123-45-67",
+          address:  "вул. Сербська, 15, Львів, 79000",
+          hours:    "Пн–Пт: 9:00–19:00, Сб–Нд: 9:00–17:00",
+          email:    "info@kvity.lviv.ua",
+          viber:    "+38 (067) 123-45-67",
+          telegram: "@kvity_lviv",
         },
         anchor:    "#contacts",
         navLabel:  "Контакти",

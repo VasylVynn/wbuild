@@ -31,6 +31,8 @@ export const businessFactsSchema = z.object({
   phone: z.string(),
   address: z.string().optional(),
   hours: z.string().optional(),
+  viber: z.string().optional(), // freeform phone number, any formatting
+  telegram: z.string().optional(), // username (with/without "@") or phone number
   about: z.string().optional(),
   services: z.array(serviceFactSchema).optional(),
   testimonials: z.array(testimonialFactSchema).optional(),

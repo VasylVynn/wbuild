@@ -13,6 +13,8 @@ const baseFields: VerticalConfig["fields"] = {
   phone: { label: "Телефон", fact: true, required: true },
   address: { label: "Адреса", fact: true },
   hours: { label: "Години роботи", fact: true },
+  viber: { label: "Viber (номер, якщо є)", fact: true },
+  telegram: { label: "Telegram (нік або номер, якщо є)", fact: true },
   about: { label: "Про бізнес", fact: false },
   services: { label: "Послуги / ціни", fact: true },
   testimonials: { label: "Відгуки клієнтів", fact: true },

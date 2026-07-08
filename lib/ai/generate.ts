@@ -231,6 +231,8 @@ function groundAndPlace(
         phone: facts.phone ?? b.props.phone,
         address: facts.address ?? b.props.address,
         hours: facts.hours ?? b.props.hours,
+        viber: facts.viber ?? b.props.viber,
+        telegram: facts.telegram ?? b.props.telegram,
       },
       ...placement,
     };

@@ -119,7 +119,11 @@ export const blockLibrary: Record<BlockType, BlockLibraryEntry> = {
   },
   contacts: {
     label: "Контакти",
-    description: "Контакти текстом: телефон, адреса, години роботи. Рівно один, завжди останній.",
+    description:
+      "Контакти текстом (телефон, адреса, години роботи, email) плюс кнопки месенджерів " +
+      "viber і telegram. Заповнюй viber/telegram ЛИШЕ якщо є у наданих фактах бізнесу " +
+      "(facts.viber / facts.telegram) — НІКОЛИ не вигадуй і не здогадуйся про нік чи номер " +
+      "(§4.4, grounding). Якщо факту немає — залиш поле порожнім. Рівно один, завжди останній.",
     role: "closer",
     maxPerPage: 1,
     inNav: true,
