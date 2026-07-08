@@ -1,17 +1,57 @@
 @import "tailwindcss";
 
 /*
- * Minimal base. Per-tenant colors/fonts are NOT global theme tokens — they are
- * CSS custom properties (--color-*, --font-*) set on the tenant shell wrapper
- * (see lib/theme/tokens.ts). Blocks read those vars directly, so the design of
- * one tenant never leaks into another.
+ * 3minsite product design system — direction B «Небо і мед» (design/CLAUDE.md).
+ * These @theme tokens style the PRODUCT UI (dashboard, chat, editor chrome).
+ * Tenant SITES keep their own per-tenant CSS vars (--color-*, --font-*) set
+ * inline on the tenant shell — the two systems never mix.
  */
+@theme {
+  /* surfaces */
+  --color-canvas: #f7f8f8;
+  --color-surface: #ffffff;
+  --color-sunken: #eef1f3;
+  --color-line: #e2e7eb;
+  --color-line-strong: #c9d2d9;
+  /* text */
+  --color-ink: #17242f;
+  --color-ink-muted: #5a6b7a;
+  --color-ink-faint: #8a99a6;
+  /* brand */
+  --color-brand: #1b5bbf;
+  --color-brand-hover: #14489c;
+  --color-brand-soft: #e7eef9;
+  --color-honey: #e9a23b;
+  --color-honey-text: #9a6a12;
+  --color-honey-soft: #fcf1dd;
+  /* semantic */
+  --color-ok: #177e53;
+  --color-ok-soft: #dff2e9;
+  --color-warn: #8f6410;
+  --color-warn-soft: #faf0d9;
+  --color-danger: #c03a32;
+  --color-danger-soft: #fbe9e7;
+  /* telegram */
+  --color-tg: #229ed9;
+  --color-tg-dark: #1787bd;
+  /* type */
+  --font-brand: var(--font-unbounded), sans-serif;
+  --font-ui: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  /* radii */
+  --radius-control: 14px;
+  --radius-card: 20px;
+  --radius-sheet: 28px;
+  /* shadow */
+  --shadow-card: 0 1px 2px rgba(23, 36, 47, 0.05), 0 10px 30px rgba(23, 36, 47, 0.07);
+}
 
-/* Force light rendering everywhere — sites never adapt to the OS dark mode. */
+/* Force light rendering everywhere — never adapt to the OS dark mode. */
 :root {
   color-scheme: light;
 }
 
 body {
-  font-family: var(--font-body, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+  /* Product base: Manrope 17px. Tenant shells override font/colors inline. */
+  font-family: var(--font-body, var(--font-ui));
+  font-size: 17px;
 }

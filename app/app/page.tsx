@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
+import { Wordmark } from "@/components/ui";
 
 /**
  * Dashboard home (served on app.<root> — see middleware). Deliberately PUBLIC:
@@ -7,41 +8,45 @@ import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
  * it is auth-aware — a signed-out visitor gets a prominent «Увійти» instead of
  * management links that would just bounce off the (protected) gate.
  */
+
+// Link needs to render an <a>, so we mirror Button's primary/secondary look
+// here directly rather than nesting a <button> inside it (invalid HTML).
+const primaryLink =
+  "inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-brand px-7 font-ui text-[18px] font-bold text-white shadow-[0_8px_24px_rgba(27,91,191,0.3)] transition-colors hover:bg-brand-hover";
+const secondaryLink =
+  "inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-[16px] border-[1.5px] border-line-strong bg-surface px-7 font-ui text-[18px] font-bold text-ink transition-colors hover:bg-sunken";
+
 export default async function Dashboard() {
   const user = isAuthConfigured() ? await getUser() : null;
   const authOn = isAuthConfigured();
 
-  const primary =
-    "inline-block rounded-full bg-neutral-900 px-8 py-4 text-lg font-medium text-white transition hover:bg-neutral-700";
-  const secondary =
-    "inline-block rounded-full border border-neutral-300 px-8 py-4 text-lg font-medium text-neutral-800 transition hover:bg-neutral-100";
-
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center px-6 py-24 text-center">
-      <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Вітрина</h1>
-      <p className="mt-3 text-lg text-neutral-600">
-        Створіть свій сайт у простій розмові з помічником.
-      </p>
-      <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-        <Link href="/new" className={primary}>
+    <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center gap-3 bg-canvas px-6 py-24 text-center">
+      <Wordmark className="text-[28px]" />
+      <h1 className="mt-4 text-[18px] font-normal leading-relaxed text-ink-muted">
+        Створіть свій сайт у простій розмові з помічником — і отримуйте заявки клієнтів у
+        Telegram.
+      </h1>
+      <div className="mt-5 flex w-full max-w-sm flex-col gap-3">
+        <Link href="/new" className={primaryLink}>
           Створити сайт
         </Link>
         {authOn && !user ? (
-          <Link href="/login" className={secondary}>
+          <Link href="/login" className={secondaryLink}>
             Увійти
           </Link>
         ) : (
           <>
-            <Link href="/sites" className={secondary}>
+            <Link href="/sites" className={secondaryLink}>
               Мої сайти
             </Link>
-            <Link href="/leads" className={secondary}>
+            <Link href="/leads" className={secondaryLink}>
               Заявки
             </Link>
           </>
         )}
       </div>
-      {user && <p className="mt-6 text-sm text-neutral-400">{user.email}</p>}
+      {user && <p className="mt-2 text-[15px] font-semibold text-ink-faint">{user.email}</p>}
     </main>
   );
 }

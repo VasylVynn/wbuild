@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Unbounded:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #ECEEF0; font-family: 'Manrope', sans-serif; color: #17242F; }
+  a { color: #1B5BBF; } a:hover { color: #14489C; }
+  @keyframes typing-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-4px); opacity: 1; } }
+</style>
+</helmet>
+
+<section style="padding: 56px; display: flex; flex-direction: column; gap: 32px;">
+  <div style="display: flex; flex-direction: column; gap: 8px; max-width: 800px;">
+    <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 30px;">Онбординг-чат — фінальний варіант</div>
+    <div style="font-size: 17px; color: #5A6B7A; line-height: 1.5;">Комбінація: прогрес-підказки (видно, що вже зібрано і скільки лишилось) + чипи швидких відповідей на старті. Телефон вводиться через плейсхолдер-приклад у полі (тип tel — цифрова клавіатура).</div>
+  </div>
+
+  <div style="display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start;">
+
+    <!-- Mobile: fresh start with quick-reply chips -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · старт</span>
+      <div data-screen-label="Chat fresh" style="width: 390px; height: 780px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px 10px; background: #FFFFFF;">
+          <span style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #5A6B7A; font-size: 20px; font-weight: 700; cursor: pointer;">←</span>
+          <div style="width: 44px; height: 44px; border-radius: 999px; background: #FCF1DD; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 19px; color: #E9A23B;">3</div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-weight: 800; font-size: 17px;">Помічник</span>
+            <span style="font-size: 13px; color: #177E53; font-weight: 700;">онлайн</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; padding: 8px 16px 12px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">Бізнес</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">Місто</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">Телефон</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">Адреса</span>
+        </div>
+        <div style="flex: 1; padding: 20px 16px; display: flex; flex-direction: column; gap: 14px; overflow: hidden;">
+          <div style="align-self: center; background: #EEF1F3; color: #5A6B7A; font-weight: 700; font-size: 13px; padding: 5px 14px; border-radius: 999px;">Сайт буде готовий за ~3 хвилини</div>
+          <div style="display: flex; justify-content: flex-start;">
+            <div style="max-width: 82%; background: #FFFFFF; border: 1.5px solid #E2E7EB; padding: 14px 18px; border-radius: 20px 20px 20px 6px; font-size: 17px; line-height: 1.5; box-shadow: 0 1px 2px rgba(23,36,47,.04);">Вітаю! 👋 Я допоможу створити сайт для вашого бізнесу. Розкажіть трохи — що це за бізнес, у якому місті, і який телефон для звʼязку?</div>
+          </div>
+          <div style="display: flex; justify-content: flex-start;">
+            <div style="max-width: 82%; background: #FFFFFF; border: 1.5px solid #E2E7EB; padding: 14px 18px; border-radius: 20px 20px 20px 6px; font-size: 16px; line-height: 1.5; color: #5A6B7A;">Можете почати з типу бізнесу 👇</div>
+          </div>
+        </div>
+        <div style="padding: 0 16px 10px; display: flex; flex-wrap: wrap; gap: 8px;">
+          <span style="background: #FFFFFF; border: 1.5px solid #C9D2D9; color: #17242F; font-weight: 700; font-size: 15px; padding: 12px 18px; border-radius: 999px; cursor: pointer;" style-hover="border-color: #1B5BBF; color: #1B5BBF;">🌷 Квітковий магазин</span>
+          <span style="background: #FFFFFF; border: 1.5px solid #C9D2D9; color: #17242F; font-weight: 700; font-size: 15px; padding: 12px 18px; border-radius: 999px; cursor: pointer;" style-hover="border-color: #1B5BBF; color: #1B5BBF;">🥐 Пекарня</span>
+          <span style="background: #FFFFFF; border: 1.5px solid #C9D2D9; color: #17242F; font-weight: 700; font-size: 15px; padding: 12px 18px; border-radius: 999px; cursor: pointer;" style-hover="border-color: #1B5BBF; color: #1B5BBF;">⚖️ Юрист</span>
+          <span style="background: #FFFFFF; border: 1.5px solid #C9D2D9; color: #17242F; font-weight: 700; font-size: 15px; padding: 12px 18px; border-radius: 999px; cursor: pointer;" style-hover="border-color: #1B5BBF; color: #1B5BBF;">🔧 Автосервіс</span>
+          <span style="background: #FFFFFF; border: 1.5px solid #C9D2D9; color: #5A6B7A; font-weight: 700; font-size: 15px; padding: 12px 18px; border-radius: 999px; cursor: pointer;" style-hover="border-color: #1B5BBF; color: #1B5BBF;">Інше…</span>
+        </div>
+        <div style="padding: 6px 16px 20px; display: flex; gap: 10px;">
+          <input type="text" placeholder="Написати…" style="flex: 1; min-width: 0; height: 56px; padding: 0 20px; border: 1.5px solid #C9D2D9; border-radius: 999px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+          <div style="width: 56px; height: 56px; flex-shrink: 0; border-radius: 999px; background: #1B5BBF; display: flex; align-items: center; justify-content: center; cursor: pointer;" style-hover="background: #14489C;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 12h14M13 6l6 6-6 6" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile: mid conversation, phone step -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · розмова, крок «телефон»</span>
+      <div data-screen-label="Chat mid" style="width: 390px; height: 780px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px 10px; background: #FFFFFF;">
+          <span style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #5A6B7A; font-size: 20px; font-weight: 700; cursor: pointer;">←</span>
+          <div style="width: 44px; height: 44px; border-radius: 999px; background: #FCF1DD; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 19px; color: #E9A23B;">3</div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-weight: 800; font-size: 17px;">Помічник</span>
+            <span style="font-size: 13px; color: #177E53; font-weight: 700;">онлайн</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; padding: 8px 16px 12px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">✓ Бізнес</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">✓ Місто</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">Телефон</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">Адреса</span>
+        </div>
+        <div style="flex: 1; padding: 20px 16px; display: flex; flex-direction: column; gap: 14px; justify-content: flex-end; overflow: hidden;">
+          <div style="display: flex; justify-content: flex-end;">
+            <div style="max-width: 82%; background: #1B5BBF; color: #FFFFFF; padding: 14px 18px; border-radius: 20px 20px 6px 20px; font-size: 17px; line-height: 1.5;">🌷 Квітковий магазин</div>
+          </div>
+          <div style="display: flex; justify-content: flex-start;">
+            <div style="max-width: 82%; background: #FFFFFF; border: 1.5px solid #E2E7EB; padding: 14px 18px; border-radius: 20px 20px 20px 6px; font-size: 17px; line-height: 1.5; box-shadow: 0 1px 2px rgba(23,36,47,.04);">Гарний вибір 🌷 Як називається магазин і в якому він місті?</div>
+          </div>
+          <div style="display: flex; justify-content: flex-end;">
+            <div style="max-width: 82%; background: #1B5BBF; color: #FFFFFF; padding: 14px 18px; border-radius: 20px 20px 6px 20px; font-size: 17px; line-height: 1.5;">«Квіти від Оксани», Львів</div>
+          </div>
+          <div style="display: flex; justify-content: flex-start;">
+            <div style="max-width: 82%; background: #FFFFFF; border: 1.5px solid #E2E7EB; padding: 14px 18px; border-radius: 20px 20px 20px 6px; font-size: 17px; line-height: 1.5; box-shadow: 0 1px 2px rgba(23,36,47,.04);">Записав! Який телефон показати клієнтам для замовлень?</div>
+          </div>
+        </div>
+        <div style="padding: 6px 16px 20px; display: flex; gap: 10px;">
+          <input type="tel" placeholder="+380 50 123 45 67" style="flex: 1; min-width: 0; height: 56px; padding: 0 20px; border: 1.5px solid #C9D2D9; border-radius: 999px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+          <div style="width: 56px; height: 56px; flex-shrink: 0; border-radius: 999px; background: #1B5BBF; display: flex; align-items: center; justify-content: center; cursor: pointer;" style-hover="background: #14489C;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 12h14M13 6l6 6-6 6" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile: typing -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · помічник друкує</span>
+      <div data-screen-label="Chat typing" style="width: 390px; height: 780px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px 10px; background: #FFFFFF;">
+          <span style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #5A6B7A; font-size: 20px; font-weight: 700; cursor: pointer;">←</span>
+          <div style="width: 44px; height: 44px; border-radius: 999px; background: #FCF1DD; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 19px; color: #E9A23B;">3</div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-weight: 800; font-size: 17px;">Помічник</span>
+            <span style="font-size: 13px; color: #5A6B7A; font-weight: 700;">друкує…</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; padding: 8px 16px 12px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">✓ Бізнес</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">✓ Місто</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">✓ Телефон</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">Адреса</span>
+        </div>
+        <div style="flex: 1; padding: 20px 16px; display: flex; flex-direction: column; gap: 14px; justify-content: flex-end; overflow: hidden;">
+          <div style="display: flex; justify-content: flex-start;">
+            <div style="max-width: 82%; background: #FFFFFF; border: 1.5px solid #E2E7EB; padding: 14px 18px; border-radius: 20px 20px 20px 6px; font-size: 17px; line-height: 1.5; box-shadow: 0 1px 2px rgba(23,36,47,.04);">Записав! Який телефон показати клієнтам для замовлень?</div>
+          </div>
+          <div style="display: flex; justify-content: flex-end;">
+            <div style="max-width: 82%; background: #1B5BBF; color: #FFFFFF; padding: 14px 18px; border-radius: 20px 20px 6px 20px; font-size: 17px; line-height: 1.5;">067 245 18 30</div>
+          </div>
+          <div style="display: flex; justify-content: flex-start;">
+            <div style="background: #FFFFFF; border: 1.5px solid #E2E7EB; padding: 17px 18px; border-radius: 20px 20px 20px 6px; display: flex; gap: 5px; align-items: center;">
+              <span style="width: 8px; height: 8px; border-radius: 999px; background: #8A99A6; animation: typing-dot 1.2s infinite;"></span>
+              <span style="width: 8px; height: 8px; border-radius: 999px; background: #8A99A6; animation: typing-dot 1.2s infinite 0.15s;"></span>
+              <span style="width: 8px; height: 8px; border-radius: 999px; background: #8A99A6; animation: typing-dot 1.2s infinite 0.3s;"></span>
+            </div>
+          </div>
+        </div>
+        <div style="padding: 6px 16px 20px; display: flex; gap: 10px;">
+          <input type="text" placeholder="Написати…" style="flex: 1; min-width: 0; height: 56px; padding: 0 20px; border: 1.5px solid #C9D2D9; border-radius: 999px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+          <div style="width: 56px; height: 56px; flex-shrink: 0; border-radius: 999px; background: #1B5BBF; opacity: 0.45; display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 12h14M13 6l6 6-6 6" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile: ready CTA -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · все зібрано</span>
+      <div data-screen-label="Chat ready" style="width: 390px; height: 780px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px 10px; background: #FFFFFF;">
+          <span style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #5A6B7A; font-size: 20px; font-weight: 700; cursor: pointer;">←</span>
+          <div style="width: 44px; height: 44px; border-radius: 999px; background: #FCF1DD; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 19px; color: #E9A23B;">3</div>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-weight: 800; font-size: 17px;">Помічник</span>
+            <span style="font-size: 13px; color: #177E53; font-weight: 700;">онлайн</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; padding: 8px 16px 12px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">✓ Бізнес</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">✓ Місто</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">✓ Телефон</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">✓ Адреса</span>
+        </div>
+        <div style="flex: 1; padding: 20px 16px; display: flex; flex-direction: column; gap: 14px; justify-content: flex-end; overflow: hidden;">
+          <div style="display: flex; justify-content: flex-end;">
+            <div style="max-width: 82%; background: #1B5BBF; color: #FFFFFF; padding: 14px 18px; border-radius: 20px 20px 6px 20px; font-size: 17px; line-height: 1.5;">вул. Городоцька, 12. Працюємо щодня з 9 до 20</div>
+          </div>
+          <div style="display: flex; justify-content: flex-start;">
+            <div style="max-width: 82%; background: #FFFFFF; border: 1.5px solid #E2E7EB; padding: 14px 18px; border-radius: 20px 20px 20px 6px; font-size: 17px; line-height: 1.5; box-shadow: 0 1px 2px rgba(23,36,47,.04);">Дякую, все є! ✨ Далі покажу вам зібрані дані — перевірите, і я створю сайт.</div>
+          </div>
+        </div>
+        <div style="padding: 0 16px 12px;">
+          <div style="display: flex; height: 60px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 18px; font-weight: 700; font-size: 18px; cursor: pointer; box-shadow: 0 8px 24px rgba(27,91,191,.35);" style-hover="background: #14489C;">Переглянути й створити сайт →</div>
+        </div>
+        <div style="padding: 0 16px 20px; display: flex; gap: 10px;">
+          <input type="text" placeholder="Або допишіть щось…" style="flex: 1; min-width: 0; height: 56px; padding: 0 20px; border: 1.5px solid #C9D2D9; border-radius: 999px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+          <div style="width: 56px; height: 56px; flex-shrink: 0; border-radius: 999px; background: #1B5BBF; display: flex; align-items: center; justify-content: center; cursor: pointer;" style-hover="background: #14489C;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 12h14M13 6l6 6-6 6" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">desktop 1440</span>
+      <div data-screen-label="Chat desktop" style="width: 1440px; height: 860px; background: #F7F8F8; border-radius: 20px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px 40px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
+          <div style="display: flex; align-items: center; gap: 24px;">
+            <span style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 21px;"><span style="color: #E9A23B;">3</span>minsite</span>
+            <span style="color: #C9D2D9;">|</span>
+            <span style="font-weight: 700; font-size: 16px; color: #5A6B7A;">Створення сайту</span>
+          </div>
+          <span style="font-weight: 700; font-size: 15px; color: #1B5BBF; cursor: pointer;">Увійти</span>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; overflow: hidden;">
+          <div style="width: 720px; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+            <div style="display: flex; gap: 8px; padding: 20px 0 16px; align-items: center;">
+              <span style="font-weight: 700; font-size: 14px; color: #8A99A6; margin-right: 4px;">Зібрано:</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">✓ Бізнес</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">✓ Місто</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">Телефон</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">Адреса</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px;">Години</span>
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 16px; justify-content: flex-end; overflow: hidden; padding-bottom: 8px;">
+              <div style="display: flex; justify-content: flex-start; gap: 12px; align-items: flex-end;">
+                <div style="width: 40px; height: 40px; flex-shrink: 0; border-radius: 999px; background: #FCF1DD; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 17px; color: #E9A23B;">3</div>
+                <div style="max-width: 70%; background: #FFFFFF; border: 1.5px solid #E2E7EB; padding: 16px 20px; border-radius: 20px 20px 20px 6px; font-size: 17px; line-height: 1.55; box-shadow: 0 1px 2px rgba(23,36,47,.04);">Вітаю! 👋 Я допоможу створити сайт для вашого бізнесу. Розкажіть трохи — що це за бізнес, у якому місті, і який телефон для звʼязку?</div>
+              </div>
+              <div style="display: flex; justify-content: flex-end;">
+                <div style="max-width: 70%; background: #1B5BBF; color: #FFFFFF; padding: 16px 20px; border-radius: 20px 20px 6px 20px; font-size: 17px; line-height: 1.55;">🌷 Квітковий магазин</div>
+              </div>
+              <div style="display: flex; justify-content: flex-start; gap: 12px; align-items: flex-end;">
+                <div style="width: 40px; height: 40px; flex-shrink: 0; border-radius: 999px; background: #FCF1DD; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 17px; color: #E9A23B;">3</div>
+                <div style="max-width: 70%; background: #FFFFFF; border: 1.5px solid #E2E7EB; padding: 16px 20px; border-radius: 20px 20px 20px 6px; font-size: 17px; line-height: 1.55; box-shadow: 0 1px 2px rgba(23,36,47,.04);">Гарний вибір 🌷 Як називається магазин і в якому він місті?</div>
+              </div>
+              <div style="display: flex; justify-content: flex-end;">
+                <div style="max-width: 70%; background: #1B5BBF; color: #FFFFFF; padding: 16px 20px; border-radius: 20px 20px 6px 20px; font-size: 17px; line-height: 1.55;">«Квіти від Оксани», Львів</div>
+              </div>
+              <div style="display: flex; justify-content: flex-start; gap: 12px; align-items: flex-end;">
+                <div style="width: 40px; height: 40px; flex-shrink: 0; border-radius: 999px; background: #FCF1DD; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 17px; color: #E9A23B;">3</div>
+                <div style="max-width: 70%; background: #FFFFFF; border: 1.5px solid #E2E7EB; padding: 16px 20px; border-radius: 20px 20px 20px 6px; font-size: 17px; line-height: 1.55; box-shadow: 0 1px 2px rgba(23,36,47,.04);">Записав! Який телефон показати клієнтам для замовлень?</div>
+              </div>
+            </div>
+            <div style="padding: 12px 0 28px; display: flex; gap: 12px;">
+              <input type="tel" placeholder="+380 50 123 45 67" style="flex: 1; min-width: 0; height: 60px; padding: 0 24px; border: 1.5px solid #C9D2D9; border-radius: 999px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+              <div style="height: 60px; padding: 0 28px; flex-shrink: 0; border-radius: 999px; background: #1B5BBF; color: #FFFFFF; display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; cursor: pointer;" style-hover="background: #14489C;">
+                Надіслати
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 12h14M13 6l6 6-6 6" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+</body>
+</html>

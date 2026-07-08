@@ -27,6 +27,7 @@ const saveFactsSchema = z.object({
   verticalId: z.enum(VERTICAL_IDS as [string, ...string[]]),
   factsPatch: factsPatchSchema,
   status: z.enum(["collecting", "ready"]),
+  quickReplies: z.array(z.string()).max(4).optional(),
 });
 
 const saveFactsTool = {
@@ -43,15 +44,48 @@ const saveFactsTool = {
       status: z
         .enum(["collecting", "ready"])
         .describe("ready — коли зібрано достатньо для якісного сайту або користувач попросив 'просто згенеруй'."),
+      quickReplies: z
+        .array(z.string())
+        .max(4)
+        .optional()
+        .describe(
+          "2–4 короткі готові відповіді-чипи на ТВОЄ поточне питання (1–4 слова кожна), ЛИШЕ коли варіанти очевидні (напр. типи бізнесу, «Так»/«Ні», «Пропустити»). Не давай, коли відповідь вільна (назва, телефон).",
+        ),
     }),
   ),
 } as unknown as Anthropic.Tool;
+
+/** Progress chip for the chat UI (design 1b): key facts and whether collected. */
+export interface ProgressItem {
+  key: string;
+  label: string;
+  done: boolean;
+}
+
+const PROGRESS_FIELDS: { key: keyof BusinessFacts; label: string }[] = [
+  { key: "businessName", label: "Бізнес" },
+  { key: "city", label: "Місто" },
+  { key: "phone", label: "Телефон" },
+  { key: "address", label: "Адреса" },
+  { key: "hours", label: "Години" },
+];
+
+function computeProgress(facts: Partial<BusinessFacts>): ProgressItem[] {
+  return PROGRESS_FIELDS.map(({ key, label }) => {
+    const v = facts[key];
+    return { key, label, done: v != null && String(v).trim().length > 0 };
+  });
+}
 
 export interface OnboardTurnResult {
   message: string;
   facts: Partial<BusinessFacts>;
   verticalId: string;
   ready: boolean;
+  /** Suggested one-tap answers for the CURRENT question (design 1c). */
+  quickReplies: string[];
+  /** Collected-facts chips (design 1b). */
+  progress: ProgressItem[];
 }
 
 function fieldList(v: VerticalConfig): string {
@@ -83,7 +117,8 @@ ${fieldList(vertical)}
 - Ти БІЗНЕС-АНАЛІТИК + ПОРАДНИК: проактивно пропонуй, що варто додати (послуги з орієнтовними цінами, години, як замовити/звернутися, відгуки). Якщо людина не знає — запропонуй конкретне й типове для її ніші, коротко.
 - Уточнюй нішеві деталі (напр. для юриста — спеціалізацію) перш ніж радити далі.
 - НЕ вигадуй фактів за користувача.
-- status "ready" — лише коли зібрано достатньо для ЯКІСНОГО сайту, АБО користувач явно каже "просто згенеруй".${issuesBlock}`;
+- status "ready" — лише коли зібрано достатньо для ЯКІСНОГО сайту, АБО користувач явно каже "просто згенеруй".
+- quickReplies: коли на твоє питання є очевидні варіанти (тип бізнесу, так/ні, «Пропустити») — дай 2–4 коротких чипи (1–4 слова). Коли відповідь вільна (назва, телефон, адреса) — НЕ давай.${issuesBlock}`;
 }
 
 function sanitize(msg: string): string {
@@ -112,6 +147,8 @@ export async function onboardTurn(
       facts: currentFacts,
       verticalId: vertical.id,
       ready: false,
+      quickReplies: [],
+      progress: computeProgress(currentFacts),
     };
   }
 
@@ -133,6 +170,7 @@ export async function onboardTurn(
   let facts: Partial<BusinessFacts> = currentFacts;
   let verticalId = vertical.id;
   let ready = false;
+  let quickReplies: string[] = [];
 
   const toolUse = res.content.find((b) => b.type === "tool_use");
   if (toolUse && toolUse.type === "tool_use") {
@@ -141,9 +179,10 @@ export async function onboardTurn(
       facts = { ...currentFacts, ...parsed.data.factsPatch };
       verticalId = VERTICAL_IDS.includes(parsed.data.verticalId) ? parsed.data.verticalId : vertical.id;
       ready = parsed.data.status === "ready";
+      quickReplies = (parsed.data.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4);
     }
   }
 
   const message = sanitize(textMsg) || "Розкажіть, будь ласка, ще трохи про ваш бізнес?";
-  return { message, facts, verticalId, ready };
+  return { message, facts, verticalId, ready, quickReplies, progress: computeProgress(facts) };
 }

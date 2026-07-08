@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Unbounded:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #ECEEF0; font-family: 'Manrope', sans-serif; color: #17242F; }
+  a { color: #1B5BBF; } a:hover { color: #14489C; }
+</style>
+</helmet>
+
+<section style="padding: 56px; display: flex; flex-direction: column; gap: 32px;">
+  <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 30px;">Підтвердження даних</div>
+
+  <div style="display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start;">
+
+    <!-- Mobile filled -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · заповнено з чату</span>
+      <div data-screen-label="Form mobile" style="width: 390px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
+          <span style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #5A6B7A; font-size: 20px; font-weight: 700; cursor: pointer;">←</span>
+          <span style="font-weight: 800; font-size: 18px;">Перевірте дані</span>
+        </div>
+        <div style="padding: 20px 20px 28px; display: flex; flex-direction: column; gap: 18px;">
+          <div style="font-size: 16px; color: #5A6B7A; line-height: 1.5;">Я заповнив усе з нашої розмови. Відредагуйте будь-що і натисніть «Створити сайт».</div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-weight: 700; font-size: 15px;">Назва бізнесу <span style="color: #C03A32;">*</span></span>
+            <input type="text" value="Квіти від Оксани" placeholder="Напр. «Квіти від Оксани»" style="width: 100%; box-sizing: border-box; height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;" style-focus="border-color: #1B5BBF; box-shadow: 0 0 0 3px #E7EEF9;">
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-weight: 700; font-size: 15px;">Місто <span style="color: #C03A32;">*</span></span>
+              <input type="text" value="Львів" placeholder="Місто" style="width: 100%; box-sizing: border-box; height: 56px; min-width: 0; padding: 0 16px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-weight: 700; font-size: 15px;">Телефон <span style="color: #C03A32;">*</span></span>
+              <input type="tel" value="067 245 18 30" placeholder="+380 50 123 45 67" style="width: 100%; box-sizing: border-box; height: 56px; min-width: 0; padding: 0 16px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-weight: 700; font-size: 15px;">Адреса</span>
+            <input type="text" value="вул. Городоцька, 12" placeholder="вул. Хрещатик, 1" style="width: 100%; box-sizing: border-box; height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-weight: 700; font-size: 15px;">Години роботи</span>
+            <input type="text" value="Щодня 9:00–20:00" placeholder="Пн–Пт 9:00–19:00, Сб–Нд 10:00–17:00" style="width: 100%; box-sizing: border-box; height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-weight: 700; font-size: 15px;">Про бізнес</span>
+            <textarea rows="4" placeholder="Кілька слів про ваш бізнес…" style="width: 100%; box-sizing: border-box; padding: 14px 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; line-height: 1.5; outline: none; resize: none; background: #FFFFFF;">Свіжі букети щодня, доставка по Львову за 2 години. Працюємо з 2015 року.</textarea>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <span style="font-weight: 700; font-size: 15px;">Послуги та ціни</span>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span style="flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: #8A99A6;">Назва послуги</span>
+              <span style="width: 96px; flex-shrink: 0; font-size: 13px; font-weight: 700; color: #8A99A6;">Ціна</span>
+              <span style="width: 44px; flex-shrink: 0;"></span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="text" value="Букет дня" placeholder="Назва послуги" style="flex: 1; min-width: 0; box-sizing: border-box; height: 52px; padding: 0 14px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none; background: #FFFFFF;">
+              <input type="text" value="від 450 грн" placeholder="Ціна" style="width: 96px; flex-shrink: 0; box-sizing: border-box; height: 52px; padding: 0 12px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none; background: #FFFFFF;">
+              <span style="width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; color: #8A99A6; font-size: 22px; cursor: pointer;" style-hover="background: #FBE9E7; color: #C03A32;">×</span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="text" value="Весільна флористика" placeholder="Назва послуги" style="flex: 1; min-width: 0; box-sizing: border-box; height: 52px; padding: 0 14px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none; background: #FFFFFF;">
+              <input type="text" value="договірна" placeholder="Ціна" style="width: 96px; flex-shrink: 0; box-sizing: border-box; height: 52px; padding: 0 12px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none; background: #FFFFFF;">
+              <span style="width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; color: #8A99A6; font-size: 22px; cursor: pointer;" style-hover="background: #FBE9E7; color: #C03A32;">×</span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="text" value="Доставка по місту" placeholder="Назва послуги" style="flex: 1; min-width: 0; box-sizing: border-box; height: 52px; padding: 0 14px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none; background: #FFFFFF;">
+              <input type="text" value="120 грн" placeholder="Ціна" style="width: 96px; flex-shrink: 0; box-sizing: border-box; height: 52px; padding: 0 12px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none; background: #FFFFFF;">
+              <span style="width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; color: #8A99A6; font-size: 22px; cursor: pointer;" style-hover="background: #FBE9E7; color: #C03A32;">×</span>
+            </div>
+            <div style="display: flex; height: 52px; align-items: center; justify-content: center; border: 2px dashed #C9D2D9; border-radius: 14px; font-weight: 700; font-size: 16px; color: #1B5BBF; cursor: pointer;" style-hover="border-color: #1B5BBF; background: #E7EEF9;">+ Додати послугу</div>
+          </div>
+
+          <div style="display: flex; height: 60px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 18px; font-weight: 700; font-size: 19px; cursor: pointer; box-shadow: 0 8px 24px rgba(27,91,191,.3); margin-top: 6px;" style-hover="background: #14489C;">Створити сайт</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile with validation errors -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · помилки валідації</span>
+      <div data-screen-label="Form errors mobile" style="width: 390px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
+          <span style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #5A6B7A; font-size: 20px; font-weight: 700; cursor: pointer;">←</span>
+          <span style="font-weight: 800; font-size: 18px;">Перевірте дані</span>
+        </div>
+        <div style="padding: 20px 20px 28px; display: flex; flex-direction: column; gap: 18px;">
+          <div style="display: flex; align-items: flex-start; gap: 10px; background: #FBE9E7; border-radius: 14px; padding: 14px 16px;">
+            <span style="font-size: 17px;">☝️</span>
+            <span style="font-size: 15px; color: #C03A32; font-weight: 700; line-height: 1.45;">Заповніть, будь ласка, два поля нижче — без них клієнти не зможуть звʼязатися.</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-weight: 700; font-size: 15px;">Назва бізнесу <span style="color: #C03A32;">*</span></span>
+            <input type="text" value="Квіти від Оксани" style="height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-weight: 700; font-size: 15px;">Місто <span style="color: #C03A32;">*</span></span>
+              <input type="text" placeholder="Київ" style="width: 100%; box-sizing: border-box; height: 56px; min-width: 0; padding: 0 16px; border: 1.5px solid #D8A29D; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FDF6F5;">
+              <span style="font-size: 14px; color: #C03A32; font-weight: 700;">Введіть місто</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-weight: 700; font-size: 15px;">Телефон <span style="color: #C03A32;">*</span></span>
+              <input type="tel" placeholder="+380 50 123 45 67" style="width: 100%; box-sizing: border-box; height: 56px; min-width: 0; padding: 0 16px; border: 1.5px solid #D8A29D; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FDF6F5;">
+              <span style="font-size: 14px; color: #C03A32; font-weight: 700;">Введіть номер телефону</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-weight: 700; font-size: 15px;">Адреса</span>
+            <input type="text" value="вул. Городоцька, 12" style="width: 100%; box-sizing: border-box; height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+          </div>
+          <div style="display: flex; height: 60px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 18px; font-weight: 700; font-size: 19px; cursor: pointer; box-shadow: 0 8px 24px rgba(27,91,191,.3); margin-top: 6px;" style-hover="background: #14489C;">Створити сайт</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">desktop 1440</span>
+      <div data-screen-label="Form desktop" style="width: 1440px; background: #F7F8F8; border-radius: 20px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px 40px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
+          <div style="display: flex; align-items: center; gap: 24px;">
+            <span style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 21px;"><span style="color: #E9A23B;">3</span>minsite</span>
+            <span style="color: #C9D2D9;">|</span>
+            <span style="font-weight: 700; font-size: 16px; color: #5A6B7A;">Створення сайту</span>
+          </div>
+          <span style="font-weight: 700; font-size: 15px; color: #1B5BBF; cursor: pointer;">Увійти</span>
+        </div>
+        <div style="display: flex; justify-content: center; padding: 40px 0 56px;">
+          <div style="width: 720px; display: flex; flex-direction: column; gap: 22px;">
+            <div>
+              <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 27px;">Перевірте дані</div>
+              <div style="font-size: 17px; color: #5A6B7A; margin-top: 8px;">Я заповнив усе з нашої розмови. Відредагуйте будь-що і натисніть «Створити сайт».</div>
+            </div>
+            <div style="background: #FFFFFF; border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <span style="font-weight: 700; font-size: 15px;">Назва бізнесу <span style="color: #C03A32;">*</span></span>
+                <input type="text" value="Квіти від Оксани" placeholder="Напр. «Квіти від Оксани»" style="height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;" style-focus="border-color: #1B5BBF; box-shadow: 0 0 0 3px #E7EEF9;">
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <span style="font-weight: 700; font-size: 15px;">Місто <span style="color: #C03A32;">*</span></span>
+                  <input type="text" value="Львів" placeholder="Місто" style="height: 56px; min-width: 0; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <span style="font-weight: 700; font-size: 15px;">Телефон <span style="color: #C03A32;">*</span></span>
+                  <input type="tel" value="067 245 18 30" placeholder="+380 50 123 45 67" style="height: 56px; min-width: 0; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+                </div>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <span style="font-weight: 700; font-size: 15px;">Адреса</span>
+                  <input type="text" value="вул. Городоцька, 12" placeholder="вул. Хрещатик, 1" style="height: 56px; min-width: 0; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <span style="font-weight: 700; font-size: 15px;">Години роботи</span>
+                  <input type="text" value="Щодня 9:00–20:00" placeholder="Пн–Пт 9:00–19:00, Сб–Нд 10:00–17:00" style="height: 56px; min-width: 0; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+                </div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <span style="font-weight: 700; font-size: 15px;">Про бізнес</span>
+                <textarea rows="4" placeholder="Кілька слів про ваш бізнес…" style="padding: 14px 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; line-height: 1.5; outline: none; resize: none; background: #FFFFFF;">Свіжі букети щодня, доставка по Львову за 2 години. Працюємо з 2015 року.</textarea>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <span style="font-weight: 700; font-size: 15px;">Послуги та ціни</span>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <span style="flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: #8A99A6;">Назва послуги</span>
+                  <span style="width: 160px; flex-shrink: 0; font-size: 13px; font-weight: 700; color: #8A99A6;">Ціна</span>
+                  <span style="width: 48px; flex-shrink: 0;"></span>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <input type="text" value="Букет дня" placeholder="Назва послуги" style="flex: 1; min-width: 0; box-sizing: border-box; height: 52px; padding: 0 16px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none; background: #FFFFFF;">
+                  <input type="text" value="від 450 грн" placeholder="Ціна" style="width: 160px; flex-shrink: 0; box-sizing: border-box; height: 52px; padding: 0 14px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none; background: #FFFFFF;">
+                  <span style="width: 48px; height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; color: #8A99A6; font-size: 22px; cursor: pointer;" style-hover="background: #FBE9E7; color: #C03A32;">×</span>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <input type="text" value="Весільна флористика" placeholder="Назва послуги" style="flex: 1; min-width: 0; box-sizing: border-box; height: 52px; padding: 0 16px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none; background: #FFFFFF;">
+                  <input type="text" value="договірна" placeholder="Ціна" style="width: 160px; flex-shrink: 0; box-sizing: border-box; height: 52px; padding: 0 14px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none; background: #FFFFFF;">
+                  <span style="width: 48px; height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; color: #8A99A6; font-size: 22px; cursor: pointer;" style-hover="background: #FBE9E7; color: #C03A32;">×</span>
+                </div>
+                <div style="display: flex; height: 52px; align-items: center; justify-content: center; border: 2px dashed #C9D2D9; border-radius: 14px; font-weight: 700; font-size: 16px; color: #1B5BBF; cursor: pointer; align-self: stretch;" style-hover="border-color: #1B5BBF; background: #E7EEF9;">+ Додати послугу</div>
+              </div>
+            </div>
+            <div style="display: flex; height: 64px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 18px; font-weight: 700; font-size: 20px; cursor: pointer; box-shadow: 0 8px 24px rgba(27,91,191,.3);" style-hover="background: #14489C;">Створити сайт</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+</body>
+</html>

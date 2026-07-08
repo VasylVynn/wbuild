@@ -4,7 +4,7 @@ import { myTenantIds } from "@/lib/tenant/membership";
 import { getVertical } from "@/lib/verticals/registry";
 import { ROOT_DOMAIN } from "@/lib/config";
 import TelegramConnect from "@/components/dashboard/TelegramConnect";
-import ClaimSites from "@/components/dashboard/ClaimSites";
+import { Card, Chip, EmptyState } from "@/components/ui";
 
 // Always show the current list — new sites appear immediately.
 export const dynamic = "force-dynamic";
@@ -38,12 +38,19 @@ async function listSites(): Promise<SiteRow[]> {
   return (data as SiteRow[]).filter((s) => !!s.host);
 }
 
-const STATUS: Record<string, { label: string; cls: string }> = {
-  published: { label: "Опубліковано", cls: "bg-green-100 text-green-800" },
-  draft: { label: "Чернетка", cls: "bg-amber-100 text-amber-800" },
-  demo: { label: "Демо", cls: "bg-neutral-100 text-neutral-600" },
-  suspended: { label: "Призупинено", cls: "bg-red-100 text-red-700" },
+const STATUS: Record<string, { label: string; tone: "ok" | "warn" | "danger" | "neutral" }> = {
+  published: { label: "Опубліковано", tone: "ok" },
+  draft: { label: "Чернетка", tone: "warn" },
+  demo: { label: "Демо", tone: "neutral" },
+  suspended: { label: "Призупинено", tone: "danger" },
 };
+
+// Link needs to render an <a>, so we mirror Button's look here directly
+// rather than nesting a <button> inside it (invalid HTML).
+const primaryLinkMd =
+  "inline-flex shrink-0 min-h-12 items-center justify-center gap-2 rounded-[16px] bg-brand px-5 font-ui text-[16px] font-bold text-white transition-colors hover:bg-brand-hover";
+const secondaryLinkMd =
+  "inline-flex flex-1 min-h-12 items-center justify-center gap-2 rounded-[16px] border-[1.5px] border-line-strong bg-surface px-5 font-ui text-[16px] font-bold text-ink transition-colors hover:bg-sunken";
 
 export default async function SitesPage() {
   const sites = await listSites();
@@ -52,77 +59,61 @@ export default async function SitesPage() {
   const urlFor = (host: string) => `${isProd ? "https" : "http"}://${host}${isProd ? "" : port}`;
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl px-6 py-12">
+    <main className="mx-auto min-h-screen max-w-3xl bg-canvas px-6 py-12">
       {/* Binds sites created anonymously before the user registered (§3.1). */}
-      <ClaimSites />
       <div className="mb-8 flex items-center justify-between gap-4">
         <div>
-          <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-800">
+          <Link href="/" className="text-[14px] font-bold text-ink-muted transition-colors hover:text-ink">
             ← Панель
           </Link>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-neutral-900">
-            Мої сайти <span className="text-neutral-400">({sites.length})</span>
+          <h1 className="mt-1.5 font-brand text-[24px] font-medium text-ink">
+            Мої сайти <span className="text-ink-faint">({sites.length})</span>
           </h1>
         </div>
-        <Link
-          href="/new"
-          className="shrink-0 rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700"
-        >
-          Створити сайт
+        <Link href="/new" className={primaryLinkMd}>
+          + Створити сайт
         </Link>
       </div>
 
       {sites.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-neutral-300 px-6 py-16 text-center text-neutral-500">
-          Ще немає сайтів.{" "}
-          <Link href="/new" className="font-medium text-neutral-800 underline">
-            Створіть перший
-          </Link>
-          .
-        </div>
+        <EmptyState emoji="🌐" title="Ще немає сайтів">
+          Створіть перший у простій розмові з помічником — це займе близько трьох хвилин.
+          <div className="mt-4">
+            <Link href="/new" className={`${primaryLinkMd} w-full sm:w-auto`}>
+              Створити сайт
+            </Link>
+          </div>
+        </EmptyState>
       ) : (
-        <ul className="space-y-3">
+        <ul className="flex flex-col gap-3.5">
           {sites.map((s) => {
             const status = STATUS[s.status] ?? STATUS.demo;
             const name = s.brand?.businessName || s.host;
             return (
-              <li
-                key={s.id}
-                className="flex items-start justify-between gap-4 rounded-2xl border border-neutral-200 bg-white px-5 py-4"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-lg font-semibold text-neutral-900">{name}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status.cls}`}>
-                      {status.label}
-                    </span>
+              <li key={s.id}>
+                <Card className="flex flex-col gap-3.5 p-5">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="truncate text-[19px] font-extrabold text-ink">{name}</span>
+                    <Chip tone={status.tone}>{status.label}</Chip>
                   </div>
-                  <div className="mt-0.5 truncate text-sm text-neutral-500">
+                  <div className="truncate text-[15px] font-semibold text-ink-muted">
                     {s.host} · {getVertical(s.vertical).label}
                   </div>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href={`/edit/${encodeURIComponent(s.host!)}`}
-                      className="rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-100"
-                    >
+                  <div className="flex items-center gap-2.5">
+                    <Link href={`/edit/${encodeURIComponent(s.host!)}`} className={secondaryLinkMd}>
                       Редагувати
                     </Link>
                     <a
                       href={urlFor(s.host!)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-100"
+                      className={secondaryLinkMd}
                     >
                       Відкрити ↗
                     </a>
                   </div>
-                  <TelegramConnect
-                    tenantId={s.id}
-                    connected={!!s.telegram_chat_id}
-                  />
-                </div>
+                  <TelegramConnect tenantId={s.id} connected={!!s.telegram_chat_id} />
+                </Card>
               </li>
             );
           })}

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Unbounded:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #ECEEF0; font-family: 'Manrope', sans-serif; color: #17242F; }
+  a { color: #1B5BBF; } a:hover { color: #14489C; }
+</style>
+</helmet>
+
+<section style="padding: 56px; display: flex; flex-direction: column; gap: 32px;">
+  <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 30px;">Мої сайти</div>
+
+  <div style="display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start;">
+
+    <!-- Mobile list -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · список</span>
+      <div data-screen-label="Sites mobile" style="width: 390px; height: 780px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
+          <span style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #5A6B7A; font-size: 20px; font-weight: 700; cursor: pointer;">←</span>
+          <span style="font-weight: 800; font-size: 18px; flex: 1;">Мої сайти</span>
+          <span style="display: flex; height: 44px; padding: 0 18px; align-items: center; background: #1B5BBF; color: #FFFFFF; border-radius: 999px; font-weight: 700; font-size: 15px; cursor: pointer;" style-hover="background: #14489C;">+ Створити</span>
+        </div>
+        <div style="flex: 1; padding: 18px 16px; display: flex; flex-direction: column; gap: 14px; overflow: hidden;">
+          <!-- card 1 published + tg connected -->
+          <div style="background: #FFFFFF; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span style="font-weight: 800; font-size: 19px;">Квіти від Оксани</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 999px;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #177E53;"></span>Опубліковано</span>
+            </div>
+            <div style="font-size: 15px; color: #5A6B7A; font-weight: 600;">kvity-oksana.3minsite.com.ua · Квітковий магазин</div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <div style="flex: 1; display: flex; height: 50px; align-items: center; justify-content: center; background: #E7EEF9; color: #1B5BBF; border-radius: 14px; font-weight: 700; font-size: 16px; cursor: pointer;" style-hover="background: #d9e5f6;">Редагувати</div>
+              <div style="flex: 1; display: flex; height: 50px; align-items: center; justify-content: center; border: 1.5px solid #C9D2D9; border-radius: 14px; font-weight: 700; font-size: 16px; cursor: pointer;" style-hover="background: #EEF1F3;">Відкрити ↗</div>
+            </div>
+            <span style="display: inline-flex; align-self: flex-start; align-items: center; gap: 7px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 14px; padding: 8px 14px; border-radius: 999px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#229ED9"></circle><path d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z" fill="#FFFFFF"></path></svg>
+              Telegram підключено ✓</span>
+          </div>
+          <!-- card 2 draft + connect tg -->
+          <div style="background: #FFFFFF; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span style="font-weight: 800; font-size: 19px;">Пекарня «Тепло»</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; background: #FAF0D9; color: #8F6410; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 999px;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #B98A17;"></span>Чернетка</span>
+            </div>
+            <div style="font-size: 15px; color: #5A6B7A; font-weight: 600;">teplo.3minsite.com.ua · Пекарня</div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <div style="flex: 1; display: flex; height: 50px; align-items: center; justify-content: center; background: #E7EEF9; color: #1B5BBF; border-radius: 14px; font-weight: 700; font-size: 16px; cursor: pointer;" style-hover="background: #d9e5f6;">Редагувати</div>
+              <div style="flex: 1; display: flex; height: 50px; align-items: center; justify-content: center; border: 1.5px solid #C9D2D9; border-radius: 14px; font-weight: 700; font-size: 16px; cursor: pointer;" style-hover="background: #EEF1F3;">Відкрити ↗</div>
+            </div>
+            <div style="display: flex; height: 50px; align-items: center; justify-content: center; gap: 9px; background: #229ED9; color: #FFFFFF; border-radius: 14px; font-weight: 700; font-size: 16px; cursor: pointer;" style-hover="background: #1787BD;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#FFFFFF"></circle><path d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z" fill="#229ED9"></path></svg>
+              Підключити Telegram</div>
+          </div>
+          <!-- card 3 suspended -->
+          <div style="background: #FFFFFF; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span style="font-weight: 800; font-size: 19px;">СТО «Мотор»</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; background: #FBE9E7; color: #C03A32; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 999px;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #C03A32;"></span>Призупинено</span>
+            </div>
+            <div style="font-size: 15px; color: #5A6B7A; font-weight: 600;">motor.3minsite.com.ua · Автосервіс</div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <div style="flex: 1; display: flex; height: 50px; align-items: center; justify-content: center; background: #E7EEF9; color: #1B5BBF; border-radius: 14px; font-weight: 700; font-size: 16px; cursor: pointer;" style-hover="background: #d9e5f6;">Редагувати</div>
+              <div style="flex: 1; display: flex; height: 50px; align-items: center; justify-content: center; border: 1.5px solid #C9D2D9; border-radius: 14px; font-weight: 700; font-size: 16px; color: #8A99A6; cursor: not-allowed;">Відкрити ↗</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile empty -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · порожньо</span>
+      <div data-screen-label="Sites empty mobile" style="width: 390px; height: 780px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
+          <span style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #5A6B7A; font-size: 20px; font-weight: 700; cursor: pointer;">←</span>
+          <span style="font-weight: 800; font-size: 18px;">Мої сайти</span>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 32px; gap: 16px; text-align: center;">
+          <div style="width: 76px; height: 76px; border-radius: 999px; background: #E7EEF9; display: flex; align-items: center; justify-content: center;">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3" stroke="#1B5BBF" stroke-width="2"></rect><path d="M3 9h18" stroke="#1B5BBF" stroke-width="2"></path></svg>
+          </div>
+          <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 21px;">Ще немає сайтів</div>
+          <div style="font-size: 17px; color: #5A6B7A; line-height: 1.55;">Створіть перший у простій розмові з помічником — це займе близько трьох хвилин.</div>
+          <div style="display: flex; height: 58px; align-items: center; justify-content: center; padding: 0 32px; background: #1B5BBF; color: #FFFFFF; border-radius: 18px; font-weight: 700; font-size: 18px; cursor: pointer; box-shadow: 0 8px 24px rgba(27,91,191,.3); margin-top: 8px;" style-hover="background: #14489C;">Створити сайт</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop list -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">desktop 1440</span>
+      <div data-screen-label="Sites desktop" style="width: 1440px; background: #F7F8F8; border-radius: 20px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px 40px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
+          <span style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 21px;"><span style="color: #E9A23B;">3</span>minsite</span>
+          <div style="display: flex; align-items: center; gap: 20px;">
+            <span style="font-weight: 600; font-size: 15px; color: #5A6B7A;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="cea1a5bdafa0af8ea9a3afa7a2e0ada1a3">[email&#160;protected]</a></span>
+            <span style="font-weight: 700; font-size: 15px; color: #1B5BBF; cursor: pointer;">Вийти</span>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: center; padding: 40px 0 56px;">
+          <div style="width: 860px; display: flex; flex-direction: column; gap: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <a href="#" style="font-weight: 700; font-size: 14px; color: #5A6B7A; text-decoration: none;">← Панель</a>
+                <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 27px; margin-top: 6px;">Мої сайти <span style="color: #8A99A6;">(3)</span></div>
+              </div>
+              <div style="display: flex; height: 52px; padding: 0 26px; align-items: center; background: #1B5BBF; color: #FFFFFF; border-radius: 16px; font-weight: 700; font-size: 16px; cursor: pointer;" style-hover="background: #14489C;">+ Створити сайт</div>
+            </div>
+
+            <div style="background: #FFFFFF; border-radius: 20px; padding: 24px 28px; display: flex; align-items: center; gap: 24px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+              <div style="flex: 1; min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-weight: 800; font-size: 20px;">Квіти від Оксани</span>
+                  <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 999px;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #177E53;"></span>Опубліковано</span>
+                  <span style="display: inline-flex; align-items: center; gap: 7px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 999px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#229ED9"></circle><path d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z" fill="#FFFFFF"></path></svg>
+                    Telegram ✓</span>
+                </div>
+                <div style="font-size: 15px; color: #5A6B7A; font-weight: 600; margin-top: 6px;">kvity-oksana.3minsite.com.ua · Квітковий магазин</div>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <div style="display: flex; height: 48px; padding: 0 22px; align-items: center; background: #E7EEF9; color: #1B5BBF; border-radius: 14px; font-weight: 700; font-size: 15px; cursor: pointer;" style-hover="background: #d9e5f6;">Редагувати</div>
+                <div style="display: flex; height: 48px; padding: 0 22px; align-items: center; border: 1.5px solid #C9D2D9; border-radius: 14px; font-weight: 700; font-size: 15px; cursor: pointer;" style-hover="background: #EEF1F3;">Відкрити ↗</div>
+              </div>
+            </div>
+
+            <div style="background: #FFFFFF; border-radius: 20px; padding: 24px 28px; display: flex; align-items: center; gap: 24px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+              <div style="flex: 1; min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-weight: 800; font-size: 20px;">Пекарня «Тепло»</span>
+                  <span style="display: inline-flex; align-items: center; gap: 6px; background: #FAF0D9; color: #8F6410; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 999px;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #B98A17;"></span>Чернетка</span>
+                </div>
+                <div style="font-size: 15px; color: #5A6B7A; font-weight: 600; margin-top: 6px;">teplo.3minsite.com.ua · Пекарня</div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <div style="display: flex; height: 48px; padding: 0 20px; align-items: center; gap: 8px; background: #229ED9; color: #FFFFFF; border-radius: 999px; font-weight: 700; font-size: 15px; cursor: pointer;" style-hover="background: #1787BD;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#FFFFFF"></circle><path d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z" fill="#229ED9"></path></svg>
+                  Підключити Telegram</div>
+                <div style="display: flex; height: 48px; padding: 0 22px; align-items: center; background: #E7EEF9; color: #1B5BBF; border-radius: 14px; font-weight: 700; font-size: 15px; cursor: pointer;" style-hover="background: #d9e5f6;">Редагувати</div>
+                <div style="display: flex; height: 48px; padding: 0 22px; align-items: center; border: 1.5px solid #C9D2D9; border-radius: 14px; font-weight: 700; font-size: 15px; cursor: pointer;" style-hover="background: #EEF1F3;">Відкрити ↗</div>
+              </div>
+            </div>
+
+            <div style="background: #FFFFFF; border-radius: 20px; padding: 24px 28px; display: flex; align-items: center; gap: 24px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+              <div style="flex: 1; min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-weight: 800; font-size: 20px;">СТО «Мотор»</span>
+                  <span style="display: inline-flex; align-items: center; gap: 6px; background: #FBE9E7; color: #C03A32; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 999px;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #C03A32;"></span>Призупинено</span>
+                </div>
+                <div style="font-size: 15px; color: #5A6B7A; font-weight: 600; margin-top: 6px;">motor.3minsite.com.ua · Автосервіс</div>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <div style="display: flex; height: 48px; padding: 0 22px; align-items: center; background: #E7EEF9; color: #1B5BBF; border-radius: 14px; font-weight: 700; font-size: 15px; cursor: pointer;" style-hover="background: #d9e5f6;">Редагувати</div>
+                <div style="display: flex; height: 48px; padding: 0 22px; align-items: center; border: 1.5px solid #E2E7EB; border-radius: 14px; font-weight: 700; font-size: 15px; color: #8A99A6; cursor: not-allowed;">Відкрити ↗</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script></body>
+</html>

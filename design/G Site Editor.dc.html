@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Unbounded:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #ECEEF0; font-family: 'Manrope', sans-serif; color: #17242F; }
+  a { color: #1B5BBF; } a:hover { color: #14489C; }
+</style>
+</helmet>
+
+<section style="padding: 56px; display: flex; flex-direction: column; gap: 32px;">
+  <div style="display: flex; flex-direction: column; gap: 8px; max-width: 800px;">
+    <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 30px;">Редактор сайту</div>
+    <div style="font-size: 17px; color: #5A6B7A; line-height: 1.5;">Хром редактора — нейтральний (папір + синій), сайт клієнта всередині — з власною темою («Класична троянда»), у білій рамці на сірому полотні, тому теми ніколи не конфліктують.</div>
+  </div>
+
+  <div style="display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start;">
+
+    <!-- ============ Desktop editor with toast ============ -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">desktop 1440 · керування секціями + тост публікації</span>
+      <div data-screen-label="Editor desktop" style="width: 1440px; height: 1000px; background: #EEF1F3; border-radius: 20px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden; position: relative;">
+        <!-- Top bar -->
+        <div style="display: flex; align-items: center; gap: 24px; padding: 14px 32px; background: #FFFFFF; border-bottom: 1px solid #E2E7EB;">
+          <a href="#" style="font-weight: 700; font-size: 15px; color: #5A6B7A; text-decoration: none; white-space: nowrap;">← Сайти</a>
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-weight: 800; font-size: 19px;">Квіти від Оксани</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; background: #FAF0D9; color: #8F6410; font-weight: 700; font-size: 13px; padding: 4px 12px; border-radius: 999px;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #B98A17;"></span>Чернетка</span>
+            </div>
+            <div style="font-size: 13px; color: #8A99A6; font-weight: 600;">kvity-oksana.3minsite.com.ua <span style="color: #8F6410;">· є неопубліковані зміни</span></div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="display: flex; height: 48px; padding: 0 20px; align-items: center; gap: 8px; border: 1.5px solid #C9D2D9; border-radius: 999px; font-weight: 700; font-size: 15px; cursor: pointer; background: #FFFFFF;" style-hover="background: #EEF1F3;">🎨 Оформлення</div>
+            <div style="display: flex; height: 48px; padding: 0 20px; align-items: center; gap: 8px; border: 1.5px solid #C9D2D9; border-radius: 999px; font-weight: 700; font-size: 15px; cursor: pointer; background: #FFFFFF;" style-hover="background: #EEF1F3;">↻ Перегенерувати</div>
+            <div style="display: flex; height: 48px; padding: 0 26px; align-items: center; background: #1B5BBF; color: #FFFFFF; border-radius: 999px; font-weight: 700; font-size: 15px; cursor: pointer;" style-hover="background: #14489C;">Опублікувати</div>
+          </div>
+        </div>
+
+        <!-- Preview canvas -->
+        <div style="flex: 1; overflow: hidden; display: flex; justify-content: center; padding: 28px 0;">
+          <div style="width: 980px; background: #FFFFFF; border-radius: 24px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); overflow: hidden; align-self: flex-start;">
+            <!-- tenant site: rose theme -->
+            <!-- HERO section with hover controls -->
+            <div style="position: relative;">
+              <div style="background: #fff8f6; padding: 56px 64px; font-family: Georgia, serif; color: #3a2b2f; outline: 2px solid rgba(27,91,191,.35); outline-offset: -2px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 44px; font-family: 'Manrope', sans-serif;">
+                  <span style="font-family: Georgia, serif; font-weight: 700; font-size: 22px; color: #b23a58;">Квіти від Оксани</span>
+                  <span style="font-weight: 700; font-size: 15px; color: #3a2b2f;">067 245 18 30</span>
+                </div>
+                <div style="font-size: 42px; font-weight: 700; line-height: 1.2; max-width: 560px;">Свіжі букети з доставкою по Львову</div>
+                <div style="font-family: 'Manrope', sans-serif; font-size: 17px; color: #6d585e; margin-top: 16px; max-width: 480px; line-height: 1.55;">Збираємо букети щодня зранку. Доставимо за 2 години або приготуємо до самовивозу.</div>
+                <div style="display: inline-flex; height: 52px; padding: 0 28px; align-items: center; background: #b23a58; color: #fff8f6; border-radius: 16px; font-family: 'Manrope', sans-serif; font-weight: 700; font-size: 16px; margin-top: 28px;">Замовити букет</div>
+              </div>
+              <!-- section chrome -->
+              <div style="position: absolute; top: 12px; left: 12px; background: rgba(255,255,255,.95); border-radius: 999px; padding: 6px 14px; font-weight: 800; font-size: 14px; color: #17242F; box-shadow: 0 2px 8px rgba(23,36,47,.15);">Шапка і банер</div>
+              <div style="position: absolute; top: 10px; right: 12px; display: flex; gap: 8px;">
+                <div style="width: 44px; height: 44px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 2px 8px rgba(23,36,47,.18); display: flex; align-items: center; justify-content: center; font-size: 17px; color: #17242F; cursor: pointer;" style-hover="background: #E7EEF9;">↑</div>
+                <div style="width: 44px; height: 44px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 2px 8px rgba(23,36,47,.18); display: flex; align-items: center; justify-content: center; font-size: 17px; color: #17242F; cursor: pointer;" style-hover="background: #E7EEF9;">↓</div>
+                <div style="width: 44px; height: 44px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 2px 8px rgba(23,36,47,.18); display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer;" style-hover="background: #E7EEF9;">👁</div>
+                <div style="width: 44px; height: 44px; border-radius: 999px; background: #1B5BBF; box-shadow: 0 2px 8px rgba(23,36,47,.18); display: flex; align-items: center; justify-content: center; font-size: 15px; cursor: pointer;" style-hover="background: #14489C;">✏️</div>
+              </div>
+            </div>
+
+            <!-- SERVICES section (no hover) -->
+            <div style="position: relative;">
+              <div style="background: #ffffff; padding: 48px 64px; font-family: Georgia, serif; color: #3a2b2f;">
+                <div style="font-size: 30px; font-weight: 700;">Послуги та ціни</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 24px; font-family: 'Manrope', sans-serif;">
+                  <div style="border: 1px solid #e7d3d8; border-radius: 16px; padding: 20px;"><div style="font-weight: 700; font-size: 16px; color: #3a2b2f;">Букет дня</div><div style="color: #b23a58; font-weight: 800; font-size: 18px; margin-top: 8px;">від 450 грн</div></div>
+                  <div style="border: 1px solid #e7d3d8; border-radius: 16px; padding: 20px;"><div style="font-weight: 700; font-size: 16px; color: #3a2b2f;">Весільна флористика</div><div style="color: #b23a58; font-weight: 800; font-size: 18px; margin-top: 8px;">договірна</div></div>
+                  <div style="border: 1px solid #e7d3d8; border-radius: 16px; padding: 20px;"><div style="font-weight: 700; font-size: 16px; color: #3a2b2f;">Доставка по місту</div><div style="color: #b23a58; font-weight: 800; font-size: 18px; margin-top: 8px;">120 грн</div></div>
+                </div>
+              </div>
+              <div style="position: absolute; top: 12px; left: 12px; background: rgba(255,255,255,.95); border-radius: 999px; padding: 6px 14px; font-weight: 800; font-size: 14px; color: #17242F; box-shadow: 0 2px 8px rgba(23,36,47,.15); opacity: .55;">Послуги</div>
+            </div>
+
+            <!-- HIDDEN section placeholder -->
+            <div style="padding: 14px 20px; background: #ffffff;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 2px dashed #C9D2D9; border-radius: 16px; padding: 18px 22px; background: #F7F8F8; font-family: 'Manrope', sans-serif;">
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-weight: 800; font-size: 16px; color: #5A6B7A;">Галерея</span>
+                    <span style="background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 12px; padding: 3px 10px; border-radius: 999px;">приховано</span>
+                  </div>
+                  <span style="font-size: 14px; color: #8A99A6; font-weight: 600;">Ця секція не показується на сайті.</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <div style="width: 44px; height: 44px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E2E7EB; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer;" style-hover="background: #E7EEF9;">🙈</div>
+                  <div style="width: 44px; height: 44px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E2E7EB; display: flex; align-items: center; justify-content: center; font-size: 15px; cursor: pointer;" style-hover="background: #E7EEF9;">✏️</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CONTACTS section -->
+            <div style="position: relative;">
+              <div style="background: #f3e1e6; padding: 48px 64px; font-family: Georgia, serif; color: #3a2b2f;">
+                <div style="font-size: 30px; font-weight: 700;">Контакти</div>
+                <div style="font-family: 'Manrope', sans-serif; font-size: 16px; line-height: 1.7; margin-top: 16px; color: #4d3b41;">вул. Городоцька, 12, Львів<br>Щодня 9:00–20:00<br><b>067 245 18 30</b></div>
+              </div>
+              <div style="position: absolute; top: 12px; left: 12px; background: rgba(255,255,255,.95); border-radius: 999px; padding: 6px 14px; font-weight: 800; font-size: 14px; color: #17242F; box-shadow: 0 2px 8px rgba(23,36,47,.15); opacity: .55;">Контакти</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="position: absolute; left: 0; right: 0; bottom: 64px; display: flex; justify-content: center; pointer-events: none;">
+          <span style="font-size: 14px; color: #8A99A6; font-weight: 600; background: rgba(238,241,243,.9); padding: 6px 16px; border-radius: 999px;">Натисніть на будь-яку секцію, щоб змінити текст або фото</span>
+        </div>
+
+        <!-- Publish toast -->
+        <div style="position: absolute; left: 0; right: 0; bottom: 108px; display: flex; justify-content: center;">
+          <div style="display: flex; align-items: center; gap: 14px; background: #17242F; color: #FFFFFF; border-radius: 999px; padding: 12px 12px 12px 24px; box-shadow: 0 14px 40px rgba(23,36,47,.3);">
+            <span style="font-weight: 700; font-size: 16px;">Опубліковано! Зміни вже на сайті</span>
+            <span style="background: rgba(255,255,255,.16); border-radius: 999px; padding: 10px 18px; font-weight: 700; font-size: 15px; cursor: pointer; white-space: nowrap;" style-hover="background: rgba(255,255,255,.28);">Переглянути сайт ↗</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Desktop confirm dialog ============ -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">desktop 1440 · підтвердження «Перегенерувати»</span>
+      <div data-screen-label="Editor confirm desktop" style="width: 1440px; height: 700px; background: #EEF1F3; border-radius: 20px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden; position: relative;">
+        <div style="display: flex; align-items: center; gap: 24px; padding: 14px 32px; background: #FFFFFF; border-bottom: 1px solid #E2E7EB; filter: blur(1px); opacity: .8;">
+          <span style="font-weight: 700; font-size: 15px; color: #5A6B7A;">← Сайти</span>
+          <div style="flex: 1;"><span style="font-weight: 800; font-size: 19px;">Квіти від Оксани</span></div>
+          <div style="display: flex; height: 48px; padding: 0 26px; align-items: center; background: #1B5BBF; color: #FFFFFF; border-radius: 999px; font-weight: 700; font-size: 15px;">Опублікувати</div>
+        </div>
+        <div style="flex: 1; filter: blur(1px); opacity: .8; display: flex; justify-content: center; padding-top: 28px;">
+          <div style="width: 980px; height: 400px; background: #fff8f6; border-radius: 24px 24px 0 0; border: 1px solid #E2E7EB;"></div>
+        </div>
+        <div style="position: absolute; inset: 0; background: rgba(23,36,47,.45); display: flex; align-items: center; justify-content: center;">
+          <div style="width: 480px; background: #FFFFFF; border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 30px 80px rgba(23,36,47,.35);">
+            <div style="width: 60px; height: 60px; border-radius: 999px; background: #E7EEF9; display: flex; align-items: center; justify-content: center; font-size: 26px;">↻</div>
+            <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 22px;">Зібрати сайт наново?</div>
+            <div style="font-size: 17px; color: #5A6B7A; line-height: 1.55;">Ми зберемо сайт наново з ваших даних. Поточна версія збережеться в чернетках — нічого не пропаде.</div>
+            <div style="display: flex; gap: 12px; margin-top: 6px;">
+              <div style="flex: 1.2; display: flex; height: 56px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 16px; font-weight: 700; font-size: 17px; cursor: pointer;" style-hover="background: #14489C;">Так, зібрати</div>
+              <div style="flex: 1; display: flex; height: 56px; align-items: center; justify-content: center; border: 1.5px solid #C9D2D9; border-radius: 16px; font-weight: 700; font-size: 17px; cursor: pointer;" style-hover="background: #EEF1F3;">Скасувати</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Mobile editor ============ -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · редактор</span>
+      <div data-screen-label="Editor mobile" style="width: 390px; height: 844px; background: #EEF1F3; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="background: #FFFFFF; border-bottom: 1px solid #E2E7EB;">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 16px 8px;">
+            <span style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: #5A6B7A; font-size: 19px; font-weight: 700; cursor: pointer;">←</span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-weight: 800; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Квіти від Оксани</span>
+                <span style="background: #FAF0D9; color: #8F6410; font-weight: 700; font-size: 12px; padding: 3px 10px; border-radius: 999px; white-space: nowrap;">Чернетка</span>
+              </div>
+              <div style="font-size: 12px; color: #8A99A6; font-weight: 600;">kvity-oksana.3minsite.com.ua</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; padding: 6px 16px 12px;">
+            <div style="display: flex; height: 44px; padding: 0 14px; align-items: center; gap: 6px; border: 1.5px solid #C9D2D9; border-radius: 999px; font-weight: 700; font-size: 14px; cursor: pointer; background: #FFFFFF;">🎨 Оформлення</div>
+            <div style="display: flex; height: 44px; padding: 0 14px; align-items: center; gap: 6px; border: 1.5px solid #C9D2D9; border-radius: 999px; font-weight: 700; font-size: 14px; cursor: pointer; background: #FFFFFF;">↻</div>
+            <div style="flex: 1; display: flex; height: 44px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 999px; font-weight: 700; font-size: 15px; cursor: pointer;" style-hover="background: #14489C;">Опублікувати</div>
+          </div>
+        </div>
+        <div style="flex: 1; overflow: hidden; padding: 14px 12px;">
+          <div style="background: #FFFFFF; border-radius: 18px; border: 1px solid #E2E7EB; overflow: hidden;">
+            <div style="position: relative;">
+              <div style="background: #fff8f6; padding: 52px 20px 28px; font-family: Georgia, serif; color: #3a2b2f;">
+                <div style="font-size: 24px; font-weight: 700; line-height: 1.25;">Свіжі букети з доставкою по Львову</div>
+                <div style="font-family: 'Manrope', sans-serif; font-size: 14px; color: #6d585e; margin-top: 10px; line-height: 1.5;">Збираємо букети щодня зранку. Доставимо за 2 години.</div>
+                <div style="display: inline-flex; height: 44px; padding: 0 20px; align-items: center; background: #b23a58; color: #fff8f6; border-radius: 14px; font-family: 'Manrope', sans-serif; font-weight: 700; font-size: 14px; margin-top: 18px;">Замовити букет</div>
+              </div>
+              <div style="position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,.95); border-radius: 999px; padding: 5px 12px; font-weight: 800; font-size: 13px; box-shadow: 0 2px 8px rgba(23,36,47,.15);">Шапка і банер</div>
+              <div style="position: absolute; top: 8px; right: 10px; display: flex; gap: 6px;">
+                <div style="width: 40px; height: 40px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 2px 8px rgba(23,36,47,.18); display: flex; align-items: center; justify-content: center; font-size: 15px; cursor: pointer;">↑</div>
+                <div style="width: 40px; height: 40px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 2px 8px rgba(23,36,47,.18); display: flex; align-items: center; justify-content: center; font-size: 15px; cursor: pointer;">↓</div>
+                <div style="width: 40px; height: 40px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 2px 8px rgba(23,36,47,.18); display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer;">👁</div>
+                <div style="width: 40px; height: 40px; border-radius: 999px; background: #1B5BBF; box-shadow: 0 2px 8px rgba(23,36,47,.18); display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer;">✏️</div>
+              </div>
+            </div>
+            <div style="position: relative;">
+              <div style="background: #ffffff; padding: 44px 20px 24px; font-family: Georgia, serif; color: #3a2b2f;">
+                <div style="font-size: 20px; font-weight: 700;">Послуги та ціни</div>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px; font-family: 'Manrope', sans-serif;">
+                  <div style="display: flex; justify-content: space-between; border: 1px solid #e7d3d8; border-radius: 12px; padding: 14px 16px;"><span style="font-weight: 700; font-size: 14px;">Букет дня</span><span style="color: #b23a58; font-weight: 800; font-size: 14px;">від 450 грн</span></div>
+                  <div style="display: flex; justify-content: space-between; border: 1px solid #e7d3d8; border-radius: 12px; padding: 14px 16px;"><span style="font-weight: 700; font-size: 14px;">Весільна флористика</span><span style="color: #b23a58; font-weight: 800; font-size: 14px;">договірна</span></div>
+                </div>
+              </div>
+              <div style="position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,.95); border-radius: 999px; padding: 5px 12px; font-weight: 800; font-size: 13px; box-shadow: 0 2px 8px rgba(23,36,47,.15); opacity: .55;">Послуги</div>
+            </div>
+            <div style="padding: 10px 12px 12px; background: #ffffff;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 2px dashed #C9D2D9; border-radius: 14px; padding: 14px 16px; background: #F7F8F8;">
+                <div style="display: flex; flex-direction: column; gap: 3px;">
+                  <div style="display: flex; align-items: center; gap: 8px;"><span style="font-weight: 800; font-size: 14px; color: #5A6B7A;">Галерея</span><span style="background: #EEF1F3; color: #8A99A6; font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 999px;">приховано</span></div>
+                  <span style="font-size: 12px; color: #8A99A6; font-weight: 600;">Не показується на сайті</span>
+                </div>
+                <div style="width: 40px; height: 40px; border-radius: 999px; background: #FFFFFF; border: 1px solid #E2E7EB; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer;">🙈</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Mobile bottom sheet ============ -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · редагування секції</span>
+      <div data-screen-label="Editor sheet mobile" style="width: 390px; height: 844px; background: #EEF1F3; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden; position: relative;">
+        <div style="flex: 1; background: rgba(23,36,47,.45);"></div>
+        <div style="position: absolute; left: 0; right: 0; bottom: 0; background: #FFFFFF; border-radius: 28px 28px 0 0; box-shadow: 0 -12px 44px rgba(23,36,47,.25); display: flex; flex-direction: column; max-height: 92%;">
+          <div style="display: flex; justify-content: center; padding: 10px 0 2px;"><div style="width: 44px; height: 5px; border-radius: 999px; background: #C9D2D9;"></div></div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 20px 14px; border-bottom: 1px solid #EEF1F3;">
+            <div>
+              <div style="font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #8A99A6;">Редагування секції</div>
+              <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 19px;">Шапка і банер</div>
+            </div>
+            <div style="width: 44px; height: 44px; border-radius: 999px; display: flex; align-items: center; justify-content: center; color: #8A99A6; font-size: 22px; cursor: pointer;" style-hover="background: #EEF1F3;">×</div>
+          </div>
+          <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; overflow: hidden;">
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-weight: 700; font-size: 15px;">Заголовок</span>
+              <input type="text" value="Свіжі букети з доставкою по Львову" style="height: 54px; padding: 0 16px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none; background: #FFFFFF;" style-focus="border-color: #1B5BBF; box-shadow: 0 0 0 3px #E7EEF9;">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-weight: 700; font-size: 15px;">Підзаголовок</span>
+              <textarea rows="2" style="padding: 12px 16px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; line-height: 1.5; outline: none; resize: none; background: #FFFFFF;">Збираємо букети щодня зранку. Доставимо за 2 години.</textarea>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-weight: 700; font-size: 15px;">Фото банера</span>
+              <div style="display: flex; gap: 12px;">
+                <div style="width: 96px; height: 96px; border-radius: 16px; position: relative; overflow: hidden; background: repeating-linear-gradient(45deg, #f3e1e6, #f3e1e6 8px, #efd7dd 8px, #efd7dd 16px);">
+                  <span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: monospace; font-size: 10px; color: #b23a58;">фото букета</span>
+                  <div style="position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; border-radius: 999px; background: rgba(23,36,47,.55); color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer;">×</div>
+                </div>
+                <div style="width: 96px; height: 96px; border: 2px dashed #C9D2D9; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: #F7F8F8; cursor: pointer;">
+                  <span style="font-size: 22px; color: #1B5BBF; line-height: 1;">+</span>
+                  <span style="font-size: 11px; font-weight: 700; color: #5A6B7A; text-align: center;">Завантажити фото</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; padding: 14px 20px 24px; border-top: 1px solid #EEF1F3;">
+            <div style="flex: 1.4; display: flex; height: 56px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 16px; font-weight: 700; font-size: 17px; cursor: pointer;" style-hover="background: #14489C;">Зберегти</div>
+            <div style="flex: 1; display: flex; height: 56px; align-items: center; justify-content: center; border: 1.5px solid #C9D2D9; border-radius: 16px; font-weight: 700; font-size: 17px; cursor: pointer;" style-hover="background: #EEF1F3;">Скасувати</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Mobile theme picker ============ -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · вибір оформлення</span>
+      <div data-screen-label="Theme picker mobile" style="width: 390px; height: 844px; background: #EEF1F3; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden; position: relative;">
+        <div style="flex: 1; background: rgba(23,36,47,.45);"></div>
+        <div style="position: absolute; left: 0; right: 0; bottom: 0; background: #FFFFFF; border-radius: 28px 28px 0 0; box-shadow: 0 -12px 44px rgba(23,36,47,.25); display: flex; flex-direction: column;">
+          <div style="display: flex; justify-content: center; padding: 10px 0 2px;"><div style="width: 44px; height: 5px; border-radius: 999px; background: #C9D2D9;"></div></div>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 20px 14px; border-bottom: 1px solid #EEF1F3;">
+            <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 19px;">Оформлення сайту</div>
+            <div style="width: 44px; height: 44px; border-radius: 999px; display: flex; align-items: center; justify-content: center; color: #8A99A6; font-size: 22px; cursor: pointer;" style-hover="background: #EEF1F3;">×</div>
+          </div>
+          <div style="padding: 18px 20px 28px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 2px solid #1B5BBF; border-radius: 18px; padding: 18px; cursor: pointer; box-shadow: 0 0 0 3px #E7EEF9;">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-weight: 800; font-size: 17px;">Класична троянда</span>
+                <span style="font-size: 14px; color: #5A6B7A; font-weight: 600;">тепла, романтична · зараз обрано</span>
+              </div>
+              <span style="display: flex; gap: 6px;">
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #b23a58; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #f3e1e6; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #fff8f6; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+              </span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1.5px solid #E2E7EB; border-radius: 18px; padding: 18px; cursor: pointer;" style-hover="border-color: #C9D2D9; background: #F7F8F8;">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-weight: 800; font-size: 17px;">Шавлієвий мінімалізм</span>
+                <span style="font-size: 14px; color: #5A6B7A; font-weight: 600;">спокійна, природна</span>
+              </div>
+              <span style="display: flex; gap: 6px;">
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #5c7a5c; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #e6efe2; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #f7f9f5; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+              </span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1.5px solid #E2E7EB; border-radius: 18px; padding: 18px; cursor: pointer;" style-hover="border-color: #C9D2D9; background: #F7F8F8;">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-weight: 800; font-size: 17px;">Бордо-елегант</span>
+                <span style="font-size: 14px; color: #5A6B7A; font-weight: 600;">розкішна, вишукана</span>
+              </div>
+              <span style="display: flex; gap: 6px;">
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #7a2233; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #f0e4d8; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #fdf9f4; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+              </span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1.5px solid #E2E7EB; border-radius: 18px; padding: 18px; cursor: pointer;" style-hover="border-color: #C9D2D9; background: #F7F8F8;">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-weight: 800; font-size: 17px;">Ніжний персик</span>
+                <span style="font-size: 14px; color: #5A6B7A; font-weight: 600;">мʼяка, привітна</span>
+              </div>
+              <span style="display: flex; gap: 6px;">
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #e08a5c; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #fbe8d8; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+                <span style="width: 28px; height: 28px; border-radius: 999px; background: #fff9f4; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);"></span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+</body>
+</html>

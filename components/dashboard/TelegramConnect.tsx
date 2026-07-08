@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { getTelegramConnectLink } from "@/app/app/(protected)/sites/actions";
+import { Button, Chip } from "@/components/ui";
 
 interface TelegramConnectProps {
   tenantId: string;
@@ -10,7 +11,7 @@ interface TelegramConnectProps {
 
 /**
  * Inline Telegram connect control for the sites list.
- * If connected — shows a static green chip.
+ * If connected — shows a static ok chip.
  * If not — button that fetches the deep-link and opens it.
  */
 export default function TelegramConnect({ tenantId, connected }: TelegramConnectProps) {
@@ -18,19 +19,11 @@ export default function TelegramConnect({ tenantId, connected }: TelegramConnect
   const [errorMsg, setErrorMsg] = useState("");
 
   if (connected) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
-        Telegram ✓
-      </span>
-    );
+    return <Chip tone="ok">Telegram ✓</Chip>;
   }
 
   if (state === "opened") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-600">
-        Відкрийте Telegram і натисніть Start
-      </span>
-    );
+    return <Chip tone="neutral">Відкрийте Telegram і натисніть Start</Chip>;
   }
 
   async function handleConnect() {
@@ -46,16 +39,18 @@ export default function TelegramConnect({ tenantId, connected }: TelegramConnect
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <button
+    <div className="flex w-full flex-col items-start gap-1.5">
+      <Button
+        variant="telegram"
+        size="md"
         onClick={handleConnect}
         disabled={state === "loading"}
-        className="shrink-0 rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-100 disabled:opacity-50"
+        className="w-full"
       >
         {state === "loading" ? "…" : "Підключити Telegram"}
-      </button>
+      </Button>
       {state === "error" && (
-        <span className="text-xs text-red-600">{errorMsg}</span>
+        <span className="text-[13px] font-semibold text-danger">{errorMsg}</span>
       )}
     </div>
   );

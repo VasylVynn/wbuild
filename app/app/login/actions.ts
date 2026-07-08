@@ -40,7 +40,13 @@ function normalize(email: string, password: string): { email: string; password: 
   return { email: e, password };
 }
 
-export async function signInAction(email: string, password: string): Promise<SignInResult> {
+/** Only ever redirect to a same-origin path — never an absolute/protocol-relative URL. */
+function safeNext(next?: string | null): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return "/sites";
+  return next;
+}
+
+export async function signInAction(email: string, password: string, next?: string): Promise<SignInResult> {
   if (!isAuthConfigured()) return { error: "Вхід тимчасово недоступний." };
   const creds = normalize(email, password);
   if (!creds) return { error: "Введіть email і пароль." };
@@ -49,10 +55,10 @@ export async function signInAction(email: string, password: string): Promise<Sig
   const { error } = await sb.auth.signInWithPassword(creds);
   if (error) return { error: uaError(error.message) };
 
-  redirect("/sites");
+  redirect(safeNext(next));
 }
 
-export async function signUpAction(email: string, password: string): Promise<SignUpResult> {
+export async function signUpAction(email: string, password: string, next?: string): Promise<SignUpResult> {
   if (!isAuthConfigured()) return { error: "Реєстрація тимчасово недоступна." };
   const creds = normalize(email, password);
   if (!creds) return { error: "Введіть email і пароль." };
@@ -66,7 +72,7 @@ export async function signUpAction(email: string, password: string): Promise<Sig
   // check their inbox instead of pretending they are signed in.
   if (!data.session) return { needsConfirmation: true };
 
-  redirect("/sites");
+  redirect(safeNext(next));
 }
 
 export async function signOutAction(): Promise<void> {

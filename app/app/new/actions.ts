@@ -35,6 +35,8 @@ export async function onboardAction(
     facts,
     verticalId: verticalId ?? "generic",
     ready: false,
+    quickReplies: [],
+    progress: [],
   });
 
   if (history.length > maxChatMessages()) {
@@ -50,14 +52,32 @@ export async function onboardAction(
 }
 
 export type FinalizeResult =
-  | { ok: true; host: string; url: string; claimToken?: string }
-  | { ok: false; error: string };
+  | { ok: true; host: string; url: string }
+  | { ok: false; error: string; authRequired?: true };
+
+/** Session state for the chat UI's login gate (journal #43). */
+export async function sessionStateAction(): Promise<{ authOn: boolean; loggedIn: boolean }> {
+  if (!isAuthConfigured()) return { authOn: false, loggedIn: false };
+  const user = await getUser();
+  return { authOn: true, loggedIn: Boolean(user) };
+}
 
 /** Confirmed facts → generate + publish the site → return its live URL. */
 export async function finalizeAction(
   facts: BusinessFacts,
   verticalId?: string,
 ): Promise<FinalizeResult> {
+  // Generation requires a signed-in user (§3.1 invariant, journal #43): the
+  // tenant gets its owner at creation; no anonymous generation, no claim flow.
+  let ownerId: string | null = null;
+  if (isAuthConfigured()) {
+    const user = await getUser();
+    if (!user) {
+      return { ok: false, error: "Щоб створити сайт, спершу увійдіть.", authRequired: true };
+    }
+    ownerId = user.id;
+  }
+
   // Generation is the most expensive AI call — gate it before any work starts.
   const limit = await checkRateLimit("finalize", ipFromHeaders(await headers()));
   if (!limit.ok) return { ok: false, error: rateLimitMessage(limit.retryAfterSec) };
@@ -76,28 +96,19 @@ export async function finalizeAction(
     const port = ROOT_DOMAIN.includes(":") ? `:${ROOT_DOMAIN.split(":")[1]}` : "";
     const url = `${isProd ? "https" : "http"}://${host}${isProd ? "" : port}`;
 
-    // Ownership (§3.1). Onboarding is anonymous, so tie the new site to whoever
-    // created it: a logged-in creator becomes owner immediately; an anonymous
-    // one gets a one-time claim_token to bind the site after they register.
-    // Skipped entirely when auth is off (open dashboard — degradation).
-    let claimToken: string | undefined;
-    if (isAuthConfigured()) {
+    // Ownership (§3.1, journal #43): the creator is signed in by the gate above,
+    // so the tenant gets its owner immediately. (Auth off = open mode, no owner.)
+    if (ownerId) {
       const sb = getServiceClient();
       const { data: t } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
       if (t) {
-        const user = await getUser();
-        if (user) {
-          await sb
-            .from("tenant_members")
-            .insert({ tenant_id: t.id, user_id: user.id, role: "owner" });
-        } else {
-          claimToken = crypto.randomUUID().replace(/-/g, "");
-          await sb.from("tenants").update({ claim_token: claimToken }).eq("id", t.id);
-        }
+        await sb
+          .from("tenant_members")
+          .insert({ tenant_id: t.id, user_id: ownerId, role: "owner" });
       }
     }
 
-    return { ok: true, host, url, ...(claimToken && { claimToken }) };
+    return { ok: true, host, url };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

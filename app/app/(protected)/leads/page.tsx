@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { myTenantIds } from "@/lib/tenant/membership";
+import { Card, Chip, EmptyState } from "@/components/ui";
 
 // Always show fresh leads — no caching.
 export const dynamic = "force-dynamic";
@@ -49,74 +50,57 @@ export default async function LeadsPage() {
   const leads = await listLeads();
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl px-6 py-12">
+    <main className="mx-auto min-h-screen max-w-3xl bg-canvas px-6 py-12">
       <div className="mb-8">
-        <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-800">
+        <Link href="/" className="text-[14px] font-bold text-ink-muted transition-colors hover:text-ink">
           ← Панель
         </Link>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight text-neutral-900">
-          Заявки <span className="text-neutral-400">({leads.length})</span>
+        <h1 className="mt-1.5 font-brand text-[24px] font-medium text-ink">
+          Заявки <span className="text-ink-faint">({leads.length})</span>
         </h1>
       </div>
 
       {leads.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-neutral-300 px-6 py-16 text-center text-neutral-500">
-          Ще немає заявок…
-        </div>
+        <EmptyState emoji="📭" title="Ще немає заявок">
+          Коли клієнт залишить заявку на вашому сайті, вона зʼявиться тут — і прийде вам у Telegram.
+        </EmptyState>
       ) : (
-        <ul className="space-y-3">
+        <ul className="flex flex-col gap-3.5">
           {leads.map((lead) => {
-            const siteName =
-              lead.tenants?.brand?.businessName || lead.tenants?.host || "—";
+            const siteName = lead.tenants?.brand?.businessName || lead.tenants?.host || "—";
             const siteHost = lead.tenants?.host;
+            const siteLabel =
+              siteHost && siteName !== siteHost ? `${siteName} · ${siteHost}` : siteName;
             return (
-              <li
-                key={lead.id}
-                className="rounded-2xl border border-neutral-200 bg-white px-5 py-4"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    {/* Name + Telegram badge */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-lg font-semibold text-neutral-900">
-                        {lead.name || "Без імені"}
-                      </span>
-                      {lead.pushed_at && (
-                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-                          ✈️ надіслано в Telegram
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Phone */}
-                    {lead.phone && (
-                      <a
-                        href={`tel:${lead.phone}`}
-                        className="mt-1 inline-block text-base font-medium text-neutral-800 underline decoration-neutral-300 hover:decoration-neutral-700"
-                      >
-                        {lead.phone}
-                      </a>
-                    )}
-
-                    {/* Message */}
-                    {lead.message && (
-                      <p className="mt-2 text-sm text-neutral-600">{lead.message}</p>
-                    )}
-                  </div>
-
-                  {/* Site chip + date */}
-                  <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-                    <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">
-                      {siteName}
-                      {siteHost && siteName !== siteHost && (
-                        <span className="ml-1 text-neutral-400">{siteHost}</span>
-                      )}
+              <li key={lead.id}>
+                <Card className="flex flex-col gap-3 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[18px] font-extrabold text-ink">
+                      {lead.name || "Без імені"}
                     </span>
-                    <span className="text-xs text-neutral-400">
+                    <span className="whitespace-nowrap text-[13px] font-bold text-ink-faint">
                       {formatDate(lead.created_at)}
                     </span>
                   </div>
-                </div>
+
+                  {lead.phone && (
+                    <a
+                      href={`tel:${lead.phone}`}
+                      className="inline-flex w-fit items-center gap-2 self-start rounded-full bg-brand-soft px-5 py-3 text-[18px] font-extrabold text-brand no-underline"
+                    >
+                      {lead.phone}
+                    </a>
+                  )}
+
+                  {lead.message && (
+                    <p className="text-[16px] leading-relaxed text-ink">{lead.message}</p>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Chip tone="neutral">{siteLabel}</Chip>
+                    {lead.pushed_at && <Chip tone="tg">✈️ надіслано в Telegram</Chip>}
+                  </div>
+                </Card>
               </li>
             );
           })}

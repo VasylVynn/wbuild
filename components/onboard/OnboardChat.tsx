@@ -1,21 +1,33 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
-import type { ChatMsg } from "@/lib/ai/onboard";
-import { onboardAction, finalizeAction } from "@/app/app/new/actions";
+import type { ChatMsg, ProgressItem } from "@/lib/ai/onboard";
+import {
+  onboardAction,
+  finalizeAction,
+  sessionStateAction,
+} from "@/app/app/new/actions";
 import {
   startConversation,
   saveTurn,
   loadConversation,
 } from "@/app/app/new/persist-actions";
-import type { FloristFacts } from "@/lib/verticals/florist";
+import type { BusinessFacts } from "@/lib/verticals/schema";
+import { Button, Field, Input, Textarea, Chip, Card } from "@/components/ui";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Phase = "chat" | "confirm" | "generating" | "done" | "error";
+type Phase = "chat" | "confirm" | "gate" | "generating" | "done" | "error";
 
 type ServiceRow = { name: string; price: string };
 
@@ -25,6 +37,55 @@ const GREETING: ChatMsg = {
     "Вітаю! 👋 Я допоможу створити сайт для вашого бізнесу. Розкажіть трохи — що це за бізнес, у якому місті, і який телефон для звʼязку?",
 };
 
+// Progress chips mirror the server's computeProgress (lib/ai/onboard.ts): a pure
+// function of `facts`, so we derive them client-side too — this keeps the header
+// correct for the fresh greeting and for resumed conversations, where no server
+// `result.progress` exists yet. After each turn it equals result.progress.
+const PROGRESS_FIELDS: { key: keyof BusinessFacts; label: string }[] = [
+  { key: "businessName", label: "Бізнес" },
+  { key: "city", label: "Місто" },
+  { key: "phone", label: "Телефон" },
+  { key: "address", label: "Адреса" },
+  { key: "hours", label: "Години" },
+];
+function deriveProgress(facts: Partial<BusinessFacts>): ProgressItem[] {
+  return PROGRESS_FIELDS.map(({ key, label }) => {
+    const v = facts[key];
+    return { key, label, done: v != null && String(v).trim().length > 0 };
+  });
+}
+
+// Design animations (design/D). Kept in-file so this component owns everything;
+// prefixed `ob-` to avoid colliding with any global keyframes.
+const KEYFRAMES = `
+@keyframes ob-typing { 0%,60%,100% { transform: translateY(0); opacity: .5 } 30% { transform: translateY(-4px); opacity: 1 } }
+@keyframes ob-genbar { 0% { width: 12% } 60% { width: 78% } 100% { width: 92% } }
+@keyframes ob-float { 0%,100% { transform: translateY(0) rotate(-4deg) } 50% { transform: translateY(-10px) rotate(4deg) } }
+@keyframes ob-confetti { 0% { transform: translateY(-24px) rotate(0deg); opacity: 1 } 100% { transform: translateY(240px) rotate(260deg); opacity: 0 } }
+`;
+
+const SendArrow = ({ className = "" }: { className?: string }) => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+    <path
+      d="M4 12h14M13 6l6 6-6 6"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const TelegramMark = ({ size = 34 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+    <circle cx="12" cy="12" r="12" fill="#229ED9" />
+    <path
+      d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z"
+      fill="#FFFFFF"
+    />
+  </svg>
+);
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -32,11 +93,12 @@ const GREETING: ChatMsg = {
 export function OnboardChat() {
   // --- Chat phase state ---
   const [messages, setMessages] = useState<ChatMsg[]>([GREETING]);
-  const [facts, setFacts] = useState<Partial<FloristFacts>>({});
+  const [facts, setFacts] = useState<Partial<BusinessFacts>>({});
   const [ready, setReady] = useState(false);
   const [verticalId, setVerticalId] = useState<string | undefined>(undefined);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<string[]>([]);
 
   // --- Shared loading flag (blocks all inputs while a request is in flight) ---
   const [loading, setLoading] = useState(false);
@@ -57,13 +119,15 @@ export function OnboardChat() {
   // --- Done / error state ---
   const [siteUrl, setSiteUrl] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-  // Set when the site was created anonymously and awaits a claim after sign-up.
-  const [unclaimed, setUnclaimed] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Holds the persisted conversation id after first user send; null = not yet created
   const convIdRef = useRef<string | null>(null);
+
+  // Progress chips — derived, always in sync with the collected facts.
+  const progress = deriveProgress(facts);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -80,7 +144,7 @@ export function OnboardChat() {
       if (!data || data.messages.length <= 1) return;
       convIdRef.current = stored;
       setMessages(data.messages);
-      setFacts(data.facts as Partial<FloristFacts>);
+      setFacts(data.facts as Partial<BusinessFacts>);
       setVerticalId(data.verticalId);
       setReady(data.ready);
     });
@@ -90,14 +154,16 @@ export function OnboardChat() {
   // Chat handlers
   // ---------------------------------------------------------------------------
 
-  const handleSend = async () => {
-    const text = input.trim();
+  // Core send — used by the input row AND by quick-reply chips.
+  const send = async (raw: string) => {
+    const text = raw.trim();
     if (!text || loading) return;
 
     const userMsg: ChatMsg = { role: "user", content: text };
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
     setInput("");
+    setQuickReplies([]);
     setLoading(true);
     setTyping(true);
 
@@ -118,6 +184,7 @@ export function OnboardChat() {
       setFacts(result.facts);
       setReady(result.ready);
       setVerticalId(result.verticalId);
+      setQuickReplies(result.quickReplies ?? []);
 
       // Persist turn fire-and-forget — never blocks the UI
       if (convIdRef.current) {
@@ -137,7 +204,9 @@ export function OnboardChat() {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleSend = () => send(input);
+
+  const handleKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -145,7 +214,7 @@ export function OnboardChat() {
   };
 
   // ---------------------------------------------------------------------------
-  // Confirm form handlers
+  // Login gate (journal #43) — runs before showing the confirm form.
   // ---------------------------------------------------------------------------
 
   const enterConfirm = () => {
@@ -162,20 +231,40 @@ export function OnboardChat() {
     setPhase("confirm");
   };
 
+  const handleReviewAndCreate = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const s = await sessionStateAction();
+      // Auth on + not signed in → warm gate (save the site), not the form.
+      if (s.authOn && !s.loggedIn) {
+        setPhase("gate");
+        return;
+      }
+      enterConfirm();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Confirm form handlers
+  // ---------------------------------------------------------------------------
+
   const validateForm = (): boolean => {
     const errs: Record<string, string> = {};
-    if (!businessName.trim()) errs.businessName = "Введіть назву магазину";
+    if (!businessName.trim()) errs.businessName = "Введіть назву бізнесу";
     if (!city.trim()) errs.city = "Введіть місто";
     if (!phone.trim()) errs.phone = "Введіть номер телефону";
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmitForm = async (e: React.FormEvent) => {
+  const handleSubmitForm = async (e: FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    const fullFacts: FloristFacts = {
+    const fullFacts: BusinessFacts = {
       businessName: businessName.trim(),
       city: city.trim(),
       phone: phone.trim(),
@@ -199,15 +288,12 @@ export function OnboardChat() {
       const result = await finalizeAction(fullFacts, verticalId);
       if (result.ok) {
         setSiteUrl(result.url);
-        // Anonymous creation (§3.1): stash the one-time claim token so the sites
-        // page can bind ownership after the owner registers.
-        if (result.claimToken) {
-          persistClaim(result.host, result.claimToken);
-          setUnclaimed(true);
-        }
         setPhase("done");
         // Conversation is complete — clear localStorage so next visit starts fresh
         localStorage.removeItem("vitryna_conv_id");
+      } else if (result.authRequired) {
+        // Session lapsed between the gate check and submit — send them to sign in.
+        setPhase("gate");
       } else {
         setErrorMsg(result.error);
         setPhase("error");
@@ -227,303 +313,468 @@ export function OnboardChat() {
   const updateService = (idx: number, field: "name" | "price", val: string) =>
     setServices((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: val } : s)));
 
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(siteUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked — the URL is visible above, no fallback needed */
+    }
+  };
+
+  const rootBase = "bg-canvas text-ink";
+
   // ---------------------------------------------------------------------------
-  // Render — full-screen loading / done / error phases
+  // Render — chat phase (design B: merged progress chips + quick-reply chips)
+  // ---------------------------------------------------------------------------
+
+  if (phase === "chat") {
+    return (
+      <div className={`flex h-[100dvh] flex-col ${rootBase}`}>
+        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
+
+        {/* Header: honey «3» avatar + Помічник + status */}
+        <header className="bg-surface">
+          <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-2.5">
+            <Link
+              href="/"
+              aria-label="Назад"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[20px] font-bold text-ink-muted hover:bg-sunken"
+            >
+              ←
+            </Link>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-honey-soft font-brand text-[19px] font-semibold text-honey">
+              3
+            </span>
+            <div className="flex flex-col leading-tight">
+              <span className="text-[17px] font-extrabold text-ink">Помічник</span>
+              <span className={`text-[13px] font-bold ${typing ? "text-ink-muted" : "text-ok"}`}>
+                {typing ? "друкує…" : "онлайн"}
+              </span>
+            </div>
+          </div>
+          {/* Progress chips */}
+          <div className="border-b border-line">
+            <div className="mx-auto flex w-full max-w-2xl items-center gap-2 overflow-x-auto px-4 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <span className="mr-1 hidden shrink-0 text-[14px] font-bold text-ink-faint sm:inline">
+                Зібрано:
+              </span>
+              {progress.map((p) => (
+                <Chip key={p.key} tone={p.done ? "ok" : "neutral"} className="shrink-0 whitespace-nowrap">
+                  {p.done ? `✓ ${p.label}` : p.label}
+                </Chip>
+              ))}
+            </div>
+          </div>
+        </header>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-2xl flex-col gap-3.5 px-4 py-5">
+            <div className="self-center rounded-full bg-sunken px-3.5 py-1.5 text-[13px] font-bold text-ink-muted">
+              Сайт буде готовий за ~3 хвилини
+            </div>
+
+            {messages.map((msg, i) => (
+              <ChatBubble key={i} msg={msg} />
+            ))}
+
+            {typing && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-1.5 rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface px-[18px] py-4">
+                  {[0, 0.15, 0.3].map((d) => (
+                    <span
+                      key={d}
+                      className="h-2 w-2 rounded-full bg-ink-faint"
+                      style={{ animation: `ob-typing 1.2s infinite ${d}s` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+
+        {/* Footer: ready CTA + quick replies + input */}
+        <footer className="mx-auto w-full max-w-2xl px-4 pb-5">
+          {ready && (
+            <button
+              onClick={handleReviewAndCreate}
+              disabled={loading}
+              className="mb-3 flex min-h-[60px] w-full items-center justify-center rounded-[18px] bg-brand text-[18px] font-bold text-white shadow-[0_8px_24px_rgba(27,91,191,0.35)] transition-colors hover:bg-brand-hover disabled:opacity-50"
+            >
+              Переглянути й створити сайт →
+            </button>
+          )}
+
+          {quickReplies.length > 0 && !loading && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {quickReplies.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => send(q)}
+                  className="rounded-full border-[1.5px] border-line-strong bg-surface px-[18px] py-3 text-[15px] font-bold text-ink transition-colors hover:border-brand hover:text-brand"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2.5">
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={loading}
+              placeholder={ready ? "Або допишіть щось…" : "Написати…"}
+              autoComplete="off"
+              className="h-14 min-w-0 flex-1 rounded-full border-[1.5px] border-line-strong bg-surface px-5 text-[17px] text-ink placeholder:text-ink-faint transition-shadow focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft disabled:opacity-50"
+            />
+            <button
+              onClick={handleSend}
+              disabled={loading || !input.trim()}
+              aria-label="Надіслати"
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <SendArrow />
+            </button>
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render — confirm form (design C)
+  // ---------------------------------------------------------------------------
+
+  if (phase === "confirm") {
+    const hasErrors = Object.keys(formErrors).length > 0;
+    return (
+      <div className={`min-h-[100dvh] ${rootBase}`}>
+        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
+        <header className="border-b border-line bg-surface">
+          <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-3.5">
+            <button
+              onClick={() => setPhase("chat")}
+              aria-label="Назад до розмови"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[20px] font-bold text-ink-muted hover:bg-sunken"
+            >
+              ←
+            </button>
+            <span className="text-[18px] font-extrabold text-ink">Перевірте дані</span>
+          </div>
+        </header>
+
+        <div className="mx-auto w-full max-w-2xl px-4 py-6">
+          <p className="mb-5 text-[16px] leading-relaxed text-ink-muted">
+            Я заповнив усе з нашої розмови. Відредагуйте будь-що і натисніть «Створити сайт».
+          </p>
+
+          <form onSubmit={handleSubmitForm} noValidate className="flex flex-col gap-5">
+            {hasErrors && (
+              <div className="flex items-start gap-2.5 rounded-[14px] bg-danger-soft px-4 py-3.5">
+                <span className="text-[17px]">☝️</span>
+                <span className="text-[15px] font-bold leading-snug text-danger">
+                  Заповніть, будь ласка, обовʼязкові поля нижче — без них клієнти не зможуть звʼязатися.
+                </span>
+              </div>
+            )}
+
+            <Card className="flex flex-col gap-5 p-5 sm:p-8">
+              <Field label="Назва бізнесу *" error={formErrors.businessName}>
+                <Input
+                  type="text"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="Назва вашого бізнесу"
+                  error={!!formErrors.businessName}
+                />
+              </Field>
+
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <Field label="Місто *" error={formErrors.city}>
+                  <Input
+                    type="text"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Київ"
+                    error={!!formErrors.city}
+                  />
+                </Field>
+                <Field label="Телефон *" error={formErrors.phone}>
+                  <Input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+380 50 123 45 67"
+                    error={!!formErrors.phone}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <Field label="Адреса">
+                  <Input
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="вул. Хрещатик, 1"
+                  />
+                </Field>
+                <Field label="Години роботи">
+                  <Input
+                    type="text"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                    placeholder="Пн–Пт 9:00–19:00, Сб–Нд 10:00–17:00"
+                  />
+                </Field>
+              </div>
+
+              <Field label="Про бізнес">
+                <Textarea
+                  value={about}
+                  onChange={(e) => setAbout(e.target.value)}
+                  rows={4}
+                  placeholder="Кілька слів про ваш бізнес…"
+                />
+              </Field>
+
+              {/* Editable services list — width pattern is load-bearing:
+                  name = min-w-0 flex-1, price = w-28 shrink-0 (a stray w-full
+                  would win in compiled CSS and collapse the sibling). */}
+              <div className="flex flex-col gap-2.5">
+                <span className="text-[15px] font-bold text-ink">Послуги та ціни</span>
+                {services.length > 0 && (
+                  <div className="flex items-center gap-2 px-0.5">
+                    <span className="min-w-0 flex-1 text-[13px] font-bold text-ink-faint">Назва послуги</span>
+                    <span className="w-28 shrink-0 text-[13px] font-bold text-ink-faint">Ціна</span>
+                    <span className="w-12 shrink-0" />
+                  </div>
+                )}
+                {services.map((svc, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={svc.name}
+                      onChange={(e) => updateService(idx, "name", e.target.value)}
+                      placeholder="Назва послуги"
+                      className={`${svcInput} min-w-0 flex-1`}
+                    />
+                    <input
+                      type="text"
+                      value={svc.price}
+                      onChange={(e) => updateService(idx, "price", e.target.value)}
+                      placeholder="Ціна"
+                      className={`${svcInput} w-28 shrink-0`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeService(idx)}
+                      aria-label="Видалити рядок"
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] text-[22px] text-ink-faint transition-colors hover:bg-danger-soft hover:text-danger"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addService}
+                  className="flex min-h-[52px] items-center justify-center rounded-[14px] border-2 border-dashed border-line-strong text-[16px] font-bold text-brand transition-colors hover:border-brand hover:bg-brand-soft"
+                >
+                  + Додати послугу
+                </button>
+              </div>
+            </Card>
+
+            <Button
+              type="submit"
+              size="lg"
+              disabled={loading}
+              className="min-h-[60px] w-full text-[19px] shadow-[0_8px_24px_rgba(27,91,191,0.3)]"
+            >
+              Створити сайт
+            </Button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render — login gate (journal #43): save the site behind an account
+  // ---------------------------------------------------------------------------
+
+  if (phase === "gate") {
+    return (
+      <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 ${rootBase}`}>
+        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
+        <div className="flex w-full max-w-md flex-col items-center text-center">
+          <span className="flex h-24 w-24 items-center justify-center rounded-full bg-honey-soft font-brand text-[42px] font-semibold text-honey">
+            3
+          </span>
+          <h2 className="mt-8 font-brand text-[24px] font-semibold leading-tight">
+            Створіть акаунт, щоб зберегти ваш сайт
+          </h2>
+          <p className="mt-3 text-[17px] leading-relaxed text-ink-muted">
+            Розмова збережеться — ви продовжите з того самого місця
+          </p>
+          <Link
+            href="/login?next=/new"
+            className="mt-8 flex min-h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-brand px-7 text-[18px] font-bold text-white transition-colors hover:bg-brand-hover"
+          >
+            Увійти або зареєструватися
+          </Link>
+          <Button variant="quiet" size="md" className="mt-2" onClick={() => setPhase("chat")}>
+            ← Назад до розмови
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render — generating (design D)
   // ---------------------------------------------------------------------------
 
   if (phase === "generating") {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-20 flex flex-col items-center gap-6 text-center">
-        <div className="text-6xl" style={{ animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite" }}>
-          ✨
-        </div>
-        <h2 className="text-2xl font-semibold text-neutral-800">Генеруємо ваш сайт…</h2>
-        <p className="text-neutral-500 text-lg">Це може зайняти до 30 секунд</p>
-        <div className="flex gap-2 mt-2">
-          <span className="w-3 h-3 rounded-full bg-neutral-400 animate-bounce [animation-delay:0ms]" />
-          <span className="w-3 h-3 rounded-full bg-neutral-400 animate-bounce [animation-delay:150ms]" />
-          <span className="w-3 h-3 rounded-full bg-neutral-400 animate-bounce [animation-delay:300ms]" />
+      <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-8 ${rootBase}`}>
+        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
+        <div className="flex w-full max-w-md flex-col items-center">
+          <span
+            className="flex h-24 w-24 items-center justify-center rounded-full bg-honey-soft font-brand text-[42px] font-semibold text-honey"
+            style={{ animation: "ob-float 2.4s ease-in-out infinite" }}
+          >
+            3
+          </span>
+          <h2 className="mt-8 text-center font-brand text-[24px] font-medium">Генеруємо ваш сайт…</h2>
+          <p className="mt-3 text-center text-[17px] leading-relaxed text-ink-muted">
+            Це може зайняти до 30 секунд. Нікуди не йдіть — уже майже готово.
+          </p>
+
+          <div className="mt-8 h-2.5 w-full overflow-hidden rounded-full bg-brand-soft">
+            <div
+              className="h-2.5 rounded-full bg-brand"
+              style={{ animation: "ob-genbar 24s ease-out forwards" }}
+            />
+          </div>
+
+          <div className="mt-7 flex w-full flex-col gap-2.5">
+            <GenStep state="done">Тексти про ваш бізнес</GenStep>
+            <GenStep state="done">Послуги та ціни</GenStep>
+            <GenStep state="active">Оформлення і кольори…</GenStep>
+            <GenStep state="pending">Форма замовлення</GenStep>
+          </div>
         </div>
       </div>
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Render — success (design D). No "register to manage" link — flow removed.
+  // ---------------------------------------------------------------------------
 
   if (phase === "done") {
+    const displayUrl = siteUrl.replace(/^https?:\/\//, "");
     return (
-      <div className="max-w-2xl mx-auto px-4 py-20 flex flex-col items-center gap-6 text-center">
-        <div className="text-6xl">🎉</div>
-        <h2 className="text-2xl font-semibold text-neutral-800">Ваш сайт готовий!</h2>
-        <p className="text-neutral-500 text-lg">Перейдіть за посиланням, щоб побачити результат:</p>
-        <a
-          href={siteUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xl font-medium text-blue-600 underline underline-offset-4 break-all hover:text-blue-800 transition-colors"
-        >
-          {siteUrl}
-        </a>
-        {unclaimed && (
-          <p className="mt-2 text-base text-neutral-500">
-            <Link
-              href="/login"
-              className="font-medium text-neutral-800 underline underline-offset-4 hover:text-neutral-600"
-            >
-              Зареєструйтесь, щоб керувати сайтом
-            </Link>
-          </p>
-        )}
-      </div>
-    );
-  }
+      <div className={`relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 ${rootBase}`}>
+        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
+        <Confetti />
+        <div className="flex w-full max-w-md flex-col items-center text-center">
+          <div className="text-[64px] leading-none">🎉</div>
+          <h2 className="mt-6 font-brand text-[26px] font-semibold">Ваш сайт готовий!</h2>
+          <p className="mt-2.5 text-[17px] text-ink-muted">Він уже працює за адресою:</p>
 
-  if (phase === "error") {
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-20 flex flex-col items-center gap-6 text-center">
-        <div className="text-6xl">😕</div>
-        <h2 className="text-2xl font-semibold text-neutral-800">Щось пішло не так</h2>
-        <p className="text-red-500 text-base bg-red-50 rounded-2xl px-5 py-4 max-w-lg">
-          {errorMsg}
-        </p>
-        <button
-          onClick={() => setPhase("confirm")}
-          className="mt-2 px-8 py-4 rounded-2xl bg-neutral-800 text-white text-lg font-medium hover:bg-neutral-700 active:scale-95 transition-all"
-        >
-          Спробувати ще раз
-        </button>
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Render — confirm form
-  // ---------------------------------------------------------------------------
-
-  if (phase === "confirm") {
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <h2 className="text-2xl font-semibold text-neutral-800 mb-1">Перевірте дані</h2>
-        <p className="text-neutral-500 mb-8 text-base">
-          Відредагуйте будь-що і натисніть «Створити сайт».
-        </p>
-
-        <form onSubmit={handleSubmitForm} noValidate className="flex flex-col gap-5">
-          <FormField label="Назва магазину *" error={formErrors.businessName}>
-            <input
-              type="text"
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              placeholder="Назва вашого бізнесу"
-              className={inputCls(!!formErrors.businessName)}
-            />
-          </FormField>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <FormField label="Місто *" error={formErrors.city}>
-              <input
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Київ"
-                className={inputCls(!!formErrors.city)}
-              />
-            </FormField>
-            <FormField label="Телефон *" error={formErrors.phone}>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+380 50 123 45 67"
-                className={inputCls(!!formErrors.phone)}
-              />
-            </FormField>
-          </div>
-
-          <FormField label="Адреса">
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="вул. Хрещатик, 1"
-              className={inputCls(false)}
-            />
-          </FormField>
-
-          <FormField label="Години роботи">
-            <input
-              type="text"
-              value={hours}
-              onChange={(e) => setHours(e.target.value)}
-              placeholder="Пн–Пт 9:00–19:00, Сб–Нд 10:00–17:00"
-              className={inputCls(false)}
-            />
-          </FormField>
-
-          <FormField label="Про нас">
-            <textarea
-              value={about}
-              onChange={(e) => setAbout(e.target.value)}
-              rows={4}
-              placeholder="Кілька слів про ваш магазин…"
-              className={`${inputCls(false)} resize-none`}
-            />
-          </FormField>
-
-          {/* Editable services list */}
-          <div>
-            <p className="text-sm font-medium text-neutral-700 mb-3">Послуги та ціни</p>
-            <div className="flex flex-col gap-3">
-              {services.map((svc, idx) => (
-                <div key={idx} className="flex gap-2 items-start">
-                  <input
-                    type="text"
-                    value={svc.name}
-                    onChange={(e) => updateService(idx, "name", e.target.value)}
-                    placeholder="Назва послуги"
-                    className={`${inputCls(false, false)} min-w-0 flex-1`}
-                  />
-                  <input
-                    type="text"
-                    value={svc.price}
-                    onChange={(e) => updateService(idx, "price", e.target.value)}
-                    placeholder="Ціна"
-                    className={`${inputCls(false, false)} w-28 shrink-0`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeService(idx)}
-                    aria-label="Видалити рядок"
-                    className="h-14 w-14 shrink-0 flex items-center justify-center rounded-2xl text-xl text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-colors"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+          <Card className="mt-5 flex w-full flex-col gap-3.5 p-5">
+            <span className="break-all text-center text-[18px] font-extrabold text-brand">
+              {displayUrl}
+            </span>
+            <div className="flex gap-2.5">
+              <a
+                href={siteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-[54px] flex-[1.3] items-center justify-center rounded-[16px] bg-brand text-[16px] font-bold text-white transition-colors hover:bg-brand-hover"
+              >
+                Відкрити сайт ↗
+              </a>
+              <button
+                onClick={copyUrl}
+                className="flex h-[54px] flex-1 items-center justify-center rounded-[16px] border-[1.5px] border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
+              >
+                {copied ? "Скопійовано ✓" : "Копіювати"}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={addService}
-              className="mt-3 text-sm text-neutral-500 hover:text-neutral-700 underline underline-offset-2 transition-colors"
-            >
-              + Додати послугу
-            </button>
-          </div>
+          </Card>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-4 w-full py-5 rounded-2xl bg-neutral-800 text-white text-xl font-semibold hover:bg-neutral-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            Створити сайт
-          </button>
-        </form>
+          <div className="mt-3.5 flex w-full items-center gap-3.5 rounded-[18px] border-[1.5px] border-line bg-surface px-5 py-4 text-left">
+            <TelegramMark />
+            <div className="min-w-0 flex-1">
+              <div className="text-[16px] font-extrabold text-ink">Наступний крок — Telegram</div>
+              <div className="text-[14px] font-semibold leading-snug text-ink-muted">
+                Підключіть Telegram, щоб заявки від клієнтів приходили прямо вам
+              </div>
+            </div>
+            <Link
+              href="/sites"
+              className="flex min-h-11 shrink-0 items-center justify-center rounded-full bg-tg px-5 text-[15px] font-bold text-white transition-colors hover:bg-tg-dark"
+            >
+              Підключити
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Render — chat phase
+  // Render — error
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="max-w-2xl mx-auto flex flex-col h-[80vh] px-4">
-      {/* Message bubbles */}
-      <div className="flex-1 overflow-y-auto py-6 flex flex-col gap-4">
-        {messages.map((msg, i) => (
-          <ChatBubble key={i} msg={msg} />
-        ))}
-
-        {/* Typing indicator */}
-        {typing && (
-          <div className="flex justify-start">
-            <div className="bg-neutral-100 rounded-3xl rounded-bl-md px-5 py-4">
-              <span className="flex gap-1.5 items-center h-5">
-                <span
-                  className="w-2.5 h-2.5 rounded-full bg-neutral-400 animate-bounce"
-                  style={{ animationDelay: "0ms" }}
-                />
-                <span
-                  className="w-2.5 h-2.5 rounded-full bg-neutral-400 animate-bounce"
-                  style={{ animationDelay: "150ms" }}
-                />
-                <span
-                  className="w-2.5 h-2.5 rounded-full bg-neutral-400 animate-bounce"
-                  style={{ animationDelay: "300ms" }}
-                />
-              </span>
-            </div>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* "Ready" CTA — appears above input once the assistant signals readiness */}
-      {ready && (
-        <div className="pb-3">
-          <button
-            onClick={enterConfirm}
-            className="w-full py-4 rounded-2xl bg-neutral-800 text-white text-lg font-semibold hover:bg-neutral-700 active:scale-95 transition-all"
-          >
-            Переглянути й створити сайт →
-          </button>
-        </div>
-      )}
-
-      {/* Input row */}
-      <div className="py-3 flex gap-3 items-end border-t border-neutral-100">
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={loading}
-          placeholder="Написати…"
-          autoComplete="off"
-          className="flex-1 min-h-14 px-5 py-4 rounded-2xl border border-neutral-200 bg-white text-neutral-900 text-base placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-300 disabled:opacity-50 transition-shadow"
-        />
-        <button
-          onClick={handleSend}
-          disabled={loading || !input.trim()}
-          className="h-14 px-6 rounded-2xl bg-neutral-800 text-white text-base font-medium hover:bg-neutral-700 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-        >
-          Надіслати
-        </button>
+    <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 ${rootBase}`}>
+      <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
+      <div className="flex w-full max-w-md flex-col items-center text-center">
+        <div className="text-[64px] leading-none">😕</div>
+        <h2 className="mt-6 font-brand text-[24px] font-semibold">Щось пішло не так</h2>
+        <p className="mt-4 rounded-[14px] bg-danger-soft px-5 py-4 text-[15px] font-semibold leading-relaxed text-danger">
+          {errorMsg}
+        </p>
+        <Button size="lg" className="mt-6" onClick={() => setPhase("confirm")}>
+          Спробувати ще раз
+        </Button>
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Small local sub-components
+// Small local sub-components + shared class strings
 // ---------------------------------------------------------------------------
 
-/**
- * Append a {host, token} pair to localStorage `vitryna_claims` (§3.1). The
- * sites page reads this after the owner registers and binds ownership.
- */
-function persistClaim(host: string, token: string): void {
-  try {
-    const raw = localStorage.getItem("vitryna_claims");
-    const list: unknown = raw ? JSON.parse(raw) : [];
-    const arr = Array.isArray(list) ? list : [];
-    arr.push({ host, token });
-    localStorage.setItem("vitryna_claims", JSON.stringify(arr));
-  } catch {
-    // localStorage unavailable (private mode) — the site still works, only the
-    // one-click claim is lost; the owner can re-create or contact support.
-  }
-}
+// Service-row input: mirrors the ui/Input look WITHOUT `w-full`, so the flex
+// widths (min-w-0 flex-1 / w-28 shrink-0) survive in the compiled CSS.
+const svcInput =
+  "min-h-12 rounded-[14px] border border-line-strong bg-surface px-4 text-[16px] text-ink placeholder:text-ink-faint transition-shadow focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft";
 
 function ChatBubble({ msg }: { msg: ChatMsg }) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <p
-        className={`max-w-[82%] px-5 py-4 rounded-3xl text-base leading-relaxed whitespace-pre-wrap ${
+        className={`max-w-[85%] whitespace-pre-wrap px-[18px] py-3.5 text-[17px] leading-relaxed sm:max-w-[75%] ${
           isUser
-            ? "bg-neutral-800 text-white rounded-br-md"
-            : "bg-neutral-100 text-neutral-800 rounded-bl-md"
+            ? "rounded-[20px_20px_6px_20px] bg-brand text-white"
+            : "rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface text-ink shadow-[0_1px_2px_rgba(23,36,47,0.04)]"
         }`}
       >
         {msg.content}
@@ -532,33 +783,54 @@ function ChatBubble({ msg }: { msg: ChatMsg }) {
   );
 }
 
-function FormField({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
+function GenStep({ state, children }: { state: "done" | "active" | "pending"; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-neutral-700">{label}</span>
-      {children}
-      {error && <span className="text-sm text-red-500">{error}</span>}
-    </label>
+    <div
+      className={`flex items-center gap-2.5 text-[16px] ${
+        state === "done"
+          ? "font-bold text-ok"
+          : state === "active"
+            ? "font-bold text-ink"
+            : "font-semibold text-ink-faint"
+      }`}
+    >
+      {state === "done" ? (
+        <span aria-hidden>✓</span>
+      ) : state === "active" ? (
+        <span className="inline-block h-4 w-4 animate-spin rounded-full border-[2.5px] border-brand border-t-transparent" aria-hidden />
+      ) : (
+        <span className="inline-block h-4 w-4 rounded-full border-2 border-line-strong" aria-hidden />
+      )}
+      <span>{children}</span>
+    </div>
   );
 }
 
-function inputCls(hasError: boolean, fullWidth = true): string {
-  return [
-    // fullWidth=false for inputs inside flex rows — a stray w-full would win
-    // over w-28/flex-1 in the compiled CSS and collapse the sibling input.
-    fullWidth ? "w-full" : "",
-    "min-h-14 px-5 py-4 rounded-2xl border text-base text-neutral-900",
-    "placeholder:text-neutral-400 focus:outline-none focus:ring-2 transition-shadow",
-    hasError
-      ? "border-red-300 bg-red-50 focus:ring-red-200"
-      : "border-neutral-200 bg-white focus:ring-neutral-300",
-  ].join(" ");
+function Confetti() {
+  const pieces = [
+    { left: "16%", color: "#E9A23B", w: 10, h: 14, delay: 0, dur: 2.6 },
+    { left: "38%", color: "#1B5BBF", w: 8, h: 12, delay: 0.4, dur: 3.1 },
+    { left: "58%", color: "#177E53", w: 10, h: 10, delay: 0.8, dur: 2.8, round: true },
+    { left: "80%", color: "#E9A23B", w: 8, h: 13, delay: 1.2, dur: 3.4 },
+    { left: "27%", color: "#C03A32", w: 9, h: 9, delay: 1.6, dur: 3, round: true },
+    { left: "70%", color: "#1B5BBF", w: 9, h: 12, delay: 0.2, dur: 3.2 },
+  ];
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-10 h-40" aria-hidden>
+      {pieces.map((p, i) => (
+        <span
+          key={i}
+          className="absolute top-0 block"
+          style={{
+            left: p.left,
+            width: p.w,
+            height: p.h,
+            background: p.color,
+            borderRadius: p.round ? 999 : 3,
+            animation: `ob-confetti ${p.dur}s ease-in infinite ${p.delay}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
 }

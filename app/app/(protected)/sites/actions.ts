@@ -2,7 +2,6 @@
 
 import { getServiceClient } from "@/lib/supabase/server";
 import { requireMember } from "@/lib/tenant/membership";
-import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
 import { botUsername } from "@/lib/telegram/push";
 
 /**
@@ -38,57 +37,3 @@ export async function getTelegramConnectLink(
   return { ok: true, link: `https://t.me/${username}?start=${token}` };
 }
 
-/**
- * Claim anonymously-created sites (§3.1). The browser holds {host, token} pairs
- * from onboarding (localStorage `vitryna_claims`); after the user registers we
- * bind ownership here. A claim succeeds only when the token matches AND the
- * tenant has no members yet — the token is single-use and nulled on success.
- * Every processed host is reported (claimed or rejected) so the client can
- * clear it from localStorage.
- */
-export async function claimSitesAction(
-  claims: { host: string; token: string }[],
-): Promise<{ claimed: string[]; rejected: string[] }> {
-  const claimed: string[] = [];
-  const rejected: string[] = [];
-
-  // No auth (open dashboard) or not signed in: nothing to bind — drop them all
-  // so the client stops retrying.
-  if (!isAuthConfigured()) return { claimed, rejected: claims.map((c) => c.host) };
-  const user = await getUser();
-  if (!user) return { claimed, rejected: claims.map((c) => c.host) };
-
-  const sb = getServiceClient();
-  for (const c of claims) {
-    const { data: t } = await sb
-      .from("tenants")
-      .select("id, claim_token")
-      .eq("host", c.host)
-      .maybeSingle();
-    if (!t || !t.claim_token || t.claim_token !== c.token) {
-      rejected.push(c.host);
-      continue;
-    }
-    // Only an unowned tenant can be claimed (a valid token stays useless once
-    // someone already owns the site).
-    const { count } = await sb
-      .from("tenant_members")
-      .select("tenant_id", { count: "exact", head: true })
-      .eq("tenant_id", t.id);
-    if ((count ?? 0) > 0) {
-      rejected.push(c.host);
-      continue;
-    }
-    const { error } = await sb
-      .from("tenant_members")
-      .insert({ tenant_id: t.id, user_id: user.id, role: "owner" });
-    if (error) {
-      rejected.push(c.host);
-      continue;
-    }
-    await sb.from("tenants").update({ claim_token: null }).eq("id", t.id);
-    claimed.push(c.host);
-  }
-
-  return { claimed, rejected };
-}

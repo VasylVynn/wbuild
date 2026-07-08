@@ -7,6 +7,7 @@ import {
   type FieldDescriptor,
 } from "@/lib/blocks/fields";
 import type { StoredBlock } from "@/lib/blocks/schema";
+import { Button, Input, Select, Textarea } from "@/components/ui";
 import PhotoField from "./PhotoField";
 
 /**
@@ -14,7 +15,8 @@ import PhotoField from "./PhotoField";
  * `getBlockFields(type)` (§4.1 — the same registry drives render + validation +
  * this form, so they cannot drift). We never hand-code per-block forms. Editing
  * happens on a local draft of the props; «Зберегти» hands the whole props object
- * back to the shell, which persists the full blocks array.
+ * back to the shell, which persists the full blocks array. Styled to the
+ * «Небо і мед» sheet (design G): drag handle, eyebrow + title, sticky footer.
  */
 
 // Ukrainian labels for the few enum values we edit via <select>.
@@ -82,37 +84,21 @@ export default function BlockSheet({
     }
     if (field.kind === "select") {
       return (
-        <select
-          value={value}
-          onChange={(e) => onValue(e.target.value)}
-          className="min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-4 text-base text-neutral-900 focus:border-neutral-900 focus:outline-none"
-        >
+        <Select value={value} onChange={(e) => onValue(e.target.value)}>
           {(field.options ?? []).map((opt) => (
             <option key={opt} value={opt}>
               {ENUM_LABELS[opt] ?? opt}
             </option>
           ))}
-        </select>
+        </Select>
       );
     }
     if (field.kind === "textarea") {
       return (
-        <textarea
-          value={value}
-          onChange={(e) => onValue(e.target.value)}
-          rows={4}
-          className="w-full rounded-xl border border-neutral-300 px-4 py-3 text-base text-neutral-900 focus:border-neutral-900 focus:outline-none"
-        />
+        <Textarea value={value} onChange={(e) => onValue(e.target.value)} rows={4} />
       );
     }
-    return (
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onValue(e.target.value)}
-        className="min-h-12 w-full rounded-xl border border-neutral-300 px-4 text-base text-neutral-900 focus:border-neutral-900 focus:outline-none"
-      />
-    );
+    return <Input type="text" value={value} onChange={(e) => onValue(e.target.value)} />;
   };
 
   const renderField = (field: AnyFieldDescriptor) => {
@@ -120,14 +106,14 @@ export default function BlockSheet({
       const items = getItems(field.key);
       return (
         <div key={field.key} className="flex flex-col gap-3">
-          <span className="text-base font-semibold text-neutral-900">{field.label}</span>
+          <span className="text-[15px] font-semibold text-ink">{field.label}</span>
           {items.map((item, index) => (
             <div
               key={index}
-              className="flex flex-col gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4"
+              className="flex flex-col gap-3 rounded-[16px] border border-line bg-canvas p-4"
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-neutral-500">№ {index + 1}</span>
+                <span className="text-[13px] font-bold text-ink-faint">№ {index + 1}</span>
                 <button
                   type="button"
                   disabled={items.length <= 1}
@@ -138,7 +124,7 @@ export default function BlockSheet({
                       items.filter((_, i) => i !== index),
                     )
                   }
-                  className="rounded-full px-3 py-1 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-40"
+                  className="rounded-full px-3 py-1 text-[14px] font-bold text-danger transition-colors hover:bg-danger-soft disabled:opacity-40"
                 >
                   Видалити
                 </button>
@@ -146,18 +132,31 @@ export default function BlockSheet({
               {field.itemFields.map((itemField) => {
                 const raw = item[itemField.key];
                 const v = typeof raw === "string" ? raw : "";
-                return (
+                const control = renderScalar(
+                  itemField,
+                  v,
+                  (val) => setItemField(field.key, index, itemField.key, val),
+                  {
+                    set: (url) => setItemField(field.key, index, itemField.key, url),
+                    clear: () => setItemField(field.key, index, itemField.key, ""),
+                  },
+                );
+                const inner = (
+                  <>
+                    <span className="text-[14px] font-semibold text-ink-muted">
+                      {itemField.label}
+                    </span>
+                    {control}
+                  </>
+                );
+                // Image controls contain buttons → don't nest them in a <label>.
+                return itemField.kind === "image" ? (
+                  <div key={itemField.key} className="flex flex-col gap-1.5">
+                    {inner}
+                  </div>
+                ) : (
                   <label key={itemField.key} className="flex flex-col gap-1.5">
-                    <span className="text-sm font-medium text-neutral-700">{itemField.label}</span>
-                    {renderScalar(
-                      itemField,
-                      v,
-                      (val) => setItemField(field.key, index, itemField.key, val),
-                      {
-                        set: (url) => setItemField(field.key, index, itemField.key, url),
-                        clear: () => setItemField(field.key, index, itemField.key, ""),
-                      },
-                    )}
+                    {inner}
                   </label>
                 );
               })}
@@ -166,7 +165,7 @@ export default function BlockSheet({
           <button
             type="button"
             onClick={() => setItems(field.key, [...items, emptyItem(field.itemFields)])}
-            className="inline-flex min-h-12 items-center justify-center rounded-full border border-dashed border-neutral-400 px-5 text-base font-medium text-neutral-700 transition hover:bg-neutral-100"
+            className="inline-flex min-h-12 items-center justify-center rounded-full border-2 border-dashed border-line-strong px-5 text-[16px] font-semibold text-ink-muted transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
           >
             + Додати
           </button>
@@ -174,18 +173,29 @@ export default function BlockSheet({
       );
     }
 
-    return (
-      <label key={field.key} className="flex flex-col gap-1.5">
-        <span className="text-base font-medium text-neutral-800">{field.label}</span>
-        {renderScalar(
-          field,
-          scalarValue(field.key),
-          (val) => setScalar(field.key, val),
-          {
-            set: (url) => setScalar(field.key, url),
-            clear: () => setScalar(field.key, ""),
-          },
-        )}
+    const control = renderScalar(
+      field,
+      scalarValue(field.key),
+      (val) => setScalar(field.key, val),
+      {
+        set: (url) => setScalar(field.key, url),
+        clear: () => setScalar(field.key, ""),
+      },
+    );
+    const inner = (
+      <>
+        <span className="text-[15px] font-semibold text-ink">{field.label}</span>
+        {control}
+      </>
+    );
+    // Image controls contain buttons → don't nest them in a <label>.
+    return field.kind === "image" ? (
+      <div key={field.key} className="flex flex-col gap-2">
+        {inner}
+      </div>
+    ) : (
+      <label key={field.key} className="flex flex-col gap-2">
+        {inner}
       </label>
     );
   };
@@ -197,21 +207,24 @@ export default function BlockSheet({
         type="button"
         aria-label="Закрити"
         onClick={onClose}
-        className="absolute inset-0 h-full w-full bg-black/40"
+        className="absolute inset-0 h-full w-full bg-ink/40"
       />
       {/* sheet */}
-      <div className="absolute inset-x-0 bottom-0 z-50 mx-auto flex max-h-[85vh] max-w-2xl flex-col rounded-t-3xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
+      <div className="absolute inset-x-0 bottom-0 z-50 mx-auto flex max-h-[90vh] max-w-2xl flex-col rounded-t-[28px] bg-surface shadow-[0_-12px_44px_rgba(23,36,47,.25)]">
+        <div className="flex justify-center pt-2.5 pb-0.5">
+          <div className="h-1.5 w-11 rounded-full bg-line-strong" />
+        </div>
+        <div className="flex items-center justify-between border-b border-sunken px-5 pb-3.5 pt-1">
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+            <div className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-ink-faint">
               Редагування секції
             </div>
-            <div className="text-lg font-semibold text-neutral-900">{label}</div>
+            <div className="font-brand text-[19px] font-medium text-ink">{label}</div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-2xl text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-[22px] text-ink-faint transition-colors hover:bg-sunken hover:text-ink"
             aria-label="Закрити"
           >
             ×
@@ -220,28 +233,24 @@ export default function BlockSheet({
 
         <div className="flex flex-col gap-5 overflow-auto px-5 py-6">
           {fields.length === 0 ? (
-            <p className="text-base text-neutral-500">Ця секція не має полів для редагування.</p>
+            <p className="text-[16px] text-ink-muted">Ця секція не має полів для редагування.</p>
           ) : (
             fields.map(renderField)
           )}
         </div>
 
-        <div className="flex gap-3 border-t border-neutral-100 px-5 py-4">
-          <button
-            type="button"
+        <div className="flex gap-3 border-t border-sunken px-5 py-4 pb-6">
+          <Button
+            size="md"
             disabled={saving}
             onClick={() => onSave(draft)}
-            className="inline-flex min-h-12 flex-1 items-center justify-center rounded-full bg-neutral-900 px-5 text-base font-semibold text-white transition hover:bg-neutral-700 disabled:opacity-50"
+            className="flex-[1.4]"
           >
             {saving ? "Зберігаємо…" : "Зберегти"}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex min-h-12 items-center justify-center rounded-full border border-neutral-300 px-6 text-base font-medium text-neutral-700 transition hover:bg-neutral-100"
-          >
+          </Button>
+          <Button size="md" variant="secondary" onClick={onClose} className="flex-1">
             Скасувати
-          </button>
+          </Button>
         </div>
       </div>
     </div>

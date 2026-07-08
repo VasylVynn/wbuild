@@ -20,12 +20,12 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4 border-b border-neutral-200 bg-white px-6 py-3">
-        <span className="truncate text-sm text-neutral-600">{user.email}</span>
+      <div className="flex items-center justify-between gap-4 border-b border-line bg-surface px-6 py-3.5">
+        <span className="truncate text-[15px] font-semibold text-ink-muted">{user.email}</span>
         <form action={signOutAction}>
           <button
             type="submit"
-            className="rounded-full border border-neutral-300 px-4 py-1.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+            className="text-[15px] font-bold text-ink-muted transition-colors hover:text-ink"
           >
             Вийти
           </button>

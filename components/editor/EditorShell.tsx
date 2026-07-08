@@ -13,6 +13,7 @@ import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { themeToCssVars, type Theme } from "@/lib/theme/tokens";
+import { Button, Chip, ConfirmDialog, Toast } from "@/components/ui";
 import EditableSection from "./EditableSection";
 import BlockSheet from "./BlockSheet";
 import ThemePicker from "./ThemePicker";
@@ -20,17 +21,21 @@ import ThemePicker from "./ThemePicker";
 /**
  * The site EDITOR (§3): the owner sees their DRAFT rendered with the live theme,
  * taps a section to edit its fields, reorders/hides sections, swaps the design
- * preset, regenerates from facts, and publishes. All chrome is calm neutral
- * dashboard styling wrapped around the themed preview; everything is Ukrainian
- * and tuned for a non-technical 50+ owner (big tap targets, plain wording).
+ * preset, regenerates from facts, and publishes. The chrome is the calm neutral
+ * «Небо і мед» product system (paper + blue) wrapped around the framed themed
+ * preview so the two never clash; everything is Ukrainian and tuned for a
+ * non-technical 50+ owner (big tap targets, plain wording).
  */
 
-const STATUS: Record<string, { label: string; cls: string }> = {
-  published: { label: "Опубліковано", cls: "bg-green-100 text-green-800" },
-  draft: { label: "Чернетка", cls: "bg-amber-100 text-amber-800" },
-  demo: { label: "Демо", cls: "bg-neutral-100 text-neutral-600" },
-  suspended: { label: "Призупинено", cls: "bg-red-100 text-red-700" },
+const STATUS_LABELS: Record<string, string> = {
+  published: "Опубліковано",
+  draft: "Чернетка",
+  demo: "Демо",
+  suspended: "Призупинено",
 };
+// Only the two happy states get a coloured chip; everything else stays neutral.
+const statusTone = (s: string): "ok" | "warn" | "neutral" =>
+  s === "published" ? "ok" : s === "draft" ? "warn" : "neutral";
 
 // Render one block via the shared registry. The registry value is keyed to its
 // own props type; for a dynamic block we widen the component to accept the
@@ -56,6 +61,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   const [theme, setTheme] = useState<Theme>(initial.theme);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [regenConfirmOpen, setRegenConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null); // theme / regenerate
@@ -121,17 +127,13 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     }
   };
 
-  const regenerate = async () => {
-    if (
-      !window.confirm(
-        "Зібрати сайт наново з ваших даних? Поточна версія збережеться в чернетках.",
-      )
-    ) {
-      return;
-    }
+  // Rebuild the site from the owner's facts. Gated behind a confirm dialog; the
+  // current draft is kept server-side, so nothing is lost (§5.5).
+  const runRegenerate = async () => {
     setBusyLabel("regenerate");
     const res = await regenerateSite(host);
     setBusyLabel(null);
+    setRegenConfirmOpen(false);
     if (res.ok && res.blocks) {
       setBlocks(res.blocks);
       if (res.theme) setTheme(res.theme);
@@ -157,7 +159,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     }
   };
 
-  const status = STATUS[initial.status] ?? STATUS.draft;
+  const statusLabel = STATUS_LABELS[initial.status] ?? STATUS_LABELS.draft;
   const regenerating = busyLabel === "regenerate";
   const themeBusy = busyLabel === "theme";
   const selected = selectedIndex != null ? blocks[selectedIndex] : null;
@@ -170,68 +172,74 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-100">
-      {/* Top bar */}
-      <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white/95 backdrop-blur">
+    <div className="min-h-screen bg-sunken font-ui text-ink">
+      {/* Top bar — business + status, then design / regenerate / publish actions. */}
+      <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <Link
               href="/sites"
-              className="shrink-0 text-sm text-neutral-500 transition hover:text-neutral-800"
+              className="flex shrink-0 items-center gap-1 text-[15px] font-bold text-ink-muted transition-colors hover:text-ink"
             >
-              ← Сайти
+              <span aria-hidden>←</span>
+              <span className="hidden sm:inline">Сайти</span>
             </Link>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="truncate text-lg font-semibold text-neutral-900">
+                <span className="truncate text-[17px] font-extrabold text-ink sm:text-[19px]">
                   {initial.businessName}
                 </span>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${status.cls}`}
-                >
-                  {status.label}
-                </span>
+                <Chip tone={statusTone(initial.status)} className="shrink-0">
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
+                  {statusLabel}
+                </Chip>
               </div>
-              <div className="truncate text-xs text-neutral-400">
+              <div className="truncate text-[13px] font-semibold text-ink-faint">
                 {host}
-                {dirty && <span className="ml-2 text-amber-600">• є неопубліковані зміни</span>}
+                {dirty && <span className="ml-2 text-warn">• є неопубліковані зміни</span>}
               </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
+          <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+            <Button
+              variant="secondary"
+              size="md"
+              className="shrink-0 rounded-full"
               onClick={() => setThemeOpen(true)}
-              className="inline-flex min-h-11 items-center justify-center rounded-full border border-neutral-300 px-4 text-sm font-medium text-neutral-800 transition hover:bg-neutral-100"
             >
-              🎨 Оформлення
-            </button>
-            <button
-              type="button"
+              <span aria-hidden>🎨</span> Оформлення
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
               disabled={regenerating}
-              onClick={regenerate}
-              className="inline-flex min-h-11 items-center justify-center rounded-full border border-neutral-300 px-4 text-sm font-medium text-neutral-800 transition hover:bg-neutral-100 disabled:opacity-50"
+              className="shrink-0 rounded-full"
+              onClick={() => setRegenConfirmOpen(true)}
             >
-              {regenerating ? "Збираємо…" : "↻ Перегенерувати"}
-            </button>
-            <button
-              type="button"
+              <span aria-hidden>↻</span>
+              <span className="hidden sm:inline">
+                {regenerating ? "Збираємо…" : "Перегенерувати"}
+              </span>
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
               disabled={publishing}
+              className="w-full rounded-full sm:w-auto"
               onClick={publish}
-              className="inline-flex min-h-11 items-center justify-center rounded-full bg-neutral-900 px-5 text-sm font-semibold text-white transition hover:bg-neutral-700 disabled:opacity-50"
             >
               {publishing ? "Публікуємо…" : "Опублікувати"}
-            </button>
+            </Button>
           </div>
         </div>
       </header>
 
-      {/* Draft preview */}
+      {/* Draft preview — the tenant theme renders inside a neutral white frame. */}
       <main className="mx-auto max-w-5xl px-2 py-4 sm:px-4 sm:py-6">
-        <div className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-[24px] border border-line bg-surface shadow-card">
           {blocks.length === 0 ? (
-            <div className="px-6 py-24 text-center text-neutral-400">
+            <div className="px-6 py-24 text-center text-[15px] font-medium text-ink-faint">
               Тут поки порожньо. Натисніть «Перегенерувати», щоб зібрати сайт із ваших даних.
             </div>
           ) : (
@@ -254,7 +262,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
             </div>
           )}
         </div>
-        <p className="mx-auto mt-4 max-w-md text-center text-sm text-neutral-400">
+        <p className="mx-auto mt-4 max-w-md text-center text-[14px] font-semibold text-ink-faint">
           Натисніть на будь-яку секцію, щоб змінити текст або фото. Зміни зберігаються в чернетку —
           натисніть «Опублікувати», щоб вони зʼявились на сайті.
         </p>
@@ -282,22 +290,34 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
         />
       )}
 
+      <ConfirmDialog
+        open={regenConfirmOpen}
+        title="Зібрати сайт наново з ваших даних?"
+        body="Поточна версія збережеться в чернетках."
+        confirmLabel="Так, зібрати"
+        busy={regenerating}
+        onConfirm={() => void runRegenerate()}
+        onCancel={() => {
+          if (!regenerating) setRegenConfirmOpen(false);
+        }}
+      />
+
       {toast && (
-        <div className="fixed inset-x-0 bottom-6 z-[60] flex justify-center px-4">
-          <div className="flex items-center gap-3 rounded-full bg-neutral-900 px-5 py-3 text-sm font-medium text-white shadow-xl">
-            <span>{toast.text}</span>
-            {toast.href && (
+        <Toast
+          message={toast.text}
+          action={
+            toast.href ? (
               <a
                 href={toast.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-full bg-white/20 px-3 py-1 font-semibold transition hover:bg-white/30"
+                className="whitespace-nowrap rounded-full bg-white/20 px-4 py-2 font-bold text-white transition-colors hover:bg-white/30"
               >
-                Відкрити ↗
+                Переглянути сайт ↗
               </a>
-            )}
-          </div>
-        </div>
+            ) : undefined
+          }
+        />
       )}
     </div>
   );

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Unbounded:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #ECEEF0; font-family: 'Manrope', sans-serif; color: #17242F; }
+  a { color: #1B5BBF; } a:hover { color: #14489C; }
+</style>
+</helmet>
+
+<section data-screen-label="Tokens" style="padding: 56px; display: flex; flex-direction: column; gap: 40px; max-width: 1280px;">
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 34px; letter-spacing: -0.01em;"><span style="color: #E9A23B;">3</span>minsite — токени</div>
+    <div style="font-size: 17px; color: #5A6B7A; max-width: 640px;">Напрям «Небо і мед»: прохолодний папір, глибокий синій, медовий акцент. Шрифти Unbounded + Manrope (повна кирилиця). Мапиться на Tailwind через theme.extend.</div>
+  </div>
+
+  <!-- Palette -->
+  <div style="display: flex; flex-direction: column; gap: 16px;">
+    <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 20px;">Кольори</div>
+    <div style="display: grid; grid-template-columns: repeat(6, 180px); gap: 14px;">
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #1B5BBF;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">primary</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#1B5BBF</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #14489C;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">primary-hover</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#14489C</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #E7EEF9;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">primary-soft</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#E7EEF9</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #E9A23B;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">honey</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#E9A23B</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #9A6A12;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">honey-text</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#9A6A12</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #FCF1DD;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">honey-soft</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#FCF1DD</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #F7F8F8; border-bottom: 1px solid #E2E7EB;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">bg</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#F7F8F8</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #FFFFFF; border-bottom: 1px solid #E2E7EB;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">surface</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#FFFFFF</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #EEF1F3;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">sunken</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#EEF1F3</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #E2E7EB;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">border</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#E2E7EB</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #17242F;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">text</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#17242F</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="height: 84px; background: #5A6B7A;"></div>
+        <div style="padding: 12px 14px;"><div style="font-weight: 700; font-size: 15px;">muted-text</div><div style="font-family: monospace; font-size: 13px; color: #8A99A6;">#5A6B7A</div></div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, 277px); gap: 14px;">
+      <div style="background: #FFFFFF; border-radius: 20px; padding: 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <span style="display: inline-flex; align-items: center; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 14px; padding: 6px 14px; border-radius: 999px;">success</span>
+        <span style="font-family: monospace; font-size: 13px; color: #8A99A6;">#177E53 / #DFF2E9</span>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; padding: 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <span style="display: inline-flex; align-items: center; background: #FAF0D9; color: #8F6410; font-weight: 700; font-size: 14px; padding: 6px 14px; border-radius: 999px;">warning</span>
+        <span style="font-family: monospace; font-size: 13px; color: #8A99A6;">#8F6410 / #FAF0D9</span>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; padding: 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <span style="display: inline-flex; align-items: center; background: #FBE9E7; color: #C03A32; font-weight: 700; font-size: 14px; padding: 6px 14px; border-radius: 999px;">danger</span>
+        <span style="font-family: monospace; font-size: 13px; color: #8A99A6;">#C03A32 / #FBE9E7</span>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; padding: 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <span style="display: inline-flex; align-items: center; background: #229ED9; color: #FFFFFF; font-weight: 700; font-size: 14px; padding: 6px 14px; border-radius: 999px;">telegram</span>
+        <span style="font-family: monospace; font-size: 13px; color: #8A99A6;">#229ED9 / #1787BD</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Type scale -->
+  <div style="display: flex; gap: 14px; align-items: stretch;">
+    <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; flex: 1; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+      <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 20px;">Типографіка</div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><span style="font-family: monospace; font-size: 12px; color: #8A99A6; width: 150px;">h1 · Unbounded 600 · 32</span><span style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 32px;">Ваш сайт готовий</span></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><span style="font-family: monospace; font-size: 12px; color: #8A99A6; width: 150px;">h2 · Unbounded 500 · 24</span><span style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 24px;">Перевірте дані</span></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><span style="font-family: monospace; font-size: 12px; color: #8A99A6; width: 150px;">h3 · Manrope 800 · 19</span><span style="font-weight: 800; font-size: 19px;">Квіти від Оксани</span></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><span style="font-family: monospace; font-size: 12px; color: #8A99A6; width: 150px;">body · Manrope 500 · 17</span><span style="font-weight: 500; font-size: 17px; line-height: 1.55;">Розкажіть трохи про ваш бізнес — решту ми зробимо самі.</span></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><span style="font-family: monospace; font-size: 12px; color: #8A99A6; width: 150px;">small · Manrope 600 · 15</span><span style="font-weight: 600; font-size: 15px; color: #5A6B7A;">kvity-oksana.3minsite.com.ua</span></div>
+      <div style="display: flex; align-items: baseline; gap: 20px;"><span style="font-family: monospace; font-size: 12px; color: #8A99A6; width: 150px;">caption · 13</span><span style="font-weight: 600; font-size: 13px; color: #8A99A6;">СЬОГОДНІ, 14:32</span></div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; width: 420px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+      <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 20px;">Вордмарк</div>
+      <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 40px; letter-spacing: -0.01em;"><span style="color: #E9A23B;">3</span>minsite</div>
+      <div style="font-size: 15px; color: #5A6B7A; line-height: 1.5;">Unbounded 600. «3» — медовий #E9A23B, решта — #17242F. Мінімальний розмір 18px. Без знака: цифра «3» і є знак.</div>
+      <div style="background: #1B5BBF; border-radius: 14px; padding: 18px 22px; font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 26px; color: #FFFFFF;"><span style="color: #E9A23B;">3</span>minsite</div>
+    </div>
+  </div>
+
+  <!-- Spacing / radius / shadow -->
+  <div style="display: flex; gap: 14px;">
+    <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; flex: 1; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+      <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 20px; margin-bottom: 18px;">Відступи</div>
+      <div style="display: flex; align-items: flex-end; gap: 16px;">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 4px; height: 4px; background: #1B5BBF; border-radius: 2px;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">4</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 8px; height: 8px; background: #1B5BBF; border-radius: 3px;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">8</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 12px; height: 12px; background: #1B5BBF; border-radius: 4px;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">12</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 16px; height: 16px; background: #1B5BBF; border-radius: 5px;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">16</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 24px; height: 24px; background: #1B5BBF; border-radius: 6px;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">24</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 32px; height: 32px; background: #1B5BBF; border-radius: 8px;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">32</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 40px; height: 40px; background: #1B5BBF; border-radius: 10px;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">40</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 56px; height: 56px; background: #1B5BBF; border-radius: 12px;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">56</span></div>
+      </div>
+      <div style="margin-top: 16px; font-size: 14px; color: #5A6B7A;">Tailwind: стандартна шкала (1 = 4px). Мін. tap target — 48px, кнопки — 56px.</div>
+    </div>
+    <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; flex: 1; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+      <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 20px; margin-bottom: 18px;">Радіуси і тінь</div>
+      <div style="display: flex; gap: 16px; align-items: flex-end;">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 72px; height: 56px; background: #EEF1F3; border: 1.5px solid #C9D2D9; border-radius: 14px;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">14 controls</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 72px; height: 56px; background: #EEF1F3; border: 1.5px solid #C9D2D9; border-radius: 20px;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">20 cards</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 72px; height: 56px; background: #EEF1F3; border: 1.5px solid #C9D2D9; border-radius: 28px 28px 0 0;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">28 sheet</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 72px; height: 56px; background: #EEF1F3; border: 1.5px solid #C9D2D9; border-radius: 999px;"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">999 pill</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><div style="width: 72px; height: 56px; background: #FFFFFF; border-radius: 20px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.12);"></div><span style="font-family: monospace; font-size: 12px; color: #8A99A6;">shadow-card</span></div>
+      </div>
+      <div style="margin-top: 16px; font-family: monospace; font-size: 13px; color: #5A6B7A; line-height: 1.6;">shadow: 0 1px 2px rgba(23,36,47,.05),<br>0 10px 30px rgba(23,36,47,.07)</div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+</body>
+</html>

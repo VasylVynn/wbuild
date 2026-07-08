@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Unbounded:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #ECEEF0; font-family: 'Manrope', sans-serif; color: #17242F; }
+  a { color: #1B5BBF; } a:hover { color: #14489C; }
+</style>
+</helmet>
+
+<section style="padding: 56px; display: flex; flex-direction: column; gap: 32px;">
+  <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 30px;">Вхід і реєстрація</div>
+
+  <div style="display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start;">
+
+    <!-- Mobile sign in -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · вхід</span>
+      <div data-screen-label="Login mobile" style="width: 390px; height: 780px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; padding: 18px 20px;">
+          <span style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #5A6B7A; font-size: 20px; font-weight: 700; cursor: pointer; margin-left: -12px;">←</span>
+          <span style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 20px;"><span style="color: #E9A23B;">3</span>minsite</span>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 24px 80px; gap: 18px;">
+          <div style="display: flex; background: #EEF1F3; border-radius: 999px; padding: 5px;">
+            <div style="flex: 1; display: flex; height: 48px; align-items: center; justify-content: center; background: #FFFFFF; border-radius: 999px; font-weight: 800; font-size: 16px; box-shadow: 0 2px 8px rgba(23,36,47,.1); cursor: pointer;">Увійти</div>
+            <div style="flex: 1; display: flex; height: 48px; align-items: center; justify-content: center; border-radius: 999px; font-weight: 700; font-size: 16px; color: #5A6B7A; cursor: pointer;">Зареєструватися</div>
+          </div>
+          <div style="margin-top: 6px;">
+            <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 24px;">Раді вас бачити!</div>
+            <div style="font-size: 16px; color: #5A6B7A; margin-top: 8px;">Увійдіть, щоб керувати сайтами і бачити заявки.</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-weight: 700; font-size: 15px;">Електронна пошта</span>
+            <input type="email" value="oksana@gmail.com" style="height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;" style-focus="border-color: #1B5BBF; box-shadow: 0 0 0 3px #E7EEF9;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-weight: 700; font-size: 15px;">Пароль</span>
+            <div style="position: relative;">
+              <input type="password" value="password" style="width: 100%; box-sizing: border-box; height: 56px; padding: 0 52px 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+              <span style="position: absolute; right: 6px; top: 6px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #8A99A6; font-size: 17px; cursor: pointer;">👁</span>
+            </div>
+          </div>
+          <div style="display: flex; height: 60px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 18px; font-weight: 700; font-size: 19px; cursor: pointer; box-shadow: 0 8px 24px rgba(27,91,191,.3); margin-top: 8px;" style-hover="background: #14489C;">Увійти</div>
+          <div style="text-align: center; font-size: 15px; color: #5A6B7A; font-weight: 600;">Забули пароль? <a href="#" style="font-weight: 700;">Відновити</a></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile sign up -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · реєстрація</span>
+      <div data-screen-label="Signup mobile" style="width: 390px; height: 780px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; align-items: center; padding: 18px 20px;">
+          <span style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #5A6B7A; font-size: 20px; font-weight: 700; cursor: pointer; margin-left: -12px;">←</span>
+          <span style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 20px;"><span style="color: #E9A23B;">3</span>minsite</span>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 24px 80px; gap: 18px;">
+          <div style="display: flex; background: #EEF1F3; border-radius: 999px; padding: 5px;">
+            <div style="flex: 1; display: flex; height: 48px; align-items: center; justify-content: center; border-radius: 999px; font-weight: 700; font-size: 16px; color: #5A6B7A; cursor: pointer;">Увійти</div>
+            <div style="flex: 1; display: flex; height: 48px; align-items: center; justify-content: center; background: #FFFFFF; border-radius: 999px; font-weight: 800; font-size: 16px; box-shadow: 0 2px 8px rgba(23,36,47,.1); cursor: pointer;">Зареєструватися</div>
+          </div>
+          <div style="margin-top: 6px;">
+            <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 24px;">Створіть обліковий запис</div>
+            <div style="font-size: 16px; color: #5A6B7A; margin-top: 8px;">Щоб керувати сайтом і отримувати заявки від клієнтів.</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-weight: 700; font-size: 15px;">Електронна пошта</span>
+            <input type="email" placeholder="ваш@email.com" style="height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <span style="font-weight: 700; font-size: 15px;">Пароль</span>
+            <input type="password" placeholder="Мінімум 6 символів" style="height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+          </div>
+          <div style="display: flex; height: 60px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 18px; font-weight: 700; font-size: 19px; cursor: pointer; box-shadow: 0 8px 24px rgba(27,91,191,.3); margin-top: 8px;" style-hover="background: #14489C;">Зареєструватися</div>
+          <div style="text-align: center; font-size: 14px; color: #8A99A6; font-weight: 600; line-height: 1.5;">Реєструючись, ви погоджуєтесь з <a href="#" style="font-weight: 700;">умовами користування</a></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">desktop 1440 · вхід</span>
+      <div data-screen-label="Login desktop" style="width: 1440px; height: 800px; background: #F7F8F8; border-radius: 20px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; overflow: hidden;">
+        <!-- left: brand panel -->
+        <div style="width: 560px; background: #1B5BBF; display: flex; flex-direction: column; justify-content: space-between; padding: 48px 56px;">
+          <span style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 24px; color: #FFFFFF;"><span style="color: #E9A23B;">3</span>minsite</span>
+          <div style="display: flex; flex-direction: column; gap: 20px;">
+            <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 32px; color: #FFFFFF; line-height: 1.3;">Клієнти з інтернету — прямо у ваш Telegram</div>
+            <div style="font-size: 17px; color: rgba(255,255,255,.75); line-height: 1.55;">Сайт для вашого бізнесу за 3 хвилини. Заявки від клієнтів — одразу вам у месенджер.</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#FFFFFF"></circle><path d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z" fill="#229ED9"></path></svg>
+            <span style="font-size: 15px; color: rgba(255,255,255,.75); font-weight: 600;">1200+ заявок надіслано підприємцям цього місяця</span>
+          </div>
+        </div>
+        <!-- right: form -->
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+          <div style="width: 440px; display: flex; flex-direction: column; gap: 18px;">
+            <div style="display: flex; background: #EEF1F3; border-radius: 999px; padding: 5px;">
+              <div style="flex: 1; display: flex; height: 48px; align-items: center; justify-content: center; background: #FFFFFF; border-radius: 999px; font-weight: 800; font-size: 16px; box-shadow: 0 2px 8px rgba(23,36,47,.1); cursor: pointer;">Увійти</div>
+              <div style="flex: 1; display: flex; height: 48px; align-items: center; justify-content: center; border-radius: 999px; font-weight: 700; font-size: 16px; color: #5A6B7A; cursor: pointer;">Зареєструватися</div>
+            </div>
+            <div style="margin-top: 6px;">
+              <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 26px;">Раді вас бачити!</div>
+              <div style="font-size: 16px; color: #5A6B7A; margin-top: 8px;">Увійдіть, щоб керувати сайтами і бачити заявки.</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-weight: 700; font-size: 15px;">Електронна пошта</span>
+              <input type="email" value="oksana@gmail.com" style="height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;" style-focus="border-color: #1B5BBF; box-shadow: 0 0 0 3px #E7EEF9;">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-weight: 700; font-size: 15px;">Пароль</span>
+              <div style="position: relative;">
+                <input type="password" value="password" style="width: 100%; box-sizing: border-box; height: 56px; padding: 0 52px 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+                <span style="position: absolute; right: 6px; top: 6px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #8A99A6; font-size: 17px; cursor: pointer;">👁</span>
+              </div>
+            </div>
+            <div style="display: flex; height: 60px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 18px; font-weight: 700; font-size: 19px; cursor: pointer; box-shadow: 0 8px 24px rgba(27,91,191,.3); margin-top: 8px;" style-hover="background: #14489C;">Увійти</div>
+            <div style="text-align: center; font-size: 15px; color: #5A6B7A; font-weight: 600;">Забули пароль? <a href="#" style="font-weight: 700;">Відновити</a></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile confirm email -->
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · перевірте пошту</span>
+      <div data-screen-label="Confirm email mobile" style="width: 390px; height: 780px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 32px; text-align: center; overflow: hidden;">
+        <div style="width: 84px; height: 84px; border-radius: 999px; background: #FCF1DD; display: flex; align-items: center; justify-content: center; font-size: 38px;">📬</div>
+        <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 24px; margin-top: 28px;">Перевірте пошту</div>
+        <div style="font-size: 17px; color: #5A6B7A; margin-top: 12px; line-height: 1.55;">Ми надіслали лист для підтвердження на <b style="color: #17242F;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="701f1b03111e1130171d11191c5e131f1d">[email&#160;protected]</a></b>. Відкрийте його й натисніть на посилання — і зможете увійти.</div>
+        <div style="display: flex; height: 56px; align-items: center; justify-content: center; padding: 0 28px; border: 1.5px solid #C9D2D9; border-radius: 18px; font-weight: 700; font-size: 17px; cursor: pointer; margin-top: 28px;" style-hover="background: #EEF1F3;">Повернутися до входу</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script></body>
+</html>

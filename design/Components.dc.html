@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Unbounded:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #ECEEF0; font-family: 'Manrope', sans-serif; color: #17242F; }
+  a { color: #1B5BBF; } a:hover { color: #14489C; }
+  @keyframes typing-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-4px); opacity: 1; } }
+</style>
+</helmet>
+
+<section data-screen-label="Components" style="padding: 56px; display: flex; flex-direction: column; gap: 32px; max-width: 1440px;">
+
+  <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 34px;"><span style="color: #E9A23B;">3</span>minsite — компоненти</div>
+
+  <div style="display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;">
+
+    <!-- Buttons -->
+    <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; width: 400px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+      <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 18px;">Кнопки</div>
+      <div style="display: flex; height: 56px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 16px; font-weight: 700; font-size: 18px; cursor: pointer;" style-hover="background: #14489C;">Створити сайт</div>
+      <div style="display: flex; height: 56px; align-items: center; justify-content: center; background: #FFFFFF; color: #17242F; border: 1.5px solid #C9D2D9; border-radius: 16px; font-weight: 700; font-size: 18px; cursor: pointer;" style-hover="background: #EEF1F3;">Мої сайти</div>
+      <div style="display: flex; height: 48px; align-items: center; justify-content: center; color: #5A6B7A; border-radius: 14px; font-weight: 700; font-size: 17px; cursor: pointer;" style-hover="background: #EEF1F3; color: #17242F;">Скасувати</div>
+      <div style="display: flex; height: 56px; align-items: center; justify-content: center; gap: 10px; background: #229ED9; color: #FFFFFF; border-radius: 16px; font-weight: 700; font-size: 18px; cursor: pointer;" style-hover="background: #1787BD;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#FFFFFF"></circle><path d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z" fill="#229ED9"></path></svg>
+        Підключити Telegram
+      </div>
+      <div style="display: flex; height: 56px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 16px; font-weight: 700; font-size: 18px; opacity: 0.45; cursor: not-allowed;">Створити сайт</div>
+      <div style="font-size: 13px; color: #8A99A6;">primary · secondary · quiet · telegram · disabled — висота 56/48, радіус 16</div>
+    </div>
+
+    <!-- Inputs -->
+    <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; width: 400px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+      <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 18px;">Поля вводу</div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-weight: 700; font-size: 15px;">Назва бізнесу <span style="color: #C03A32;">*</span></span>
+        <input type="text" value="Квіти від Оксани" style="height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; color: #17242F; background: #FFFFFF; outline: none;" style-focus="border-color: #1B5BBF; box-shadow: 0 0 0 3px #E7EEF9;">
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-weight: 700; font-size: 15px;">Телефон <span style="color: #C03A32;">*</span></span>
+        <input type="tel" placeholder="+380 50 123 45 67" style="height: 56px; padding: 0 18px; border: 1.5px solid #D8A29D; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; color: #17242F; background: #FDF6F5; outline: none;">
+        <span style="font-size: 15px; color: #C03A32; font-weight: 600;">Введіть номер телефону</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-weight: 700; font-size: 15px;">Про бізнес</span>
+        <textarea rows="3" placeholder="Кілька слів про ваш магазин…" style="padding: 14px 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; color: #17242F; background: #FFFFFF; outline: none; resize: none;"></textarea>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <span style="font-weight: 700; font-size: 15px;">Вирівнювання</span>
+        <div style="position: relative;">
+          <select style="width: 100%; height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 17px; color: #17242F; background: #FFFFFF; outline: none; appearance: none;">
+            <option>По центру</option><option>Ліворуч</option><option>Праворуч</option>
+          </select>
+          <span style="position: absolute; right: 18px; top: 16px; color: #8A99A6; pointer-events: none; font-size: 15px;">▾</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chips + cards -->
+    <div style="display: flex; flex-direction: column; gap: 24px; width: 400px;">
+      <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 18px;">Статуси</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 14px; padding: 7px 14px; border-radius: 999px;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #177E53;"></span>Опубліковано</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #FAF0D9; color: #8F6410; font-weight: 700; font-size: 14px; padding: 7px 14px; border-radius: 999px;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #B98A17;"></span>Чернетка</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #FBE9E7; color: #C03A32; font-weight: 700; font-size: 14px; padding: 7px 14px; border-radius: 999px;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #C03A32;"></span>Призупинено</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #E7EEF9; color: #1B5BBF; font-weight: 700; font-size: 14px; padding: 7px 14px; border-radius: 999px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#229ED9"></circle><path d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z" fill="#FFFFFF"></path></svg>
+            Telegram ✓</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #E7EEF9; color: #1B5BBF; font-weight: 700; font-size: 14px; padding: 7px 14px; border-radius: 999px;">✈️ надіслано в Telegram</span>
+        </div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-weight: 800; font-size: 19px;">Квіти від Оксани</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; background: #DFF2E9; color: #177E53; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 999px;"><span style="width: 6px; height: 6px; border-radius: 999px; background: #177E53;"></span>Опубліковано</span>
+        </div>
+        <div style="font-size: 15px; color: #5A6B7A; font-weight: 600;">kvity-oksana.3minsite.com.ua · Квітковий магазин</div>
+        <div style="font-size: 13px; color: #8A99A6;">Картка: surface, радіус 20, тінь card, падінг 22</div>
+      </div>
+      <!-- Photo upload tiles -->
+      <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 18px;">Фото</div>
+        <div style="display: flex; gap: 12px;">
+          <div style="width: 104px; height: 104px; border: 2px dashed #C9D2D9; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: #F7F8F8; cursor: pointer;" style-hover="border-color: #1B5BBF; background: #E7EEF9;">
+            <span style="font-size: 24px; color: #1B5BBF; font-weight: 400; line-height: 1;">+</span>
+            <span style="font-size: 12px; font-weight: 700; color: #5A6B7A; text-align: center;">Завантажити фото</span>
+          </div>
+          <div style="width: 104px; height: 104px; border-radius: 16px; position: relative; overflow: hidden; background: repeating-linear-gradient(45deg, #E7EEF9, #E7EEF9 8px, #EEF1F3 8px, #EEF1F3 16px);">
+            <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(23,36,47,0.35);">
+              <span style="font-size: 12px; font-weight: 700; color: #FFFFFF;">64%</span>
+              <div style="width: 64px; height: 5px; border-radius: 999px; background: rgba(255,255,255,0.35);"><div style="width: 41px; height: 5px; border-radius: 999px; background: #FFFFFF;"></div></div>
+            </div>
+          </div>
+          <div style="width: 104px; height: 104px; border-radius: 16px; position: relative; overflow: hidden; background: repeating-linear-gradient(45deg, #FCF1DD, #FCF1DD 8px, #F7E7C9 8px, #F7E7C9 16px);">
+            <span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: monospace; font-size: 11px; color: #9A6A12;">фото букета</span>
+            <div style="position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 999px; background: rgba(23,36,47,0.55); color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer;">×</div>
+          </div>
+        </div>
+        <div style="font-size: 13px; color: #8A99A6;">порожній · завантаження · заповнений</div>
+      </div>
+    </div>
+
+    <!-- Chat bubbles -->
+    <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; width: 400px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+      <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 18px;">Чат</div>
+      <div style="display: flex; justify-content: flex-start;">
+        <div style="max-width: 82%; background: #FFFFFF; border: 1.5px solid #E2E7EB; color: #17242F; padding: 14px 18px; border-radius: 20px 20px 20px 6px; font-size: 17px; line-height: 1.5; box-shadow: 0 1px 2px rgba(23,36,47,.04);">Вітаю! 👋 Я допоможу створити сайт для вашого бізнесу.</div>
+      </div>
+      <div style="display: flex; justify-content: flex-end;">
+        <div style="max-width: 82%; background: #1B5BBF; color: #FFFFFF; padding: 14px 18px; border-radius: 20px 20px 6px 20px; font-size: 17px; line-height: 1.5;">У мене квітковий магазин у Львові</div>
+      </div>
+      <div style="display: flex; justify-content: flex-start;">
+        <div style="background: #FFFFFF; border: 1.5px solid #E2E7EB; padding: 16px 18px; border-radius: 20px 20px 20px 6px; display: flex; gap: 5px; align-items: center;">
+          <span style="width: 8px; height: 8px; border-radius: 999px; background: #8A99A6; animation: typing-dot 1.2s infinite;"></span>
+          <span style="width: 8px; height: 8px; border-radius: 999px; background: #8A99A6; animation: typing-dot 1.2s infinite 0.15s;"></span>
+          <span style="width: 8px; height: 8px; border-radius: 999px; background: #8A99A6; animation: typing-dot 1.2s infinite 0.3s;"></span>
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 6px;">
+        <input type="text" placeholder="Написати…" style="flex: 1; min-width: 0; height: 56px; padding: 0 18px; border: 1.5px solid #C9D2D9; border-radius: 999px; font-family: 'Manrope', sans-serif; font-size: 17px; outline: none; background: #FFFFFF;">
+        <div style="width: 56px; height: 56px; flex-shrink: 0; border-radius: 999px; background: #1B5BBF; color: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer;" style-hover="background: #14489C;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 12h14M13 6l6 6-6 6" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast + confirm + empty -->
+    <div style="display: flex; flex-direction: column; gap: 24px; width: 440px;">
+      <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 18px;">Тост</div>
+        <div style="display: flex; align-items: center; gap: 14px; background: #17242F; color: #FFFFFF; border-radius: 999px; padding: 12px 12px 12px 22px; box-shadow: 0 10px 30px rgba(23,36,47,.25); align-self: flex-start;">
+          <span style="font-weight: 700; font-size: 16px;">Опубліковано! Зміни вже на сайті</span>
+          <span style="background: rgba(255,255,255,0.16); border-radius: 999px; padding: 9px 16px; font-weight: 700; font-size: 15px; color: #FFFFFF; cursor: pointer; white-space: nowrap;" style-hover="background: rgba(255,255,255,0.28);">Переглянути сайт ↗</span>
+        </div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 24px; padding: 28px; display: flex; flex-direction: column; gap: 18px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 20px 50px rgba(23,36,47,.18);">
+        <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 20px;">Зібрати сайт наново?</div>
+        <div style="font-size: 17px; color: #5A6B7A; line-height: 1.5;">Зберемо сайт наново з ваших даних. Поточна версія збережеться в чернетках.</div>
+        <div style="display: flex; gap: 12px;">
+          <div style="flex: 1; display: flex; height: 56px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 16px; font-weight: 700; font-size: 17px; cursor: pointer;" style-hover="background: #14489C;">Так, зібрати</div>
+          <div style="flex: 1; display: flex; height: 56px; align-items: center; justify-content: center; background: #FFFFFF; color: #17242F; border: 1.5px solid #C9D2D9; border-radius: 16px; font-weight: 700; font-size: 17px; cursor: pointer;" style-hover="background: #EEF1F3;">Скасувати</div>
+        </div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 18px;">Порожній стан</div>
+        <div style="border: 2px dashed #C9D2D9; border-radius: 20px; padding: 36px 24px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;">
+          <div style="width: 64px; height: 64px; border-radius: 999px; background: #E7EEF9; display: flex; align-items: center; justify-content: center;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3" stroke="#1B5BBF" stroke-width="2"></rect><path d="M3 9h18" stroke="#1B5BBF" stroke-width="2"></path></svg>
+          </div>
+          <div style="font-weight: 800; font-size: 18px;">Ще немає сайтів</div>
+          <div style="font-size: 16px; color: #5A6B7A; line-height: 1.5; max-width: 280px;">Створіть перший — це займе близько трьох хвилин.</div>
+          <div style="display: flex; height: 52px; align-items: center; justify-content: center; padding: 0 28px; background: #1B5BBF; color: #FFFFFF; border-radius: 16px; font-weight: 700; font-size: 17px; cursor: pointer;" style-hover="background: #14489C;">Створити сайт</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom sheet + top bars -->
+    <div style="display: flex; flex-direction: column; gap: 24px; width: 480px;">
+      <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 18px;">Нижній лист (bottom sheet)</div>
+        <div style="border-radius: 20px; overflow: hidden; background: #9AA7B2; padding-top: 40px;">
+          <div style="background: #FFFFFF; border-radius: 28px 28px 0 0; box-shadow: 0 -10px 40px rgba(23,36,47,.2);">
+            <div style="display: flex; justify-content: center; padding: 10px 0 2px;"><div style="width: 44px; height: 5px; border-radius: 999px; background: #C9D2D9;"></div></div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 22px 14px; border-bottom: 1px solid #EEF1F3;">
+              <div>
+                <div style="font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #8A99A6;">Редагування секції</div>
+                <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 19px;">Послуги та ціни</div>
+              </div>
+              <div style="width: 44px; height: 44px; border-radius: 999px; display: flex; align-items: center; justify-content: center; color: #8A99A6; font-size: 22px; cursor: pointer;" style-hover="background: #EEF1F3; color: #17242F;">×</div>
+            </div>
+            <div style="padding: 18px 22px; display: flex; flex-direction: column; gap: 12px;">
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <span style="font-weight: 700; font-size: 15px;">Заголовок</span>
+                <input type="text" value="Наші букети" style="height: 52px; padding: 0 16px; border: 1.5px solid #C9D2D9; border-radius: 14px; font-family: 'Manrope', sans-serif; font-size: 16px; outline: none;">
+              </div>
+            </div>
+            <div style="display: flex; gap: 12px; padding: 14px 22px 20px; border-top: 1px solid #EEF1F3;">
+              <div style="flex: 1.4; display: flex; height: 54px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 16px; font-weight: 700; font-size: 17px; cursor: pointer;" style-hover="background: #14489C;">Зберегти</div>
+              <div style="flex: 1; display: flex; height: 54px; align-items: center; justify-content: center; border: 1.5px solid #C9D2D9; border-radius: 16px; font-weight: 700; font-size: 17px; cursor: pointer;" style-hover="background: #EEF1F3;">Скасувати</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 20px; padding: 28px 32px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
+        <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 18px;">Верхні панелі</div>
+        <div style="border: 1px solid #E2E7EB; border-radius: 16px; overflow: hidden;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: #FFFFFF;">
+            <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 19px;"><span style="color: #E9A23B;">3</span>minsite</div>
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <span style="font-weight: 600; font-size: 15px; color: #5A6B7A;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="84ebeff7e5eae5c4e3e9e5ede8aae7ebe9">[email&#160;protected]</a></span>
+              <span style="font-weight: 700; font-size: 15px; color: #1B5BBF; cursor: pointer;">Вийти</span>
+            </div>
+          </div>
+        </div>
+        <div style="border: 1px solid #E2E7EB; border-radius: 16px; overflow: hidden;">
+          <div style="display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: #FFFFFF;">
+            <span style="color: #5A6B7A; font-weight: 700; font-size: 16px; cursor: pointer;">←</span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 8px;"><span style="font-weight: 800; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Квіти від Оксани</span><span style="background: #FAF0D9; color: #8F6410; font-weight: 700; font-size: 12px; padding: 3px 10px; border-radius: 999px; white-space: nowrap;">Чернетка</span></div>
+              <div style="font-size: 13px; color: #8A99A6; font-weight: 600;">kvity-oksana.3minsite.com.ua</div>
+            </div>
+            <div style="display: flex; height: 44px; align-items: center; padding: 0 18px; background: #1B5BBF; color: #FFFFFF; border-radius: 999px; font-weight: 700; font-size: 15px; cursor: pointer;" style-hover="background: #14489C;">Опублікувати</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+</x-dc>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script></body>
+</html>

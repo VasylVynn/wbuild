@@ -1,13 +1,16 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Button } from "@/components/ui";
 
 /**
  * Photo field for the editor bottom-sheet (§4.8). The client re-encodes the
  * chosen image on a canvas BEFORE upload: this strips EXIF/GPS, fixes the
  * orientation and caps the size — so nothing sensitive leaves the phone and the
  * asset is web-ready. The processed blob is posted to /api/upload, which stores
- * it and returns a public URL we hand back via `onChange`.
+ * it and returns a public URL we hand back via `onChange`. Styled to the
+ * «Небо і мед» photo tiles (design G / Components): dashed add tile, filled
+ * tile with a remove badge, and an overlay while working.
  */
 
 const MAX_EDGE = 1600; // longest edge, px
@@ -81,18 +84,56 @@ export default function PhotoField({
     }
   }
 
+  const pick = () => inputRef.current?.click();
+  const tile = "h-28 w-28 shrink-0 overflow-hidden rounded-[16px]";
+
   return (
     <div className="flex flex-col gap-3">
-      {value ? (
-        <div className="overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={value} alt="" className="max-h-48 w-full object-cover" />
-        </div>
-      ) : (
-        <div className="flex h-32 items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-neutral-50 text-sm text-neutral-400">
-          Фото ще немає
-        </div>
-      )}
+      <div className="flex flex-wrap items-start gap-3">
+        {busy ? (
+          <div className={`relative border border-line bg-sunken ${tile}`}>
+            {value && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={value} alt="" className="h-full w-full object-cover" />
+            )}
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-ink/45 text-white">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              <span className="text-[12px] font-bold">
+                {status === "processing" ? "Обробка…" : "Завантаження…"}
+              </span>
+            </div>
+          </div>
+        ) : value ? (
+          <div className={`relative border border-line bg-sunken ${tile}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={value} alt="" className="h-full w-full object-cover" />
+            <button
+              type="button"
+              onClick={onClear}
+              aria-label="Прибрати фото"
+              title="Прибрати фото"
+              className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-ink/55 text-[16px] text-white transition-colors hover:bg-ink"
+            >
+              ×
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={pick}
+            className={`flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-line-strong bg-canvas text-center transition-colors hover:border-brand hover:bg-brand-soft ${tile}`}
+          >
+            <span aria-hidden className="text-[26px] leading-none text-brand">+</span>
+            <span className="px-2 text-[12px] font-bold text-ink-muted">Завантажити фото</span>
+          </button>
+        )}
+
+        {value && !busy && (
+          <Button variant="secondary" size="md" onClick={pick}>
+            Замінити фото
+          </Button>
+        )}
+      </div>
 
       <input
         ref={inputRef}
@@ -106,34 +147,10 @@ export default function PhotoField({
         }}
       />
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => inputRef.current?.click()}
-          className="inline-flex min-h-12 items-center justify-center rounded-full bg-neutral-900 px-5 text-base font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50"
-        >
-          {status === "processing"
-            ? "Обробка…"
-            : status === "uploading"
-              ? "Завантаження…"
-              : value
-                ? "Замінити фото"
-                : "Завантажити фото"}
-        </button>
-        {value && !busy && (
-          <button
-            type="button"
-            onClick={onClear}
-            className="inline-flex min-h-12 items-center justify-center rounded-full border border-neutral-300 px-5 text-base font-medium text-neutral-700 transition hover:bg-neutral-100"
-          >
-            Прибрати фото
-          </button>
-        )}
-      </div>
-
       {status === "error" && (
-        <p className="text-sm text-red-600">{error ?? "Не вдалося завантажити фото."}</p>
+        <p className="text-[14px] font-semibold text-danger">
+          {error ?? "Не вдалося завантажити фото."}
+        </p>
       )}
     </div>
   );
