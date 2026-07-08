@@ -379,14 +379,14 @@ export function OnboardChat() {
                     value={svc.name}
                     onChange={(e) => updateService(idx, "name", e.target.value)}
                     placeholder="Назва послуги"
-                    className={`${inputCls(false)} flex-1`}
+                    className={`${inputCls(false, false)} min-w-0 flex-1`}
                   />
                   <input
                     type="text"
                     value={svc.price}
                     onChange={(e) => updateService(idx, "price", e.target.value)}
                     placeholder="Ціна"
-                    className={`${inputCls(false)} w-28 shrink-0`}
+                    className={`${inputCls(false, false)} w-28 shrink-0`}
                   />
                   <button
                     type="button"
@@ -550,9 +550,12 @@ function FormField({
   );
 }
 
-function inputCls(hasError: boolean): string {
+function inputCls(hasError: boolean, fullWidth = true): string {
   return [
-    "w-full min-h-14 px-5 py-4 rounded-2xl border text-base text-neutral-900",
+    // fullWidth=false for inputs inside flex rows — a stray w-full would win
+    // over w-28/flex-1 in the compiled CSS and collapse the sibling input.
+    fullWidth ? "w-full" : "",
+    "min-h-14 px-5 py-4 rounded-2xl border text-base text-neutral-900",
     "placeholder:text-neutral-400 focus:outline-none focus:ring-2 transition-shadow",
     hasError
       ? "border-red-300 bg-red-50 focus:ring-red-200"
