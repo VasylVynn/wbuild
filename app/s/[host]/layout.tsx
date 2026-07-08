@@ -4,6 +4,7 @@ import { getTenantByHost, getNav } from "@/lib/tenant/data";
 import { themeToCssVars } from "@/lib/theme/tokens";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { Beacon } from "@/components/site/Beacon";
 
 /**
  * Tenant shell (brief §5.1): applies the tenant's design tokens as CSS
@@ -34,6 +35,7 @@ export default async function TenantLayout({
       <SiteHeader tenant={tenant} nav={nav} />
       <main className="flex-1">{children}</main>
       <SiteFooter tenant={tenant} />
+      <Beacon />
     </div>
   );
 }

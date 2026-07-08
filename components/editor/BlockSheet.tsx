@@ -8,6 +8,7 @@ import {
 } from "@/lib/blocks/fields";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { Button, Input, Select, Textarea } from "@/components/ui";
+import { aiEditBlockAction } from "@/app/app/(protected)/edit/actions";
 import PhotoField from "./PhotoField";
 
 /**
@@ -25,6 +26,9 @@ const ENUM_LABELS: Record<string, string> = {
   center: "По центру",
   right: "Праворуч",
 };
+
+// Tap-to-fill starter instructions for the ✨ AI-edit panel (static strings).
+const AI_EXAMPLES = ["Зроби текст теплішим", "Скороти заголовок", "Додай описи"];
 
 type Item = Record<string, unknown>;
 type Draft = Record<string, unknown>;
@@ -52,6 +56,42 @@ export default function BlockSheet({
   const [draft, setDraft] = useState<Draft>(() =>
     JSON.parse(JSON.stringify(block.props)) as Draft,
   );
+
+  // ✨ AI-edit: the owner types a plain instruction; the model rewrites the
+  // block props and the result lands back in THIS form for review (§3 — nothing
+  // auto-saves). We pass the CURRENT draft as props so consecutive edits stack.
+  const [aiInstruction, setAiInstruction] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiDone, setAiDone] = useState(false);
+
+  const runAiEdit = async () => {
+    const instruction = aiInstruction.trim();
+    if (!instruction || aiBusy) return;
+    setAiBusy(true);
+    setAiError(null);
+    setAiDone(false);
+    try {
+      const res = await aiEditBlockAction(host, { type: block.type, props: draft }, instruction);
+      if (res.ok) {
+        setDraft((d) => ({ ...d, ...(res.props as Draft) }));
+        setAiInstruction("");
+        setAiDone(true);
+      } else {
+        setAiError(res.error);
+      }
+    } catch {
+      setAiError("Не вдалося звʼязатися з помічником. Спробуйте ще раз.");
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const fillExample = (text: string) => {
+    setAiInstruction(text);
+    setAiError(null);
+    setAiDone(false);
+  };
 
   const setScalar = (key: string, value: unknown) =>
     setDraft((d) => ({ ...d, [key]: value }));
@@ -235,7 +275,70 @@ export default function BlockSheet({
           {fields.length === 0 ? (
             <p className="text-[16px] text-ink-muted">Ця секція не має полів для редагування.</p>
           ) : (
-            fields.map(renderField)
+            <>
+              {/* ✨ AI-edit — distinct honey panel, but native to the sheet. */}
+              <div className="flex flex-col gap-3 rounded-[16px] bg-honey-soft p-4">
+                <div className="flex items-center gap-2">
+                  <span aria-hidden className="text-[16px]">✨</span>
+                  <span className="text-[13px] font-extrabold uppercase tracking-[0.06em] text-honey-text">
+                    ШІ-редагування
+                  </span>
+                </div>
+                <div className="flex items-end gap-2">
+                  <Input
+                    value={aiInstruction}
+                    onChange={(e) => {
+                      setAiInstruction(e.target.value);
+                      if (aiError) setAiError(null);
+                      if (aiDone) setAiDone(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void runAiEdit();
+                      }
+                    }}
+                    disabled={aiBusy}
+                    placeholder="Що змінити? напр.: зроби текст теплішим"
+                    aria-label="Інструкція для ШІ-редагування"
+                    className="flex-1"
+                  />
+                  <Button
+                    size="md"
+                    onClick={() => void runAiEdit()}
+                    disabled={aiBusy || !aiInstruction.trim()}
+                    className="shrink-0"
+                  >
+                    Застосувати
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {AI_EXAMPLES.map((ex) => (
+                    <button
+                      key={ex}
+                      type="button"
+                      disabled={aiBusy}
+                      onClick={() => fillExample(ex)}
+                      className="inline-flex min-h-9 items-center rounded-full border border-honey/40 bg-surface px-3 py-1 text-[13px] font-bold text-honey-text transition-colors hover:bg-honey hover:text-white disabled:opacity-50"
+                    >
+                      {ex}
+                    </button>
+                  ))}
+                </div>
+                {aiBusy && (
+                  <p className="text-[14px] font-semibold text-honey-text">Помічник редагує…</p>
+                )}
+                {aiError && !aiBusy && (
+                  <p className="text-[14px] font-semibold text-danger">{aiError}</p>
+                )}
+                {aiDone && !aiBusy && !aiError && (
+                  <p className="text-[13px] text-ink-faint">
+                    Перевірте зміни й натисніть „Зберегти“.
+                  </p>
+                )}
+              </div>
+              {fields.map(renderField)}
+            </>
           )}
         </div>
 

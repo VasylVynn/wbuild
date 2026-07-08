@@ -200,3 +200,87 @@ export async function publishSite(host: string): Promise<{ ok: boolean; error?: 
   await revalidateTenant(host);
   return { ok: true };
 }
+
+// ── Block-level AI edit (current-cycle п.1) ──────────────────────────────────
+import { aiEditBlock } from "@/lib/ai/edit-block";
+import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
+import { headers } from "next/headers";
+import { sendTelegramMessage } from "@/lib/telegram/push";
+import { isAnthropicConfigured } from "@/lib/ai/anthropic";
+
+/**
+ * «Відредагувати з ШІ»: rewrites ONE block's props per the owner's instruction.
+ * Result goes back to the client FORM (draft) — the human reviews and saves;
+ * nothing is persisted here (§3: AI fills the form, the person confirms).
+ */
+export async function aiEditBlockAction(
+  host: string,
+  block: { type: string; props: unknown },
+  instruction: string,
+): Promise<{ ok: true; props: unknown } | { ok: false; error: string }> {
+  const gate = await requireMember({ host });
+  if (!gate.ok) return { ok: false, error: gate.error ?? "Потрібно увійти." };
+  if (!isAnthropicConfigured()) return { ok: false, error: "AI не налаштовано." };
+  if (!instruction.trim()) return { ok: false, error: "Опишіть, що змінити." };
+
+  const limit = await checkRateLimit("ai_edit", ipFromHeaders(await headers()));
+  if (!limit.ok) return { ok: false, error: rateLimitMessage(limit.retryAfterSec) };
+
+  const sb = getServiceClient();
+  const { data: t } = await sb
+    .from("tenants")
+    .select("facts, vertical")
+    .eq("host", host)
+    .maybeSingle();
+  if (!t) return { ok: false, error: "Сайт не знайдено." };
+
+  return aiEditBlock({
+    type: block.type,
+    props: block.props,
+    instruction,
+    facts: (t.facts ?? {}) as Partial<BusinessFacts>,
+    verticalId: t.vertical,
+  });
+}
+
+// ── «Хочу кастомні зміни» (current-cycle п.5, апсел-канал) ──────────────────
+export async function customRequestAction(
+  host: string,
+  message: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const gate = await requireMember({ host });
+  if (!gate.ok) return { ok: false, error: gate.error ?? "Потрібно увійти." };
+  const text = message.trim().slice(0, 2000);
+  if (!text) return { ok: false, error: "Опишіть, що ви хочете змінити." };
+
+  const limit = await checkRateLimit("custom_request", ipFromHeaders(await headers()));
+  if (!limit.ok) return { ok: false, error: rateLimitMessage(limit.retryAfterSec) };
+
+  const sb = getServiceClient();
+  const { data: t } = await sb
+    .from("tenants")
+    .select("id, host, brand, facts")
+    .eq("host", host)
+    .maybeSingle();
+  if (!t) return { ok: false, error: "Сайт не знайдено." };
+
+  const facts = (t.facts ?? {}) as { phone?: string };
+  const { data: row, error } = await sb
+    .from("custom_requests")
+    .insert({ tenant_id: t.id, message: text, contact: facts.phone ?? null })
+    .select("id")
+    .single();
+  if (error || !row) return { ok: false, error: "Не вдалося надіслати. Спробуйте ще раз." };
+
+  // Best-effort push to the platform admin (env-configured chat).
+  const adminChat = process.env.ADMIN_TELEGRAM_CHAT_ID;
+  if (adminChat) {
+    const businessName = (t.brand as { businessName?: string } | null)?.businessName ?? t.host;
+    const ok = await sendTelegramMessage(
+      adminChat,
+      `🛠 <b>Запит на кастомні зміни</b>\n\n🏪 ${businessName} (${t.host})\n📞 ${facts.phone ?? "—"}\n\n💬 ${text}`,
+    );
+    if (ok) await sb.from("custom_requests").update({ pushed_at: new Date().toISOString() }).eq("id", row.id);
+  }
+  return { ok: true };
+}

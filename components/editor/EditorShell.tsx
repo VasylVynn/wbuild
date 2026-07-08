@@ -7,13 +7,14 @@ import {
   switchTheme,
   regenerateSite,
   publishSite,
+  customRequestAction,
   type EditorData,
 } from "@/app/app/(protected)/edit/actions";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { themeToCssVars, type Theme } from "@/lib/theme/tokens";
-import { Button, Chip, ConfirmDialog, Toast } from "@/components/ui";
+import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/components/ui";
 import EditableSection from "./EditableSection";
 import BlockSheet from "./BlockSheet";
 import ThemePicker from "./ThemePicker";
@@ -68,6 +69,10 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   const [dirty, setDirty] = useState(false); // unpublished draft changes
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customMessage, setCustomMessage] = useState("");
+  const [customSubmitting, setCustomSubmitting] = useState(false);
+  const [customError, setCustomError] = useState<string | null>(null);
 
   const notify = (t: Toast) => {
     setToast(t);
@@ -156,6 +161,28 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       notify({ text: "Опубліковано! Зміни вже на сайті", href: url });
     } else {
       notify({ text: `Не вдалося опублікувати: ${res.error ?? "помилка"}` });
+    }
+  };
+
+  const closeCustomSheet = () => {
+    if (customSubmitting) return;
+    setCustomOpen(false);
+    setCustomError(null);
+  };
+
+  // «Хочу кастомні зміни» — quiet upsell channel (current-cycle п.5): free-text
+  // request goes to the platform team, the owner just gets a thank-you.
+  const submitCustomRequest = async () => {
+    setCustomSubmitting(true);
+    setCustomError(null);
+    const res = await customRequestAction(host, customMessage);
+    setCustomSubmitting(false);
+    if (res.ok) {
+      setCustomOpen(false);
+      setCustomMessage("");
+      notify({ text: "Дякуємо! Ми звʼяжемось з вами найближчим часом." });
+    } else {
+      setCustomError(res.error ?? "Не вдалося надіслати. Спробуйте ще раз.");
     }
   };
 
@@ -266,6 +293,20 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           Натисніть на будь-яку секцію, щоб змінити текст або фото. Зміни зберігаються в чернетку —
           натисніть «Опублікувати», щоб вони зʼявились на сайті.
         </p>
+
+        <Card className="mt-4 flex flex-col items-start gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[15px] font-semibold text-ink-muted">
+            Потрібно щось особливе — інша структура, дизайн, додаткові сторінки?
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full shrink-0 rounded-full sm:w-auto"
+            onClick={() => setCustomOpen(true)}
+          >
+            Хочу кастомні зміни
+          </Button>
+        </Card>
       </main>
 
       {selected && selectedIndex != null && (
@@ -289,6 +330,39 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           onClose={() => setThemeOpen(false)}
         />
       )}
+
+      <Sheet open={customOpen} onClose={closeCustomSheet} title="Кастомні зміни">
+        <p className="mb-4 text-[15px] leading-relaxed text-ink-muted">
+          Опишіть, що ви хочете змінити чи додати — ми подивимось і звʼяжемось з вами.
+        </p>
+        <Textarea
+          rows={4}
+          value={customMessage}
+          onChange={(e) => setCustomMessage(e.target.value)}
+          placeholder="Напр.: хочу окрему сторінку для кожної послуги і власні кольори бренду"
+          error={!!customError}
+        />
+        {customError && <p className="mt-2 text-[14px] text-danger">{customError}</p>}
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
+          <Button
+            size="md"
+            disabled={customSubmitting}
+            className="sm:flex-1"
+            onClick={() => void submitCustomRequest()}
+          >
+            {customSubmitting ? "Надсилаємо…" : "Надіслати запит"}
+          </Button>
+          <Button
+            size="md"
+            variant="quiet"
+            disabled={customSubmitting}
+            className="sm:flex-1"
+            onClick={closeCustomSheet}
+          >
+            Скасувати
+          </Button>
+        </div>
+      </Sheet>
 
       <ConfirmDialog
         open={regenConfirmOpen}
