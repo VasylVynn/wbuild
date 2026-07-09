@@ -10,6 +10,7 @@ import {
   customRequestAction,
   type EditorData,
 } from "@/app/app/(protected)/edit/actions";
+import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-actions";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
 import type { StoredBlock } from "@/lib/blocks/schema";
@@ -17,6 +18,7 @@ import { themeToCssVars, type Theme } from "@/lib/theme/tokens";
 import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/components/ui";
 import EditableSection from "./EditableSection";
 import BlockSheet from "./BlockSheet";
+import PhotoField from "./PhotoField";
 import ThemePicker from "./ThemePicker";
 
 /**
@@ -76,6 +78,9 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   const [customMessage, setCustomMessage] = useState("");
   const [customSubmitting, setCustomSubmitting] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
+  const [logoOpen, setLogoOpen] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+  const [logoBusy, setLogoBusy] = useState(false);
 
   const notify = (t: Toast) => {
     setToast(t);
@@ -205,6 +210,39 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     }
   };
 
+  // «Лого» — the logo lives on the unversioned tenant.brand, so a change is live
+  // immediately (setLogoAction purges the cache). Load on open; save on
+  // upload/clear. Uploads scope by host, like the block editor's photo fields.
+  const openLogo = async () => {
+    setLogoOpen(true);
+    setLogoBusy(true);
+    try {
+      const res = await getLogoAction(host);
+      if (res.ok) setLogoUrl(res.logoUrl);
+    } catch {
+      // Non-fatal: the sheet opens with an empty slot the owner can still fill.
+    } finally {
+      setLogoBusy(false);
+    }
+  };
+
+  const saveLogo = async (url: string | null) => {
+    setLogoBusy(true);
+    try {
+      const res = await setLogoAction(host, url);
+      if (res.ok) {
+        setLogoUrl(res.logoUrl);
+        notify({ text: url ? "Лого збережено — вже на сайті" : "Лого прибрано" });
+      } else {
+        notify({ text: `Не вдалося зберегти лого: ${res.error ?? "помилка"}` });
+      }
+    } catch {
+      notify({ text: "Не вдалося звʼязатися з сервером. Спробуйте ще раз." });
+    } finally {
+      setLogoBusy(false);
+    }
+  };
+
   const statusLabel = STATUS_LABELS[initial.status] ?? STATUS_LABELS.draft;
   const regenerating = busyLabel === "regenerate";
   const themeBusy = busyLabel === "theme";
@@ -255,6 +293,14 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
               onClick={() => setThemeOpen(true)}
             >
               <span aria-hidden>🎨</span> Оформлення
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
+              className="shrink-0 rounded-full"
+              onClick={() => void openLogo()}
+            >
+              <span aria-hidden>🖼️</span> Лого
             </Button>
             <Button
               variant="secondary"
@@ -382,6 +428,35 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
             Скасувати
           </Button>
         </div>
+      </Sheet>
+
+      <Sheet
+        open={logoOpen}
+        onClose={() => {
+          if (!logoBusy) setLogoOpen(false);
+        }}
+        title="Лого сайту"
+      >
+        <p className="mb-4 text-[15px] leading-relaxed text-ink-muted">
+          Лого показується у шапці сайту поряд із назвою. Зміни застосовуються одразу.
+        </p>
+        <PhotoField
+          value={logoUrl}
+          host={host}
+          onChange={(url) => void saveLogo(url)}
+          onClear={() => void saveLogo(null)}
+        />
+        {logoUrl && (
+          <Button
+            variant="danger"
+            size="md"
+            className="mt-4"
+            disabled={logoBusy}
+            onClick={() => void saveLogo(null)}
+          >
+            Прибрати лого
+          </Button>
+        )}
       </Sheet>
 
       <ConfirmDialog

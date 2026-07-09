@@ -18,16 +18,19 @@ import {
 import {
   startConversation,
   saveTurn,
+  saveMediaAction,
   loadConversation,
 } from "@/app/app/new/persist-actions";
 import type { BusinessFacts } from "@/lib/verticals/schema";
+import type { SiteMedia } from "@/lib/media/media";
 import { Button, Field, Input, Textarea, Chip, Card } from "@/components/ui";
+import PhotoField from "@/components/editor/PhotoField";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Phase = "chat" | "confirm" | "gate" | "generating" | "done" | "error";
+type Phase = "chat" | "media" | "confirm" | "gate" | "generating" | "done" | "error";
 
 type ServiceRow = { name: string; price: string };
 
@@ -106,6 +109,9 @@ export function OnboardChat() {
   // --- Phase ---
   const [phase, setPhase] = useState<Phase>("chat");
 
+  // --- Media (logo + photos) — optional step before confirm ---
+  const [media, setMedia] = useState<SiteMedia>({ photos: [] });
+
   // --- Confirm form state ---
   const [businessName, setBusinessName] = useState("");
   const [city, setCity] = useState("");
@@ -147,6 +153,9 @@ export function OnboardChat() {
       setFacts(data.facts as Partial<BusinessFacts>);
       setVerticalId(data.verticalId);
       setReady(data.ready);
+      // Media survives the login-gate redirect (saved fire-and-forget) — restore
+      // it so the media step shows what was already uploaded.
+      setMedia(data.media ?? { photos: [] });
     });
   }, []);
 
@@ -231,7 +240,37 @@ export function OnboardChat() {
     setPhase("confirm");
   };
 
-  const handleReviewAndCreate = async () => {
+  // Ready CTA → the optional media step (login gate comes AFTER it, on «Далі»).
+  const handleReviewAndCreate = () => {
+    if (loading) return;
+    setPhase("media");
+  };
+
+  // ---------------------------------------------------------------------------
+  // Media step (§4.8) — optional logo + up to 3 photos, saved fire-and-forget so
+  // uploads survive the login-gate redirect. «Далі» and «Пропустити» share this.
+  // ---------------------------------------------------------------------------
+
+  // Persist to state AND to the conversation row (best-effort). Onboarding
+  // uploads scope by conversationId; if there's no row yet (Supabase off) the
+  // save is simply skipped.
+  const persistMedia = (next: SiteMedia) => {
+    setMedia(next);
+    if (convIdRef.current) void saveMediaAction(convIdRef.current, next);
+  };
+
+  const setLogo = (url: string) => persistMedia({ ...media, logoUrl: url });
+  const clearLogo = () => persistMedia({ ...media, logoUrl: undefined });
+  const replacePhoto = (i: number, url: string) =>
+    persistMedia({ ...media, photos: media.photos.map((p, idx) => (idx === i ? url : p)) });
+  const removePhoto = (i: number) =>
+    persistMedia({ ...media, photos: media.photos.filter((_, idx) => idx !== i) });
+  const addPhoto = (url: string) => {
+    if (media.photos.length >= 3) return;
+    persistMedia({ ...media, photos: [...media.photos, url] });
+  };
+
+  const handleMediaNext = async () => {
     if (loading) return;
     setLoading(true);
     try {
@@ -285,7 +324,7 @@ export function OnboardChat() {
     setPhase("generating");
 
     try {
-      const result = await finalizeAction(fullFacts, verticalId);
+      const result = await finalizeAction(fullFacts, verticalId, media);
       if (result.ok) {
         setSiteUrl(result.url);
         setPhase("done");
@@ -451,6 +490,97 @@ export function OnboardChat() {
   }
 
   // ---------------------------------------------------------------------------
+  // Render — media step (§4.8): optional logo + photos before the confirm form
+  // ---------------------------------------------------------------------------
+
+  if (phase === "media") {
+    const convId = convIdRef.current ?? undefined;
+    return (
+      <div className={`min-h-[100dvh] ${rootBase}`}>
+        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
+        <header className="border-b border-line bg-surface">
+          <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-3.5">
+            <button
+              onClick={() => setPhase("chat")}
+              aria-label="Назад до розмови"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[20px] font-bold text-ink-muted hover:bg-sunken"
+            >
+              ←
+            </button>
+            <span className="text-[18px] font-extrabold text-ink">Лого та фото</span>
+          </div>
+        </header>
+
+        <div className="mx-auto w-full max-w-2xl px-4 py-6">
+          <Card className="flex flex-col gap-6 p-5 sm:p-8">
+            <div>
+              <h2 className="font-brand text-[22px] font-semibold leading-tight text-ink">
+                Додайте лого та фото — сайт одразу виглядатиме як ваш
+              </h2>
+              <p className="mt-2 text-[16px] leading-relaxed text-ink-muted">
+                Це необовʼязково — можна пропустити і додати пізніше в редакторі.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <span className="text-[15px] font-bold text-ink">Лого або фото вивіски</span>
+              <PhotoField
+                value={media.logoUrl}
+                conversationId={convId}
+                onChange={setLogo}
+                onClear={clearLogo}
+              />
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <span className="text-[15px] font-bold text-ink">Фото: роботи, приміщення, товари</span>
+              <div className="flex flex-wrap items-start gap-3">
+                {media.photos.map((url, i) => (
+                  <PhotoField
+                    key={i}
+                    value={url}
+                    conversationId={convId}
+                    onChange={(u) => replacePhoto(i, u)}
+                    onClear={() => removePhoto(i)}
+                  />
+                ))}
+                {media.photos.length < 3 && (
+                  <PhotoField
+                    key={`add-${media.photos.length}`}
+                    conversationId={convId}
+                    onChange={addPhoto}
+                    onClear={() => {}}
+                  />
+                )}
+              </div>
+            </div>
+          </Card>
+
+          <div className="mt-6 flex flex-col gap-2">
+            <Button
+              size="lg"
+              disabled={loading}
+              onClick={() => void handleMediaNext()}
+              className="min-h-[60px] w-full text-[19px] shadow-[0_8px_24px_rgba(27,91,191,0.3)]"
+            >
+              Далі →
+            </Button>
+            <Button
+              variant="quiet"
+              size="md"
+              disabled={loading}
+              onClick={() => void handleMediaNext()}
+              className="w-full"
+            >
+              Пропустити
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Render — confirm form (design C)
   // ---------------------------------------------------------------------------
 
@@ -473,6 +603,27 @@ export function OnboardChat() {
         </header>
 
         <div className="mx-auto w-full max-w-2xl px-4 py-6">
+          {(media.logoUrl || media.photos.length > 0) && (
+            <div className="mb-5 flex flex-wrap items-center gap-2.5">
+              {media.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={media.logoUrl}
+                  alt="Лого"
+                  className="h-14 w-14 shrink-0 rounded-[12px] border border-line bg-surface object-contain"
+                />
+              )}
+              {media.photos.map((url) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={url}
+                  src={url}
+                  alt=""
+                  className="h-14 w-14 shrink-0 rounded-[12px] border border-line object-cover"
+                />
+              ))}
+            </div>
+          )}
           <p className="mb-5 text-[16px] leading-relaxed text-ink-muted">
             Я заповнив усе з нашої розмови. Відредагуйте будь-що і натисніть «Створити сайт».
           </p>

@@ -137,12 +137,17 @@ export async function regenerateSite(
     const sb = getServiceClient();
     const { data: t } = await sb
       .from("tenants")
-      .select("id, facts, vertical")
+      .select("id, facts, vertical, brand")
       .eq("host", host)
       .maybeSingle();
     if (!t) return { ok: false, error: "tenant not found" };
 
-    const site = await generateSite(t.facts as BusinessFacts, t.vertical);
+    // Real uploaded photos survive regeneration (§4.8: never fabricate imagery).
+    const brand = (t.brand ?? {}) as { logoUrl?: string; photos?: string[] };
+    const site = await generateSite(t.facts as BusinessFacts, t.vertical, {
+      logoUrl: brand.logoUrl,
+      photos: brand.photos ?? [],
+    });
 
     const { data: p } = await sb
       .from("pages")
@@ -217,7 +222,7 @@ export async function aiEditBlockAction(
   host: string,
   block: { type: string; props: unknown },
   instruction: string,
-): Promise<{ ok: true; props: unknown } | { ok: false; error: string }> {
+): Promise<{ ok: true; props: unknown; note?: string } | { ok: false; error: string }> {
   const gate = await requireMember({ host });
   if (!gate.ok) return { ok: false, error: gate.error ?? "Потрібно увійти." };
   if (!isAnthropicConfigured()) return { ok: false, error: "AI не налаштовано." };

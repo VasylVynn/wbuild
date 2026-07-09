@@ -69,6 +69,7 @@ export default function BlockSheet({
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiDone, setAiDone] = useState(false);
+  const [aiNote, setAiNote] = useState<string | null>(null);
 
   const runAiEdit = async () => {
     const instruction = aiInstruction.trim();
@@ -76,6 +77,7 @@ export default function BlockSheet({
     setAiBusy(true);
     setAiError(null);
     setAiDone(false);
+    setAiNote(null);
     try {
       const res = await aiEditBlockAction(host, { type: block.type, props: draft }, instruction);
       if (res.ok) {
@@ -85,6 +87,7 @@ export default function BlockSheet({
         setDraft(res.props as Draft);
         setAiInstruction("");
         setAiDone(true);
+        setAiNote(res.note ?? null);
       } else {
         setAiError(res.error);
       }
@@ -99,6 +102,7 @@ export default function BlockSheet({
     setAiInstruction(text);
     setAiError(null);
     setAiDone(false);
+    setAiNote(null);
   };
 
   const setScalar = (key: string, value: unknown) =>
@@ -368,6 +372,9 @@ export default function BlockSheet({
                   <p className="text-[13px] text-ink-faint">
                     Перевірте зміни й натисніть „Зберегти“.
                   </p>
+                )}
+                {aiNote && !aiBusy && !aiError && (
+                  <p className="text-[13px] text-ink-faint">💬 {aiNote}</p>
                 )}
               </div>
               {fields.map(renderField)}

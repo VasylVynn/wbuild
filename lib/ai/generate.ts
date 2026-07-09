@@ -16,6 +16,7 @@ import type { Theme } from "@/lib/theme/tokens";
 import { getVertical } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
 import type { BusinessFacts } from "@/lib/verticals/schema";
+import type { SiteMedia } from "@/lib/media/media";
 
 /**
  * Phase 2 — AI composition (brief §4.1–4.4), vertical-aware. The model composes
@@ -80,7 +81,14 @@ const buildSiteTool = {
   input_schema: z.toJSONSchema(generationSchema),
 } as unknown as Anthropic.Tool;
 
-export async function generateSite(facts: BusinessFacts, verticalId?: string): Promise<GeneratedSite> {
+export async function generateSite(
+  facts: BusinessFacts,
+  verticalId?: string,
+  // Owner-uploaded media (§4.8). The MODEL never learns about photos — this only
+  // drives the deterministic post-pass in assemble(). Optional so callers that
+  // don't thread media keep working (no photos → no hero/gallery imagery).
+  media?: SiteMedia,
+): Promise<GeneratedSite> {
   const client = getAnthropic();
   const vertical = getVertical(verticalId);
 
@@ -132,7 +140,7 @@ ${JSON.stringify(facts, null, 2)}
       return {
         theme: resolveTheme(themePresetId),
         themePresetId,
-        blocks: assemble(parsed.data.blocks, facts),
+        blocks: assemble(parsed.data.blocks, facts, media),
       };
     }
     lastError = parsed.error.issues
@@ -147,22 +155,31 @@ ${JSON.stringify(facts, null, 2)}
 // ---------------------------------------------------------------------------
 // Post-generation: enforce composition, ground facts, project nav placement.
 // ---------------------------------------------------------------------------
-function assemble(raw: BlockInstance[], facts: BusinessFacts): StoredBlock[] {
+function assemble(raw: BlockInstance[], facts: BusinessFacts, media?: SiteMedia): StoredBlock[] {
+  const photos = media?.photos ?? [];
+  const allowed = new Set(photos);
+  const businessName = facts.businessName;
+
   const hero = raw.find((b) => b.type === "hero");
   const contacts = raw.find((b) => b.type === "contacts");
 
   const perType: Partial<Record<BlockType, number>> = {};
   const middle = raw
     .filter((b) => b.type !== "hero" && b.type !== "contacts" && b.type !== "lead_form")
-    // Drop image-only blocks: no trusted photo source until upload (Phase 4);
-    // the model would otherwise invent URLs (§4.8).
-    .filter(hasUsableImages)
+    // switchback has no trusted per-item image source → always dropped (§4.8).
+    .filter((b) => b.type !== "switchback")
+    // gallery is kept ONLY when ≥2 real photos exist to fill it; its own images
+    // are model-invented and replaced below. Otherwise the model would show
+    // fabricated imagery (§4.8 honesty invariant).
+    .filter((b) => b.type !== "gallery" || photos.length >= 2)
     .filter((b) => {
       const used = (perType[b.type] ?? 0) + 1;
       perType[b.type] = used;
       return used <= blockLibrary[b.type].maxPerPage;
     })
     .slice(0, COMPOSITION_RULES.maxMiddle);
+
+  const modelChoseGallery = middle.some((b) => b.type === "gallery");
 
   // The lead funnel is the product's value core (§5.6): force-inject the
   // lead_form on EVERY site, right before the contacts closer. Presence is an
@@ -176,20 +193,64 @@ function assemble(raw: BlockInstance[], facts: BusinessFacts): StoredBlock[] {
     },
   };
 
+  // With ≥2 real photos and no model gallery, inject one from the uploads right
+  // before the lead funnel — routed through the same placement path as any block.
+  const injectedGallery: BlockInstance[] =
+    photos.length >= 2 && !modelChoseGallery
+      ? [
+          {
+            type: "gallery",
+            props: { title: "Наші фото", images: photos.map((url) => ({ url, alt: businessName })) },
+          },
+        ]
+      : [];
+
   const ordered: BlockInstance[] = [
     ...(hero ? [hero] : []),
     ...middle,
+    ...injectedGallery,
     leadForm,
     ...(contacts ? [contacts] : []),
   ];
 
   const seen: Partial<Record<BlockType, number>> = {};
-  return ordered.map((b) => groundAndPlace(b, facts, seen));
+  return ordered.map((b) =>
+    groundAndPlace(groundImages(b, photos, allowed, businessName), facts, seen),
+  );
 }
 
-/** Image-only blocks are dropped until a trusted photo source exists (§4.8). */
-function hasUsableImages(b: BlockInstance): boolean {
-  return b.type !== "gallery" && b.type !== "switchback";
+/**
+ * Deterministic image grounding (§4.8): the model never sees photo URLs, so
+ * every image field is (re)assigned from the uploaded set here. Nothing invented
+ * ever survives — a fabricated URL is stripped, a real photo is placed.
+ */
+function groundImages(
+  b: BlockInstance,
+  photos: string[],
+  allowed: Set<string>,
+  businessName: string,
+): BlockInstance {
+  switch (b.type) {
+    case "hero":
+      // Hero background := first real photo, else no image (never invented).
+      return { ...b, props: { ...b.props, imageUrl: photos.length >= 1 ? photos[0] : undefined } };
+    case "services":
+      // Per-service images are model-invented → strip any not in the uploaded set.
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          items: b.props.items.map((it) =>
+            it.imageUrl && !allowed.has(it.imageUrl) ? { ...it, imageUrl: undefined } : it,
+          ),
+        },
+      };
+    case "gallery":
+      // Any surviving gallery (kept or injected) is filled with the real photos.
+      return { ...b, props: { ...b.props, images: photos.map((url) => ({ url, alt: businessName })) } };
+    default:
+      return b;
+  }
 }
 
 function computePlacement(type: BlockType, seen: Partial<Record<BlockType, number>>): BlockPlacement {
@@ -222,10 +283,6 @@ function groundAndPlace(
   seen: Partial<Record<BlockType, number>>,
 ): StoredBlock {
   const placement = computePlacement(b.type, seen);
-
-  if (b.type === "hero" && b.props.imageUrl) {
-    return { ...b, props: { ...b.props, imageUrl: undefined }, ...placement };
-  }
 
   // Grounding (§4.4): contact facts are known — force them verbatim.
   if (b.type === "contacts") {

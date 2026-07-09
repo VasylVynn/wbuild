@@ -27,6 +27,8 @@ export interface Tenant {
     businessName: string;
     tagline?: string;
     logoUrl?: string;
+    /** Owner-uploaded photos (§4.8) — the trusted source for hero/gallery imagery. */
+    photos?: string[];
   };
   footer: {
     phone?: string;

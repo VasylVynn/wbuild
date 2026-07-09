@@ -4,6 +4,7 @@ import { revalidateTenant } from "@/lib/cache";
 import { generateSite } from "@/lib/ai/generate";
 import { getVertical } from "@/lib/verticals/registry";
 import type { BusinessFacts } from "@/lib/verticals/schema";
+import type { SiteMedia } from "@/lib/media/media";
 
 /**
  * Generate a site from facts for a vertical (Phase 2) and persist it as a
@@ -22,9 +23,10 @@ export async function generateAndPublish(
   host: string,
   verticalId?: string,
   publish = true,
+  media?: SiteMedia,
 ): Promise<PublishResult> {
   const vertical = getVertical(verticalId);
-  const site = await generateSite(facts, vertical.id);
+  const site = await generateSite(facts, vertical.id, media);
   const sb = getServiceClient();
 
   const { data: tenant, error: tErr } = await sb
@@ -35,7 +37,11 @@ export async function generateAndPublish(
         canonical_hostname: host,
         nav_mode: "onepage",
         status: publish ? "published" : "draft",
-        brand: { businessName: facts.businessName },
+        brand: {
+          businessName: facts.businessName,
+          ...(media?.logoUrl && { logoUrl: media.logoUrl }),
+          ...(media?.photos?.length && { photos: media.photos }),
+        },
         footer: {
           phone: facts.phone,
           address: facts.address,

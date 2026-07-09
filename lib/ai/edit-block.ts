@@ -20,17 +20,18 @@ export async function aiEditBlock(input: {
   instruction: string;
   facts: Partial<BusinessFacts>;
   verticalId?: string;
-}): Promise<{ ok: true; props: unknown } | { ok: false; error: string }> {
+}): Promise<{ ok: true; props: unknown; note?: string } | { ok: false; error: string }> {
   if (!isBlockType(input.type)) return { ok: false, error: `Unknown block type: ${input.type}` };
   const type = input.type as BlockType;
   const schema = blockSchemas[type];
   const vertical = getVertical(input.verticalId);
 
   const client = getAnthropic();
+  const resultSchema = z.object({ props: schema, note: z.string().max(300).optional() });
   const editTool = {
     name: "apply_edit",
     description: "Застосувати відредагований вміст блоку.",
-    input_schema: z.toJSONSchema(z.object({ props: schema })),
+    input_schema: z.toJSONSchema(resultSchema),
   } as unknown as Anthropic.Tool;
 
   const system = `Ти — редактор вмісту ОДНОГО блоку сайту українського бізнесу (${vertical.label}).
@@ -40,7 +41,8 @@ export async function aiEditBlock(input: {
 - Змінюй лише те, про що просить інструкція; решту полів залишай як є (скопіюй без змін).
 - ФАКТИ (телефон, адреса, години, ціни, назви послуг, тексти відгуків) — НЕ вигадуй і не змінюй, якщо інструкція прямо цього не просить; нові факти бери ЛИШЕ з наданих даних бізнесу.
 - Не вигадуй URL зображень; наявні imageUrl/url залишай без змін.
-- Пиши живою українською, тепло і по суті. Виклич інструмент apply_edit з повним оновленим props.`;
+- Пиши живою українською, тепло і по суті. Виклич інструмент apply_edit з повним оновленим props.
+- Якщо інструкція просить те, чого цей блок не підтримує (нові типи полів, кошик/оплата, онлайн-запис, зміна дизайну чи коду) — зроби лише можливу частину (або залиш props без змін) і коротко поясни в полі note, що саме неможливо і що індивідуальні зміни можна замовити кнопкою «Хочу кастомні зміни» в редакторі. Не вигадуй обхідних рішень.`;
 
   const user = `Тип блоку: ${type}
 Поточний вміст (JSON):
@@ -73,8 +75,8 @@ ${JSON.stringify(input.facts ?? {}, null, 2)}
       lastError = `stop_reason=${res.stop_reason}`;
       continue;
     }
-    const parsed = z.object({ props: schema }).safeParse(tu.input);
-    if (parsed.success) return { ok: true, props: parsed.data.props };
+    const parsed = resultSchema.safeParse(tu.input);
+    if (parsed.success) return { ok: true, props: parsed.data.props, note: parsed.data.note };
     lastError = parsed.error.issues.slice(0, 4).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
   }
   return { ok: false, error: `Не вдалося застосувати правку: ${lastError}` };

@@ -9,6 +9,7 @@ import { ROOT_DOMAIN } from "@/lib/config";
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
 import { getServiceClient } from "@/lib/supabase/server";
 import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
+import { sanitizeMedia, type SiteMedia } from "@/lib/media/media";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 
 /**
@@ -66,7 +67,11 @@ export async function sessionStateAction(): Promise<{ authOn: boolean; loggedIn:
 export async function finalizeAction(
   facts: BusinessFacts,
   verticalId?: string,
+  media?: SiteMedia,
 ): Promise<FinalizeResult> {
+  // Re-validate media server-side (client input is untrusted): bad/foreign URLs
+  // or an over-long list collapse to no media rather than reaching the site.
+  const cleanMedia = sanitizeMedia(media);
   // Generation requires a signed-in user (§3.1 invariant, journal #43): the
   // tenant gets its owner at creation; no anonymous generation, no claim flow.
   let ownerId: string | null = null;
@@ -91,7 +96,7 @@ export async function finalizeAction(
           .join(" "),
       );
     const host = await uniqueSubdomain(facts.businessName);
-    await generateAndPublish(facts, host, vId, true);
+    await generateAndPublish(facts, host, vId, true, cleanMedia);
     const isProd = process.env.NODE_ENV === "production";
     const port = ROOT_DOMAIN.includes(":") ? `:${ROOT_DOMAIN.split(":")[1]}` : "";
     const url = `${isProd ? "https" : "http"}://${host}${isProd ? "" : port}`;

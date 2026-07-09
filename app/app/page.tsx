@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
+import { isPlatformAdmin } from "@/lib/admin";
 import { Wordmark } from "@/components/ui";
 
 /**
@@ -19,6 +20,7 @@ const secondaryLink =
 export default async function Dashboard() {
   const user = isAuthConfigured() ? await getUser() : null;
   const authOn = isAuthConfigured();
+  const admin = user ? await isPlatformAdmin() : false;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center gap-3 bg-canvas px-6 py-24 text-center">
@@ -43,6 +45,11 @@ export default async function Dashboard() {
             <Link href="/leads" className={secondaryLink}>
               Заявки
             </Link>
+            {admin && (
+              <Link href="/admin" className={secondaryLink}>
+                Адмінка
+              </Link>
+            )}
           </>
         )}
       </div>

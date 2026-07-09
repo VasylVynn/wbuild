@@ -49,11 +49,15 @@ type Status = "idle" | "processing" | "uploading" | "error";
 export default function PhotoField({
   value,
   host,
+  conversationId,
   onChange,
   onClear,
 }: {
   value?: string;
-  host: string;
+  // Exactly one scoping key: `host` (editor) OR `conversationId` (onboarding,
+  // before a host exists). Whichever is set is sent as the /api/upload field.
+  host?: string;
+  conversationId?: string;
   onChange: (url: string) => void;
   onClear: () => void;
 }) {
@@ -72,7 +76,8 @@ export default function PhotoField({
       const ext = blob.type === "image/webp" ? "webp" : "jpg";
       const fd = new FormData();
       fd.append("file", blob, `photo.${ext}`);
-      fd.append("host", host);
+      if (conversationId) fd.append("conversationId", conversationId);
+      else if (host) fd.append("host", host);
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       const json = (await res.json().catch(() => null)) as { ok?: boolean; url?: string } | null;
       if (!res.ok || !json?.url) throw new Error("Сервер не прийняв фото");
