@@ -841,6 +841,13 @@ export function OnboardChat() {
 
   if (phase === "done") {
     const displayUrl = siteUrl.replace(/^https?:\/\//, "");
+    // Editor route key = tenant host (hostname strips the dev :port).
+    let editHost = "";
+    try {
+      editHost = new URL(siteUrl).hostname;
+    } catch {
+      /* keep "" — the edit link just doesn't render */
+    }
     return (
       <div className={`relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 ${rootBase}`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
@@ -885,6 +892,24 @@ export function OnboardChat() {
               className="flex min-h-11 shrink-0 items-center justify-center rounded-full bg-tg px-5 text-[15px] font-bold text-white transition-colors hover:bg-tg-dark"
             >
               Підключити
+            </Link>
+          </div>
+
+          {/* Exits: the success screen must never be a dead end. */}
+          <div className="mt-6 flex w-full flex-col gap-2">
+            {editHost && (
+              <Link
+                href={`/edit/${editHost}`}
+                className="flex h-[54px] w-full items-center justify-center rounded-[16px] border-[1.5px] border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
+              >
+                ✏️ Редагувати сайт
+              </Link>
+            )}
+            <Link
+              href="/sites"
+              className="flex min-h-11 items-center justify-center text-[15px] font-bold text-ink-muted transition-colors hover:text-ink"
+            >
+              Мої сайти →
             </Link>
           </div>
         </div>
