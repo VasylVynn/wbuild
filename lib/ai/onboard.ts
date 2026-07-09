@@ -109,6 +109,8 @@ ${fieldList(vertical)}
 
 ЯК ВІДПОВІДАТИ:
 - Пиши користувачу звичайним теплим текстом українською. Списки — звичайними переносами рядків. НЕ пиши JSON і НЕ екрануй символи.
+- Розмітка: можна виділити найважливіше **жирним**. ЖОДНОЇ іншої markdown-розмітки (без #, таблиць, нумерованих списків).
+- Поки триває збір (status "collecting"), КОЖНА відповідь закінчується ОДНИМ конкретним питанням до користувача. Ніколи не пиши мета-фрази («зберігаю дані», «питаю далі», «продовжимо») замість питання — одразу став саме питання.
 - ПІСЛЯ тексту ЗАВЖДИ виклич інструмент save_facts зі структурованими даними (verticalId, factsPatch, status).
 
 ПРАВИЛА РОЗМОВИ:
@@ -158,37 +160,70 @@ export async function onboardTurn(
     };
   }
 
-  const res = await client.messages.create({
-    model: CHAT_MODEL,
-    max_tokens: 3000,
-    system: `${buildSystem(vertical, issues.map((i) => i.note))}\n\nПоточні зібрані факти (JSON): ${JSON.stringify(currentFacts)}`,
-    tools: [saveFactsTool],
-    tool_choice: { type: "auto" },
-    messages,
-  });
+  const system = `${buildSystem(vertical, issues.map((i) => i.note))}\n\nПоточні зібрані факти (JSON): ${JSON.stringify(currentFacts)}`;
 
-  const textMsg = res.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
+  const ask = (msgs: Anthropic.MessageParam[]) =>
+    client.messages.create({
+      model: CHAT_MODEL,
+      max_tokens: 3000,
+      system,
+      tools: [saveFactsTool],
+      tool_choice: { type: "auto" },
+      messages: msgs,
+    });
 
-  let facts: Partial<BusinessFacts> = currentFacts;
-  let verticalId = vertical.id;
-  let ready = false;
-  let quickReplies: string[] = [];
+  const parse = (
+    res: Anthropic.Message,
+    baseFacts: Partial<BusinessFacts>,
+    baseVerticalId: string,
+  ) => {
+    const textMsg = res.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
 
-  const toolUse = res.content.find((b) => b.type === "tool_use");
-  if (toolUse && toolUse.type === "tool_use") {
-    const parsed = saveFactsSchema.safeParse(toolUse.input);
-    if (parsed.success) {
-      facts = { ...currentFacts, ...parsed.data.factsPatch };
-      verticalId = VERTICAL_IDS.includes(parsed.data.verticalId) ? parsed.data.verticalId : vertical.id;
-      ready = parsed.data.status === "ready";
-      quickReplies = (parsed.data.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4);
+    let facts: Partial<BusinessFacts> = baseFacts;
+    let verticalId = baseVerticalId;
+    let ready = false;
+    let quickReplies: string[] = [];
+
+    const toolUse = res.content.find((b) => b.type === "tool_use");
+    if (toolUse && toolUse.type === "tool_use") {
+      const parsed = saveFactsSchema.safeParse(toolUse.input);
+      if (parsed.success) {
+        facts = { ...baseFacts, ...parsed.data.factsPatch };
+        verticalId = VERTICAL_IDS.includes(parsed.data.verticalId) ? parsed.data.verticalId : baseVerticalId;
+        ready = parsed.data.status === "ready";
+        quickReplies = (parsed.data.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4);
+      }
     }
+
+    const message = sanitize(textMsg) || "Розкажіть, будь ласка, ще трохи про ваш бізнес?";
+    return { message, facts, verticalId, ready, quickReplies };
+  };
+
+  let out = parse(await ask(messages), currentFacts, vertical.id);
+
+  // Guard: a collecting turn that ends without a question stalls the funnel —
+  // the model occasionally narrates («зберігаю дані й питаю далі») instead of
+  // asking. One corrective retry; its factsPatch lands on top of the first one.
+  if (!out.ready && !out.message.includes("?")) {
+    const retry = parse(
+      await ask([
+        ...messages,
+        { role: "assistant", content: out.message },
+        {
+          role: "user",
+          content:
+            "(службова примітка, не від користувача: у відповіді вище немає питання — постав зараз ОДНЕ конкретне наступне питання і виклич save_facts)",
+        },
+      ]),
+      out.facts,
+      out.verticalId,
+    );
+    if (retry.message.includes("?")) out = retry;
   }
 
-  const message = sanitize(textMsg) || "Розкажіть, будь ласка, ще трохи про ваш бізнес?";
-  return { message, facts, verticalId, ready, quickReplies, progress: computeProgress(facts) };
+  return { ...out, progress: computeProgress(out.facts) };
 }

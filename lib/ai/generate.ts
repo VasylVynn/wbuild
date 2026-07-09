@@ -119,9 +119,14 @@ ${JSON.stringify(facts, null, 2)}
     const res = await client.messages.create({
       model: GEN_MODEL,
       max_tokens: 16000,
+      // Extended thinking: the owner already watches a ~30s progress screen, so
+      // the latency is free — the composition/copy quality is not. Thinking is
+      // incompatible with a forced tool_choice → "auto"; a missing tool call is
+      // handled as a failed attempt by this retry loop.
+      thinking: { type: "enabled", budget_tokens: 6000 },
       system: buildSystem(vertical),
       tools: [buildSiteTool],
-      tool_choice: { type: "tool", name: "build_site" },
+      tool_choice: { type: "auto" },
       messages,
     });
 

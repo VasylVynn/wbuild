@@ -2,6 +2,9 @@ import { notFound } from "next/navigation";
 import { getEditorData } from "../actions";
 import EditorShell from "@/components/editor/EditorShell";
 
+// regenerateSite runs thinking-generation (~35s) + one schema retry — headroom.
+export const maxDuration = 120;
+
 /**
  * Editor page, reached at app.<root>/edit/<tenant-host> (middleware rewrites the
  * app host into /app). Loads the tenant's DRAFT via getEditorData and hands it

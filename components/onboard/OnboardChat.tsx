@@ -102,6 +102,8 @@ export function OnboardChat() {
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
+  // «✓ Записав: …» під останньою відповіддю — реальний diff прогресу за хід.
+  const [savedNote, setSavedNote] = useState<string | null>(null);
 
   // --- Shared loading flag (blocks all inputs while a request is in flight) ---
   const [loading, setLoading] = useState(false);
@@ -170,9 +172,13 @@ export function OnboardChat() {
 
     const userMsg: ChatMsg = { role: "user", content: text };
     const nextMessages = [...messages, userMsg];
+    const progressBefore = new Set(
+      deriveProgress(facts).filter((p) => p.done).map((p) => p.label),
+    );
     setMessages(nextMessages);
     setInput("");
     setQuickReplies([]);
+    setSavedNote(null);
     setLoading(true);
     setTyping(true);
 
@@ -194,6 +200,13 @@ export function OnboardChat() {
       setReady(result.ready);
       setVerticalId(result.verticalId);
       setQuickReplies(result.quickReplies ?? []);
+
+      // Agentic feedback: which facts the agent just recorded — a real diff of
+      // the same progress model as the header chips, not decoration.
+      const newly = deriveProgress(result.facts)
+        .filter((p) => p.done && !progressBefore.has(p.label))
+        .map((p) => p.label);
+      setSavedNote(newly.length ? newly.join(", ") : null);
 
       // Persist turn fire-and-forget — never blocks the UI
       if (convIdRef.current) {
@@ -419,19 +432,11 @@ export function OnboardChat() {
               <ChatBubble key={i} msg={msg} />
             ))}
 
-            {typing && (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-1.5 rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface px-[18px] py-4">
-                  {[0, 0.15, 0.3].map((d) => (
-                    <span
-                      key={d}
-                      className="h-2 w-2 rounded-full bg-ink-faint"
-                      style={{ animation: `ob-typing 1.2s infinite ${d}s` }}
-                    />
-                  ))}
-                </div>
-              </div>
+            {savedNote && !typing && (
+              <div className="pl-1 text-[13px] font-bold text-ok">✓ Записав: {savedNote}</div>
             )}
+
+            {typing && <AgentTyping />}
 
             <div ref={messagesEndRef} />
           </div>
@@ -917,6 +922,14 @@ export function OnboardChat() {
 const svcInput =
   "min-h-12 rounded-[14px] border border-line-strong bg-surface px-4 text-[16px] text-ink placeholder:text-ink-faint transition-shadow focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft";
 
+// Markdown-lite for agent replies: only **bold** is supported (the prompt
+// forbids everything else). Built as React nodes — no HTML injection surface.
+function renderBold(text: string): ReactNode[] {
+  return text
+    .split(/\*\*([^*]+)\*\*/g)
+    .map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
+}
+
 function ChatBubble({ msg }: { msg: ChatMsg }) {
   const isUser = msg.role === "user";
   return (
@@ -928,8 +941,39 @@ function ChatBubble({ msg }: { msg: ChatMsg }) {
             : "rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface text-ink shadow-[0_1px_2px_rgba(23,36,47,0.04)]"
         }`}
       >
-        {msg.content}
+        {isUser ? msg.content : renderBold(msg.content)}
       </p>
+    </div>
+  );
+}
+
+// Staged working indicator: dots + a label that advances through the real
+// stages of a turn (read → save → next step) and holds on the last one.
+const AGENT_STAGES = ["Читаю відповідь…", "Оновлюю дані сайту…", "Готую наступний крок…"];
+
+function AgentTyping() {
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    const t = setInterval(
+      () => setStage((s) => Math.min(s + 1, AGENT_STAGES.length - 1)),
+      1400,
+    );
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="flex justify-start">
+      <div className="flex items-center gap-2.5 rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface px-[18px] py-4">
+        <span className="flex items-center gap-1.5">
+          {[0, 0.15, 0.3].map((d) => (
+            <span
+              key={d}
+              className="h-2 w-2 rounded-full bg-ink-faint"
+              style={{ animation: `ob-typing 1.2s infinite ${d}s` }}
+            />
+          ))}
+        </span>
+        <span className="text-[14px] font-semibold text-ink-muted">{AGENT_STAGES[stage]}</span>
+      </div>
     </div>
   );
 }
