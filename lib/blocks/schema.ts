@@ -209,22 +209,32 @@ export type BlockProps = {
   [K in BlockType]: z.infer<(typeof blockSchemas)[K]>;
 };
 
+// Section id of the source TEMPLATE this block was composed from (§templates).
+// Absent on pack/legacy sites — the renderer then keys on the block type. Shared
+// by the model-emitted instance AND the stored placement so it round-trips.
+const sectionField = z
+  .string()
+  .optional()
+  .describe("id секції шаблону, з якої взято цей блок (лише для сайтів на шаблоні)");
+
 // ---------------------------------------------------------------------------
 // Block instance (what the AI generates: type + validated props).
 // A discriminated union so generation output is strictly validated (§4.3).
+// `section` (optional) lets the model tag a block with the template section it
+// fills; ignored on pack sites and stripped/validated in code either way.
 // ---------------------------------------------------------------------------
 export const blockInstanceSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("hero"), props: heroSchema }),
-  z.object({ type: z.literal("richText"), props: richTextSchema }),
-  z.object({ type: z.literal("switchback"), props: switchbackSchema }),
-  z.object({ type: z.literal("services"), props: servicesSchema }),
-  z.object({ type: z.literal("gallery"), props: gallerySchema }),
-  z.object({ type: z.literal("stats"), props: statsSchema }),
-  z.object({ type: z.literal("testimonials"), props: testimonialsSchema }),
-  z.object({ type: z.literal("faq"), props: faqSchema }),
-  z.object({ type: z.literal("cta"), props: ctaSchema }),
-  z.object({ type: z.literal("lead_form"), props: leadFormSchema }),
-  z.object({ type: z.literal("contacts"), props: contactsSchema }),
+  z.object({ type: z.literal("hero"), props: heroSchema, section: sectionField }),
+  z.object({ type: z.literal("richText"), props: richTextSchema, section: sectionField }),
+  z.object({ type: z.literal("switchback"), props: switchbackSchema, section: sectionField }),
+  z.object({ type: z.literal("services"), props: servicesSchema, section: sectionField }),
+  z.object({ type: z.literal("gallery"), props: gallerySchema, section: sectionField }),
+  z.object({ type: z.literal("stats"), props: statsSchema, section: sectionField }),
+  z.object({ type: z.literal("testimonials"), props: testimonialsSchema, section: sectionField }),
+  z.object({ type: z.literal("faq"), props: faqSchema, section: sectionField }),
+  z.object({ type: z.literal("cta"), props: ctaSchema, section: sectionField }),
+  z.object({ type: z.literal("lead_form"), props: leadFormSchema, section: sectionField }),
+  z.object({ type: z.literal("contacts"), props: contactsSchema, section: sectionField }),
 ]);
 export type BlockInstance = z.infer<typeof blockInstanceSchema>;
 
@@ -244,7 +254,12 @@ export const blockPlacementSchema = z.object({
   showInNav: z.boolean().default(false),
   hidden: z.boolean().default(false), // hide/show the whole section (§3)
   // Presentation variant («скін») — layout-only, never content. Absent = default.
+  // Mutually exclusive with `section`: template sites carry `section`, pack sites
+  // carry `skin`.
   skin: z.string().optional(),
+  // Template section this block belongs to (see blockInstanceSchema). Absent on
+  // pack/legacy sites — the renderer then keys on the block type.
+  section: sectionField,
   // Per-block schema version for migrations (§4.6). Absent = v1.
   schemaVersion: z.number().int().optional(),
 });

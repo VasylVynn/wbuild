@@ -73,15 +73,15 @@ export default async function TenantPage({ params }: { params: Params }) {
   const page = await getCachedPublishedPage(host, slugPath);
   if (!page) notFound(); // unknown slug → explicit 404 after the DB read (§5.2)
 
+  // One tenant read serves both the template id (which design the site IS) and
+  // the JSON-LD below. getTenantByHost already drops suspended tenants.
+  const tenant = await getTenantByHost(host);
+
   // §10.3 — LocalBusiness JSON-LD on the HOME page of a PUBLISHED tenant only.
-  // getTenantByHost already drops suspended tenants; the status guard keeps
-  // demo/draft out of structured data too.
+  // The status guard keeps demo/draft out of structured data too.
   let jsonLd: string | null = null;
-  if (slugPath === "") {
-    const tenant = await getTenantByHost(host);
-    if (tenant?.status === "published") {
-      jsonLd = localBusinessJsonLd(tenant, firstImageFromBlocks(page.blocks));
-    }
+  if (slugPath === "" && tenant?.status === "published") {
+    jsonLd = localBusinessJsonLd(tenant, firstImageFromBlocks(page.blocks));
   }
 
   return (
@@ -89,7 +89,7 @@ export default async function TenantPage({ params }: { params: Params }) {
       {jsonLd && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
       )}
-      <PageRenderer blocks={page.blocks} />
+      <PageRenderer blocks={page.blocks} templateId={tenant?.brand.templateId} />
     </>
   );
 }

@@ -77,6 +77,11 @@ function validateBlocks(blocks: StoredBlock[]): StoredBlock[] {
       navLabel: b.navLabel,
       showInNav: b.showInNav ?? false,
       hidden: b.hidden ?? false,
+      // Preserve the design placement fields across a draft save: `skin` (pack
+      // sites) and `section` (template sites) must round-trip or the site loses
+      // its look on the first edit.
+      skin: b.skin,
+      section: b.section,
       schemaVersion: b.schemaVersion,
     });
     return { type: parsed.type, props: parsed.props, ...placement } as StoredBlock;
@@ -154,9 +159,11 @@ export async function regenerateSite(
       photos?: string[];
       generatedHero?: string;
       packId?: string;
+      templateId?: string;
     };
-    // Reuse the site's saved design pack so regeneration KEEPS the look — only
-    // the content/composition is re-rolled, not the palette or section layouts.
+    // Reuse the site's saved template/pack so regeneration KEEPS the look — only
+    // the content/composition is re-rolled, not the design. templateId wins when
+    // present (template path ignores packs).
     const site = await generateSite(
       t.facts as BusinessFacts,
       t.vertical,
@@ -166,6 +173,7 @@ export async function regenerateSite(
         generatedHero: brand.generatedHero,
       },
       brand.packId,
+      brand.templateId,
     );
 
     const { data: p } = await sb
@@ -182,13 +190,16 @@ export async function regenerateSite(
       .from("pages")
       .update({ draft_content: { blocks: site.blocks, pocket: [...oldPocket, ...oldBlocks].slice(-40) } })
       .eq("id", p.id);
-    // Pin the pack the first time (older sites have no packId yet) so future
-    // regenerations keep this design; merge into brand without clobbering it.
+    // Pin the design source the first time (older sites have neither id yet) so
+    // future regenerations keep this look; merge into brand without clobbering it.
     const tenantUpdate: { draft_theme: Theme; brand?: Record<string, unknown> } = {
       draft_theme: site.theme,
     };
-    if (!brand.packId) {
-      tenantUpdate.brand = { ...(t.brand as Record<string, unknown>), packId: site.packId };
+    const brandPatch: Record<string, unknown> = {};
+    if (!brand.packId && site.packId) brandPatch.packId = site.packId;
+    if (!brand.templateId && site.templateId) brandPatch.templateId = site.templateId;
+    if (Object.keys(brandPatch).length > 0) {
+      tenantUpdate.brand = { ...(t.brand as Record<string, unknown>), ...brandPatch };
     }
     await sb.from("tenants").update(tenantUpdate).eq("id", t.id);
 

@@ -206,6 +206,12 @@ export default async function AdminPage() {
             🎨 Прев&apos;ю дизайнів
           </Link>
           <Link
+            href="/admin/templates"
+            className="inline-flex min-h-12 items-center gap-2 rounded-[16px] border-[1.5px] border-line-strong bg-surface px-5 font-ui text-[15px] font-bold text-ink transition-colors hover:border-brand hover:text-brand"
+          >
+            🧩 Шаблони
+          </Link>
+          <Link
             href="/admin/generate"
             className="inline-flex min-h-12 items-center gap-2 rounded-[16px] bg-brand px-5 font-ui text-[15px] font-bold text-white transition-colors hover:bg-brand-hover"
           >

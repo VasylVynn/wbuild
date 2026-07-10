@@ -1,0 +1,251 @@
+/*
+ * Studio template — VERBATIM port of template_sources/design-template-main's
+ * design system (globals.css), namespaced under `.tpl-studio` so it never
+ * leaks into the product UI or the tenant shell.
+ *
+ * Fidelity notes:
+ *  - Every custom class from the source (.saas-hero*, .btn-*, .card,
+ *    .section-*, .gradient-text, .noise-overlay) is reproduced 1:1, only the
+ *    selectors are prefixed with `.tpl-studio`.
+ *  - The source's `:root` CSS vars live on `.tpl-studio` instead, so they win
+ *    (nearest ancestor) over the product `@theme` tokens and the tenant shell
+ *    vars inside this subtree, and revert to ours outside it.
+ *  - `--font-sans` binds to the next/font Inter variable injected by the
+ *    wrapper (`--font-inter`), falling back to a system Inter stack.
+ *  - CustomCursor / LogoCloud / Team / Nav / Footer styles are intentionally
+ *    dropped (those sections are out of scope).
+ */
+
+.tpl-studio {
+  --color-accent: #8b5cf6;
+  --color-accent-soft: #7c3aed;
+  --color-bg: #09090b;
+  --color-surface: #111113;
+  --color-border: #1c1c1f;
+  --color-text: #fafafa;
+  --color-text-muted: #71717a;
+  --color-text-subtle: #52525b;
+  --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+
+  position: relative;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tpl-studio ::selection {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+/* ===== Noise Overlay ===== */
+.tpl-studio .noise-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* ===== Hero ===== */
+.tpl-studio .saas-hero {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.tpl-studio .saas-hero__mesh {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.tpl-studio .saas-hero__overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 20%, var(--color-bg) 80%);
+  z-index: 2;
+}
+
+.tpl-studio .saas-hero__content {
+  position: relative;
+  z-index: 3;
+  text-align: center;
+  max-width: 860px;
+  padding: 2rem;
+}
+
+.tpl-studio .saas-hero__headline {
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  font-weight: 700;
+  line-height: 1.05;
+  margin: 0 0 1.5rem;
+  letter-spacing: -0.04em;
+  color: var(--color-text);
+}
+
+.tpl-studio .saas-hero__subline {
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  color: var(--color-text-muted);
+  margin: 0 0 2.5rem;
+  font-weight: 400;
+  line-height: 1.7;
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.tpl-studio .gradient-text {
+  color: var(--color-accent);
+}
+
+/* ===== Buttons — sharp, no pills ===== */
+.tpl-studio .btn-gradient {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.875rem 2rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #fff;
+  background: var(--color-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: -0.01em;
+}
+
+.tpl-studio .btn-gradient:hover {
+  background: var(--color-accent-soft);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.2);
+}
+
+.tpl-studio .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.875rem 2rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tpl-studio .btn-ghost:hover {
+  border-color: #3f3f46;
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ===== Sections ===== */
+.tpl-studio .section-title {
+  font-size: clamp(1.75rem, 4vw, 3rem);
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.03em;
+  color: var(--color-text);
+}
+
+.tpl-studio .section-subtitle {
+  font-size: 1.0625rem;
+  color: var(--color-text-muted);
+  max-width: 520px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* ===== Cards ===== */
+.tpl-studio .card {
+  background: var(--color-surface);
+  border-radius: 8px;
+  padding: 2rem;
+  transition: all 0.2s ease;
+  border: 1px solid var(--color-border);
+}
+
+.tpl-studio .card:hover {
+  border-color: #27272a;
+  transform: translateY(-2px);
+}
+
+.tpl-studio .gradient-border {
+  position: relative;
+  border-color: var(--color-accent) !important;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 1024px) {
+  .tpl-studio .saas-hero__content {
+    padding: 1.5rem;
+    max-width: 640px;
+  }
+
+  .tpl-studio .btn-gradient,
+  .tpl-studio .btn-ghost {
+    padding: 0.75rem 1.75rem;
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .tpl-studio .saas-hero__content {
+    padding: 1rem;
+  }
+
+  .tpl-studio .saas-hero__headline {
+    font-size: clamp(2rem, 9vw, 2.75rem);
+  }
+
+  .tpl-studio .btn-gradient,
+  .tpl-studio .btn-ghost {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .tpl-studio .card {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .tpl-studio .saas-hero__headline {
+    font-size: 1.875rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tpl-studio {
+    scroll-behavior: auto;
+  }
+  .tpl-studio *,
+  .tpl-studio *::before,
+  .tpl-studio *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.tpl-studio :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

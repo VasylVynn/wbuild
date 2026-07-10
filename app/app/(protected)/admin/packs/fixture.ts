@@ -13,14 +13,12 @@ const IMG_WHEAT =
 const IMG_CARPET =
   "https://bsaenssjxsaopspubufd.supabase.co/storage/v1/object/public/photos/generated/4e2ee556-8941-4d87-be91-08024999d4a6.png";
 
-export function fixtureBlocks(pack: DesignPack): StoredBlock[] {
-  const skin = (type: string) => {
-    const s = pack.skins[type as keyof DesignPack["skins"]];
-    return s || undefined;
-  };
-  const base = { showInNav: false, hidden: false };
-
-  const blocks = [
+/**
+ * Raw fixture content (type + props), one realistic block of every type. Shared
+ * by BOTH previews: the pack preview skins each block; the template preview
+ * assigns each a `section` id instead (see admin/templates/fixture.ts).
+ */
+export const fixtureContent = [
     {
       type: "hero",
       props: {
@@ -135,5 +133,11 @@ export function fixtureBlocks(pack: DesignPack): StoredBlock[] {
     },
   ];
 
-  return blocks.map((b) => ({ ...b, ...base, skin: skin(b.type) })) as unknown as StoredBlock[];
+export function fixtureBlocks(pack: DesignPack): StoredBlock[] {
+  const skin = (type: string) => {
+    const s = pack.skins[type as keyof DesignPack["skins"]];
+    return s || undefined;
+  };
+  const base = { showInNav: false, hidden: false };
+  return fixtureContent.map((b) => ({ ...b, ...base, skin: skin(b.type) })) as unknown as StoredBlock[];
 }

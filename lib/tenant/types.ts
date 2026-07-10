@@ -32,6 +32,10 @@ export interface Tenant {
     /** Atmospheric hero background generated when the owner has NO photos (§4.8).
      *  Reused on regeneration — never a real venue/product; hero-only, no gallery. */
     generatedHero?: string;
+    /** Design source id (persisted for continuity on regenerate). Exactly one is
+     *  set: `templateId` (template site — read by the render path) or `packId`. */
+    packId?: string;
+    templateId?: string;
   };
   footer: {
     phone?: string;

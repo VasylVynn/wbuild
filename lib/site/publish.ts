@@ -61,7 +61,10 @@ export async function generateAndPublish(
         status: publish ? "published" : "draft",
         brand: {
           businessName: facts.businessName,
-          packId: site.packId,
+          // Exactly one design source is set: templateId (template site) or
+          // packId (pack site). The render path reads brand.templateId.
+          ...(site.packId && { packId: site.packId }),
+          ...(site.templateId && { templateId: site.templateId }),
           ...(media?.logoUrl && { logoUrl: media.logoUrl }),
           ...(media?.photos?.length && { photos: media.photos }),
           ...(media?.generatedHero && { generatedHero: media.generatedHero }),
