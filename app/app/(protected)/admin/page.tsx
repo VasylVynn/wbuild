@@ -191,11 +191,19 @@ export default async function AdminPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl bg-canvas px-6 py-12">
-      <div className="mb-8">
-        <Link href="/" className="text-[14px] font-bold text-ink-muted transition-colors hover:text-ink">
-          ← Панель
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <Link href="/" className="text-[14px] font-bold text-ink-muted transition-colors hover:text-ink">
+            ← Панель
+          </Link>
+          <h1 className="mt-1.5 font-brand text-[24px] font-medium text-ink">Адмінка</h1>
+        </div>
+        <Link
+          href="/admin/generate"
+          className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-[16px] bg-brand px-5 font-ui text-[15px] font-bold text-white transition-colors hover:bg-brand-hover"
+        >
+          🧪 Тест-генерація
         </Link>
-        <h1 className="mt-1.5 font-brand text-[24px] font-medium text-ink">Адмінка</h1>
       </div>
 
       <div className="mb-10 grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
