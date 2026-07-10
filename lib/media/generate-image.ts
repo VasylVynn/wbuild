@@ -1,6 +1,6 @@
 import "server-only";
 import { getServiceClient } from "@/lib/supabase/server";
-import { getVertical } from "@/lib/verticals/registry";
+import { getVertical, HERO_PROMPT_SUFFIX } from "@/lib/verticals/registry";
 
 /**
  * Runtime hero-image generation (plan 6б, §4.8): for a site with NO owner
@@ -25,16 +25,30 @@ type GeminiPart = {
 };
 type GeminiResponse = { candidates?: { content?: { parts?: GeminiPart[] } }[] };
 
-export async function generateHeroImage(verticalId?: string): Promise<string | null> {
+export async function generateHeroImage(opts: {
+  verticalId?: string;
+  /** Model-proposed atmospheric subject for THIS business (English, sanitized here). */
+  subject?: string;
+  /** Site theme colors — keeps the image from clashing with the chosen palette. */
+  palette?: { primary: string; background: string };
+}): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn("[generateHeroImage] GEMINI_API_KEY missing — skipping generation");
     return null;
   }
 
-  const prompts = getVertical(verticalId).imagePrompts;
-  if (!prompts.length) return null;
-  const prompt = prompts[Math.floor(Math.random() * prompts.length)];
+  // Subject comes from the site-generation model; the honesty suffix and palette
+  // are appended IN CODE, so bounds never depend on the subject's wording.
+  const subject = opts.subject?.replace(/[\n\r"«»]/g, " ").trim().slice(0, 140);
+  const fallbacks = getVertical(opts.verticalId).imagePrompts;
+  let prompt = subject
+    ? `${subject}, ${HERO_PROMPT_SUFFIX}`
+    : fallbacks[Math.floor(Math.random() * fallbacks.length)];
+  if (!prompt) return null;
+  if (opts.palette) {
+    prompt += `, color palette inspired by ${opts.palette.primary} and ${opts.palette.background}`;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);

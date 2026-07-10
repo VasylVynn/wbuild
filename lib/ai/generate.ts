@@ -29,6 +29,10 @@ import type { SiteMedia } from "@/lib/media/media";
 const generationSchema = z.object({
   themePresetId: z.enum(THEME_PRESET_IDS),
   blocks: z.array(blockInstanceSchema),
+  // Atmospheric hero-image subject proposed by the model FOR THIS business —
+  // consumed by generateHeroImage (§4.8 suffix + palette are appended in code,
+  // so the honesty bounds never depend on the model remembering them).
+  imageSubject: z.string().max(140).optional(),
 });
 type Generation = z.infer<typeof generationSchema>;
 
@@ -36,6 +40,7 @@ export interface GeneratedSite {
   blocks: StoredBlock[];
   theme: Theme;
   themePresetId: string;
+  imageSubject?: string;
 }
 
 function buildLibraryDoc(): string {
@@ -72,7 +77,9 @@ GROUNDING (критично для довіри):
 - НІКОЛИ не вигадуй числа у stats — лише якщо є у фактах.
 - Не вигадуй посилань на зображення.
 
-ТЕМА: обери themePresetId ЛИШЕ зі списку доступних, що найкраще пасує бренду.`;
+ТЕМА: обери themePresetId ЛИШЕ зі списку доступних, що найкраще пасує бренду.
+
+HERO-ЗОБРАЖЕННЯ: заповни imageSubject — короткий опис АНГЛІЙСЬКОЮ (до 15 слів) атмосферного ФОНОВОГО зображення, що асоціюється саме з цим бізнесом: текстури, матеріали, гра світла, природа. ЗАБОРОНЕНО: приміщення/фасади/вітрини, впізнавані товари як «наші», люди, будь-який текст. Приклад для хімчистки: "soft folded fresh linen textures in airy light".`;
 }
 
 const buildSiteTool = {
@@ -146,6 +153,7 @@ ${JSON.stringify(facts, null, 2)}
         theme: resolveTheme(themePresetId),
         themePresetId,
         blocks: assemble(parsed.data.blocks, facts, media),
+        imageSubject: parsed.data.imageSubject,
       };
     }
     lastError = parsed.error.issues

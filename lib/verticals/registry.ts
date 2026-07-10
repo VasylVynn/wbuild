@@ -12,7 +12,7 @@ import type { VerticalConfig } from "./types";
  * must read as atmosphere, never as a photo of the owner's real venue/products.
  * Appended to every variant so the honesty bounds can't be forgotten per-vertical.
  */
-const HERO_PROMPT_SUFFIX =
+export const HERO_PROMPT_SUFFIX =
   "soft atmospheric background photograph, shallow depth of field, no people, " +
   "no readable text, no logos, no prices, no storefront or interior that could be " +
   "mistaken for a specific real venue, muted colors, suitable as a website hero background";

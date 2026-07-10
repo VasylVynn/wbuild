@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
-import { analyzeImage, correctImage } from "@/lib/media/process";
 
 /**
  * Photo upload (§4.8 MVP): the CLIENT pre-processes (canvas re-encode strips
@@ -17,6 +16,25 @@ import { analyzeImage, correctImage } from "@/lib/media/process";
 const BUCKET = "photos";
 const MAX_BYTES = 8 * 1024 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The classical quality layer (plan 6а) rides on sharp — a NATIVE module that
+ * can fail to load in some runtimes. It is an enhancement, never a gate:
+ * loaded lazily, and on any load failure the upload proceeds with the original
+ * bytes and no warnings (fail-open, same contract as the functions themselves).
+ */
+async function qualityPass(
+  buf: Buffer,
+): Promise<{ warnings: string[]; corrected: Buffer | null }> {
+  try {
+    const { analyzeImage, correctImage } = await import("@/lib/media/process");
+    const [{ warnings }, corrected] = await Promise.all([analyzeImage(buf), correctImage(buf)]);
+    return { warnings, corrected };
+  } catch (e) {
+    console.warn("[upload] quality layer unavailable:", e instanceof Error ? e.message : e);
+    return { warnings: [], corrected: null };
+  }
+}
 
 let bucketReady = false;
 async function ensureBucket() {
@@ -84,25 +102,29 @@ export async function POST(req: NextRequest) {
   const id = crypto.randomUUID();
   const buf = Buffer.from(await file.arrayBuffer());
 
-  // analyzeImage/correctImage both read the ORIGINAL bytes and never throw —
-  // a bad or unusual image degrades to "no warnings" / "uncorrected buffer",
-  // it never blocks the upload.
-  const [{ warnings }, corrected] = await Promise.all([analyzeImage(buf), correctImage(buf)]);
+  const { warnings, corrected } = await qualityPass(buf);
 
-  // Corrected file is always WebP (what correctImage emits); the untouched
-  // original keeps its own extension alongside it — §4.8, original is never
-  // destroyed.
-  const mainPath = `${tenantId}/${id}.webp`;
-  const origPath = `${tenantId}/${id}-orig.${ext}`;
-  const [main, orig] = await Promise.all([
-    sb.storage.from(BUCKET).upload(mainPath, corrected, { contentType: "image/webp", upsert: false }),
-    sb.storage.from(BUCKET).upload(origPath, buf, { contentType: file.type, upsert: false }),
-  ]);
+  // With a correction: corrected WebP is what the site serves, the untouched
+  // original keeps its own extension alongside (§4.8, never destroyed).
+  // Without one (sharp unavailable): the original bytes ARE the main file.
+  const mainPath = corrected ? `${tenantId}/${id}.webp` : `${tenantId}/${id}.${ext}`;
+  const main = await sb.storage
+    .from(BUCKET)
+    .upload(mainPath, corrected ?? buf, {
+      contentType: corrected ? "image/webp" : file.type,
+      upsert: false,
+    });
   if (main.error) return NextResponse.json({ error: main.error.message }, { status: 500 });
-  // Preserving the original is best-effort: it backs up the source photo but
-  // isn't what the site serves, so a failure here shouldn't block the upload
-  // the owner is actually waiting on.
-  if (orig.error) console.warn("[upload] failed to persist original alongside corrected", orig.error);
+
+  if (corrected) {
+    // Preserving the original is best-effort: it backs up the source photo but
+    // isn't what the site serves, so a failure here shouldn't block the upload
+    // the owner is actually waiting on.
+    const orig = await sb.storage
+      .from(BUCKET)
+      .upload(`${tenantId}/${id}-orig.${ext}`, buf, { contentType: file.type, upsert: false });
+    if (orig.error) console.warn("[upload] failed to persist original alongside corrected", orig.error);
+  }
 
   const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(mainPath);
   return NextResponse.json({ ok: true, url: pub.publicUrl, warnings });

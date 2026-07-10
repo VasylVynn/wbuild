@@ -28,14 +28,27 @@ export async function generateAndPublish(
 ): Promise<PublishResult> {
   const vertical = getVertical(verticalId);
 
-  // No owner photos → generate ONE atmospheric hero background (§4.8). Fail-open:
-  // generateHeroImage returns null on any error, and a site with no image is fine.
-  if (!media?.photos?.length) {
-    const gen = await generateHeroImage(vertical.id);
-    if (gen) media = { ...(media ?? { photos: [] }), generatedHero: gen };
+  const site = await generateSite(facts, vertical.id, media);
+
+  // No owner photos → generate ONE atmospheric hero background (§4.8). Runs
+  // AFTER site generation so the prompt gets the model's business-specific
+  // subject AND the chosen theme palette (a mismatched image is worse than
+  // none). Fail-open: null on any error, and a site with no image is fine.
+  if (!media?.photos?.length && !media?.generatedHero) {
+    const gen = await generateHeroImage({
+      verticalId: vertical.id,
+      subject: site.imageSubject,
+      palette: { primary: site.theme.colors.primary, background: site.theme.colors.background },
+    });
+    if (gen) {
+      media = { ...(media ?? { photos: [] }), generatedHero: gen };
+      // generateSite already ran → patch the hero block directly (same value
+      // groundImages would have assigned had the URL existed earlier).
+      const hero = site.blocks.find((b) => b.type === "hero");
+      if (hero) (hero.props as { imageUrl?: string }).imageUrl = gen;
+    }
   }
 
-  const site = await generateSite(facts, vertical.id, media);
   const sb = getServiceClient();
 
   const { data: tenant, error: tErr } = await sb
