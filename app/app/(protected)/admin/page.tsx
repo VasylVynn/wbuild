@@ -223,6 +223,9 @@ export default async function AdminPage() {
             <thead>
               <tr className="border-b border-line text-left text-[12px] font-bold uppercase tracking-wide text-ink-faint">
                 <th className="px-4 py-3">Сайт</th>
+                {/* Actions sit right after the host: the table scrolls horizontally,
+                    and controls hidden past the fold were being missed. */}
+                <th className="px-4 py-3">Дії</th>
                 <th className="px-4 py-3">Бізнес</th>
                 <th className="px-4 py-3">Напрям</th>
                 <th className="px-4 py-3">Статус</th>
@@ -230,7 +233,6 @@ export default async function AdminPage() {
                 <th className="px-4 py-3">Telegram</th>
                 <th className="px-4 py-3">Власник</th>
                 <th className="px-4 py-3">Створено</th>
-                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -249,6 +251,9 @@ export default async function AdminPage() {
                         {host}
                       </a>
                     </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <SiteRow tenantId={s.id} host={host} suspended={s.status === "suspended"} />
+                    </td>
                     <td className="px-4 py-3 text-ink">{s.brand?.businessName || "—"}</td>
                     <td className="px-4 py-3 text-ink-muted">{getVertical(s.vertical).label}</td>
                     <td className="px-4 py-3">
@@ -259,9 +264,6 @@ export default async function AdminPage() {
                     <td className="px-4 py-3 text-ink-muted">{ownerByTenant.get(s.id) ?? "—"}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-ink-faint">
                       {formatDate(s.created_at)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <SiteRow tenantId={s.id} host={host} suspended={s.status === "suspended"} />
                     </td>
                   </tr>
                 );
