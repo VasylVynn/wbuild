@@ -5,8 +5,12 @@ import { z } from "zod";
  * reach a generated site — the AI model never sees or produces image URLs. Every
  * URL is validated to live under our own public Storage bucket, so a tampered
  * client can't smuggle an arbitrary external image into a site.
+ *
+ * `generatedHero` is the ONE exception to "only real uploads": an atmospheric,
+ * non-literal background we generate for a site with no owner photos (§4.8). It
+ * still lives under our own bucket, so the same storage-prefix guard applies.
  */
-export type SiteMedia = { logoUrl?: string; photos: string[] };
+export type SiteMedia = { logoUrl?: string; photos: string[]; generatedHero?: string };
 
 /**
  * Public URL prefix for the "photos" bucket, derived from the Supabase URL.
@@ -33,6 +37,7 @@ const storageUrl = z.string().refine(isStorageUrl, { message: "not a storage url
 export const mediaSchema = z.object({
   logoUrl: storageUrl.optional(),
   photos: z.array(storageUrl).max(3).default([]),
+  generatedHero: storageUrl.optional(),
 });
 
 /**
@@ -46,5 +51,6 @@ export function sanitizeMedia(input: unknown): SiteMedia {
   return {
     ...(parsed.data.logoUrl && { logoUrl: parsed.data.logoUrl }),
     photos: parsed.data.photos,
+    ...(parsed.data.generatedHero && { generatedHero: parsed.data.generatedHero }),
   };
 }

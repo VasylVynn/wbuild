@@ -1,11 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
+import { analyzeImage, correctImage } from "@/lib/media/process";
 
 /**
  * Photo upload (§4.8 MVP): the CLIENT pre-processes (canvas re-encode strips
- * EXIF/GPS, fixes orientation, compresses) and posts the result here; we store
- * it in a public Supabase Storage bucket and return the public URL.
+ * EXIF/GPS, fixes orientation, compresses) and posts the result here. We run a
+ * classical (non-generative) quality pass — plan 6а — on the server: analyze
+ * for soft warnings, auto-correct exposure/clarity, and store BOTH the
+ * corrected file (served to the site) and the untouched original (§4.8: never
+ * destroyed) side by side in a public Supabase Storage bucket.
  * multipart/form-data: file + EITHER host (tenant host) OR conversationId
  * (onboarding, before a host exists) — both resolve to a tenant id for path
  * scoping.
@@ -77,14 +81,29 @@ export async function POST(req: NextRequest) {
 
   await ensureBucket();
   const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-  const path = `${tenantId}/${crypto.randomUUID()}.${ext}`;
+  const id = crypto.randomUUID();
   const buf = Buffer.from(await file.arrayBuffer());
 
-  const { error } = await sb.storage
-    .from(BUCKET)
-    .upload(path, buf, { contentType: file.type, upsert: false });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // analyzeImage/correctImage both read the ORIGINAL bytes and never throw —
+  // a bad or unusual image degrades to "no warnings" / "uncorrected buffer",
+  // it never blocks the upload.
+  const [{ warnings }, corrected] = await Promise.all([analyzeImage(buf), correctImage(buf)]);
 
-  const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(path);
-  return NextResponse.json({ ok: true, url: pub.publicUrl });
+  // Corrected file is always WebP (what correctImage emits); the untouched
+  // original keeps its own extension alongside it — §4.8, original is never
+  // destroyed.
+  const mainPath = `${tenantId}/${id}.webp`;
+  const origPath = `${tenantId}/${id}-orig.${ext}`;
+  const [main, orig] = await Promise.all([
+    sb.storage.from(BUCKET).upload(mainPath, corrected, { contentType: "image/webp", upsert: false }),
+    sb.storage.from(BUCKET).upload(origPath, buf, { contentType: file.type, upsert: false }),
+  ]);
+  if (main.error) return NextResponse.json({ error: main.error.message }, { status: 500 });
+  // Preserving the original is best-effort: it backs up the source photo but
+  // isn't what the site serves, so a failure here shouldn't block the upload
+  // the owner is actually waiting on.
+  if (orig.error) console.warn("[upload] failed to persist original alongside corrected", orig.error);
+
+  const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(mainPath);
+  return NextResponse.json({ ok: true, url: pub.publicUrl, warnings });
 }

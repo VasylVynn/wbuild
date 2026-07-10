@@ -64,11 +64,15 @@ export default function PhotoField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
+  // Soft quality nudges from the server's classical analysis (plan 6а) — never
+  // block the upload, just a note; cleared on the next upload/clear.
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   const busy = status === "processing" || status === "uploading";
 
   async function handleFile(file: File) {
     setError(null);
+    setWarnings([]);
     try {
       setStatus("processing");
       const blob = await processImage(file);
@@ -79,14 +83,22 @@ export default function PhotoField({
       if (conversationId) fd.append("conversationId", conversationId);
       else if (host) fd.append("host", host);
       const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const json = (await res.json().catch(() => null)) as { ok?: boolean; url?: string } | null;
+      const json = (await res.json().catch(() => null)) as
+        | { ok?: boolean; url?: string; warnings?: string[] }
+        | null;
       if (!res.ok || !json?.url) throw new Error("Сервер не прийняв фото");
       onChange(json.url);
+      setWarnings(json.warnings ?? []);
       setStatus("idle");
     } catch (e) {
       setStatus("error");
       setError(e instanceof Error ? e.message : "Не вдалося завантажити фото");
     }
+  }
+
+  function clear() {
+    setWarnings([]);
+    onClear();
   }
 
   const pick = () => inputRef.current?.click();
@@ -114,7 +126,7 @@ export default function PhotoField({
             <img src={value} alt="" className="h-full w-full object-cover" />
             <button
               type="button"
-              onClick={onClear}
+              onClick={clear}
               aria-label="Прибрати фото"
               title="Прибрати фото"
               className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-ink/55 text-[16px] text-white transition-colors hover:bg-ink"
@@ -156,6 +168,16 @@ export default function PhotoField({
         <p className="text-[14px] font-semibold text-danger">
           {error ?? "Не вдалося завантажити фото."}
         </p>
+      )}
+
+      {warnings.length > 0 && (
+        <div className="flex flex-col gap-0.5 rounded-[12px] bg-warn-soft px-3.5 py-2.5">
+          {warnings.map((w) => (
+            <p key={w} className="text-[13px] font-semibold text-warn">
+              {w}
+            </p>
+          ))}
+        </div>
       )}
     </div>
   );

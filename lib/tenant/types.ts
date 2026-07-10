@@ -29,6 +29,9 @@ export interface Tenant {
     logoUrl?: string;
     /** Owner-uploaded photos (§4.8) — the trusted source for hero/gallery imagery. */
     photos?: string[];
+    /** Atmospheric hero background generated when the owner has NO photos (§4.8).
+     *  Reused on regeneration — never a real venue/product; hero-only, no gallery. */
+    generatedHero?: string;
   };
   footer: {
     phone?: string;

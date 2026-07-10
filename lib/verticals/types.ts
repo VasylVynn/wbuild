@@ -37,4 +37,11 @@ export interface VerticalConfig {
   themePresetIds: ThemePresetId[];
   /** Example service names to hint the agent (NOT facts — never inserted). */
   exampleServices: string[];
+  /**
+   * Atmospheric, NON-LITERAL hero-image prompts (§4.8 honesty invariant): used
+   * only to generate a background for a site with NO owner photos. Never depicts
+   * the actual venue, real products, people, or readable text — data so the owner
+   * can tune wording without touching logic. A random variant is picked per site.
+   */
+  imagePrompts: string[];
 }

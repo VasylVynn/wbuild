@@ -162,7 +162,11 @@ ${JSON.stringify(facts, null, 2)}
 // ---------------------------------------------------------------------------
 function assemble(raw: BlockInstance[], facts: BusinessFacts, media?: SiteMedia): StoredBlock[] {
   const photos = media?.photos ?? [];
+  // The generated hero (§4.8) is a trusted, bucket-hosted URL like a real photo:
+  // it may back the hero, so it belongs in the allow-set. Gallery stays photos-only.
+  const generatedHero = media?.generatedHero;
   const allowed = new Set(photos);
+  if (generatedHero) allowed.add(generatedHero);
   const businessName = facts.businessName;
 
   const hero = raw.find((b) => b.type === "hero");
@@ -220,7 +224,7 @@ function assemble(raw: BlockInstance[], facts: BusinessFacts, media?: SiteMedia)
 
   const seen: Partial<Record<BlockType, number>> = {};
   return ordered.map((b) =>
-    groundAndPlace(groundImages(b, photos, allowed, businessName), facts, seen),
+    groundAndPlace(groundImages(b, photos, allowed, businessName, generatedHero), facts, seen),
   );
 }
 
@@ -234,11 +238,13 @@ function groundImages(
   photos: string[],
   allowed: Set<string>,
   businessName: string,
+  generatedHero?: string,
 ): BlockInstance {
   switch (b.type) {
     case "hero":
-      // Hero background := first real photo, else no image (never invented).
-      return { ...b, props: { ...b.props, imageUrl: photos.length >= 1 ? photos[0] : undefined } };
+      // Hero background := first real photo → generated atmospheric hero → none
+      // (never a model-invented URL). Real uploads always win over the generated one.
+      return { ...b, props: { ...b.props, imageUrl: photos[0] ?? generatedHero } };
     case "services":
       // Per-service images are model-invented → strip any not in the uploaded set.
       return {

@@ -7,6 +7,19 @@ import type { VerticalConfig } from "./types";
  * owner who doesn't know what belongs on a site. Add a niche = add an entry.
  */
 
+/**
+ * Shared safety suffix for every hero-image prompt (§4.8): the generated image
+ * must read as atmosphere, never as a photo of the owner's real venue/products.
+ * Appended to every variant so the honesty bounds can't be forgotten per-vertical.
+ */
+const HERO_PROMPT_SUFFIX =
+  "soft atmospheric background photograph, shallow depth of field, no people, " +
+  "no readable text, no logos, no prices, no storefront or interior that could be " +
+  "mistaken for a specific real venue, muted colors, suitable as a website hero background";
+
+/** Compose a full hero prompt from an atmospheric subject + the shared suffix. */
+const heroPrompt = (subject: string) => `${subject}, ${HERO_PROMPT_SUFFIX}`;
+
 const baseFields: VerticalConfig["fields"] = {
   businessName: { label: "Назва бізнесу", fact: true, required: true },
   city: { label: "Місто", fact: true, required: true },
@@ -34,6 +47,10 @@ export const verticals: Record<string, VerticalConfig> = {
     priceRange: { min: 50, max: 15000 },
     themePresetIds: ["rose-classic", "sage-minimal", "burgundy-elegant", "peach-soft"],
     exampleServices: ["Авторський букет", "Доставка квітів", "Весільна флористика", "Оформлення подій"],
+    imagePrompts: [
+      heroPrompt("extreme macro of soft rose and peony petals with dewy bokeh, delicate pastel botanicals"),
+      heroPrompt("blurred abstract garden of out-of-focus wildflowers and greenery in gentle morning light"),
+    ],
   },
   bakery: {
     id: "bakery",
@@ -47,6 +64,10 @@ export const verticals: Record<string, VerticalConfig> = {
     priceRange: { min: 20, max: 5000 },
     themePresetIds: ["warm-bakery", "peach-soft", "rose-classic"],
     exampleServices: ["Торти на замовлення", "Тістечка", "Свіжий хліб", "Кава з собою"],
+    imagePrompts: [
+      heroPrompt("warm flour-dust light drifting over rustic wheat stalks and golden grain textures"),
+      heroPrompt("soft out-of-focus glow over linen and baked-dough textures in cozy warm morning tones"),
+    ],
   },
   lawyer: {
     id: "lawyer",
@@ -60,6 +81,10 @@ export const verticals: Record<string, VerticalConfig> = {
     priceRange: { min: 200, max: 100000 },
     themePresetIds: ["slate-professional", "navy-trust"],
     exampleServices: ["Консультація", "Складання договорів", "Супровід угод", "Представництво в суді"],
+    imagePrompts: [
+      heroPrompt("calm abstract architectural light falling across clean stone columns and paper textures"),
+      heroPrompt("muted geometric play of soft window light on layered paper and marble surfaces"),
+    ],
   },
   autoservice: {
     id: "autoservice",
@@ -73,6 +98,10 @@ export const verticals: Record<string, VerticalConfig> = {
     priceRange: { min: 100, max: 50000 },
     themePresetIds: ["bold-slate", "slate-professional"],
     exampleServices: ["Комп'ютерна діагностика", "Заміна масла", "Шиномонтаж", "Ремонт ходової"],
+    imagePrompts: [
+      heroPrompt("dark metallic bokeh with faint silhouettes of tools receding into shadow, brushed-steel highlights"),
+      heroPrompt("abstract reflections on polished metal surfaces under cool industrial light and depth"),
+    ],
   },
   generic: {
     id: "generic",
@@ -86,6 +115,10 @@ export const verticals: Record<string, VerticalConfig> = {
     priceRange: { min: 20, max: 100000 },
     themePresetIds: ["emerald-fresh", "slate-professional", "navy-trust"],
     exampleServices: ["Основна послуга", "Додаткова послуга", "Консультація"],
+    imagePrompts: [
+      heroPrompt("soft brand-colored abstract gradient with gentle flowing light and subtle grain texture"),
+      heroPrompt("minimal out-of-focus abstract shapes in warm neutral tones with soft diffused light"),
+    ],
   },
 };
 

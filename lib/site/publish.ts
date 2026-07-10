@@ -2,6 +2,7 @@ import "server-only";
 import { getServiceClient } from "@/lib/supabase/server";
 import { revalidateTenant } from "@/lib/cache";
 import { generateSite } from "@/lib/ai/generate";
+import { generateHeroImage } from "@/lib/media/generate-image";
 import { getVertical } from "@/lib/verticals/registry";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import type { SiteMedia } from "@/lib/media/media";
@@ -26,6 +27,14 @@ export async function generateAndPublish(
   media?: SiteMedia,
 ): Promise<PublishResult> {
   const vertical = getVertical(verticalId);
+
+  // No owner photos → generate ONE atmospheric hero background (§4.8). Fail-open:
+  // generateHeroImage returns null on any error, and a site with no image is fine.
+  if (!media?.photos?.length) {
+    const gen = await generateHeroImage(vertical.id);
+    if (gen) media = { ...(media ?? { photos: [] }), generatedHero: gen };
+  }
+
   const site = await generateSite(facts, vertical.id, media);
   const sb = getServiceClient();
 
@@ -41,6 +50,7 @@ export async function generateAndPublish(
           businessName: facts.businessName,
           ...(media?.logoUrl && { logoUrl: media.logoUrl }),
           ...(media?.photos?.length && { photos: media.photos }),
+          ...(media?.generatedHero && { generatedHero: media.generatedHero }),
         },
         footer: {
           phone: facts.phone,

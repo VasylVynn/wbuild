@@ -879,6 +879,10 @@ export function OnboardChat() {
             </div>
           </Card>
 
+          <p className="mt-3 text-[14px] text-ink-muted">
+            Перегляньте сайт — фото й зображення можна замінити в редакторі.
+          </p>
+
           <div className="mt-3.5 flex w-full items-center gap-3.5 rounded-[18px] border-[1.5px] border-line bg-surface px-5 py-4 text-left">
             <TelegramMark />
             <div className="min-w-0 flex-1">

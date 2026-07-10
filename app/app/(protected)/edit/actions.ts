@@ -143,10 +143,13 @@ export async function regenerateSite(
     if (!t) return { ok: false, error: "tenant not found" };
 
     // Real uploaded photos survive regeneration (§4.8: never fabricate imagery).
-    const brand = (t.brand ?? {}) as { logoUrl?: string; photos?: string[] };
+    // The generated hero is REUSED here (already paid for) — regeneration never
+    // generates a new image; that only happens on the no-photos publish path.
+    const brand = (t.brand ?? {}) as { logoUrl?: string; photos?: string[]; generatedHero?: string };
     const site = await generateSite(t.facts as BusinessFacts, t.vertical, {
       logoUrl: brand.logoUrl,
       photos: brand.photos ?? [],
+      generatedHero: brand.generatedHero,
     });
 
     const { data: p } = await sb
