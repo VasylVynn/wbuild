@@ -198,12 +198,20 @@ export default async function AdminPage() {
           </Link>
           <h1 className="mt-1.5 font-brand text-[24px] font-medium text-ink">Адмінка</h1>
         </div>
-        <Link
-          href="/admin/generate"
-          className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-[16px] bg-brand px-5 font-ui text-[15px] font-bold text-white transition-colors hover:bg-brand-hover"
-        >
-          🧪 Тест-генерація
-        </Link>
+        <div className="flex shrink-0 items-center gap-2.5">
+          <Link
+            href="/admin/packs"
+            className="inline-flex min-h-12 items-center gap-2 rounded-[16px] border-[1.5px] border-line-strong bg-surface px-5 font-ui text-[15px] font-bold text-ink transition-colors hover:border-brand hover:text-brand"
+          >
+            🎨 Прев&apos;ю дизайнів
+          </Link>
+          <Link
+            href="/admin/generate"
+            className="inline-flex min-h-12 items-center gap-2 rounded-[16px] bg-brand px-5 font-ui text-[15px] font-bold text-white transition-colors hover:bg-brand-hover"
+          >
+            🧪 Тест-генерація
+          </Link>
+        </div>
       </div>
 
       <div className="mb-10 grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
