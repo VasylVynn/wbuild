@@ -34,7 +34,9 @@
 
 **Пропуски (свідомо):** logo-cloud (фейкові лого), integrations-grid (не SMB), контакт-сторінки side-by-side (не лягає в стек блоків), каталог /products (е-commerce, ретаргетимо CTA на заявку), кастом-курсор (гімік).
 
-## Хвилі виконання
+## Хвилі виконання — СТАТУС: хвилі 1+2 ✅ shipped 2026-07-10
+
+> 10 нових скінів live (hero: photo/gradient/mesh; services: trust/showcase/pricing/steps; switchback: framed; testimonials: spotlight; faq: accordion; gallery: captions) + опційні пропси (secondary CTA, icon, badge, switchback button, gallery captions). Рендер кожного скіна перевірено e2e по маркерах у HTML. **Запобіжник:** скіни, що ховають ціни (trust/steps), — editor-only, виключені з лотереї генерації (`lottery: false`). Глобальний noise-поліш перенесено в десктоп-поліровку. `template_sources/` в .gitignore + tsconfig exclude.
 
 - **Хвиля 1 — «нуль змін схеми»** (№1,2,3,5,7,8,10,11 + №4 без іконок + №14): ~8–9 скінів + поліш, паралельно агентами, ~1–1.5 дня. Лотерея генерації одразу підхоплює нові скіни.
 - **Хвиля 2 — з розширенням схеми** (№4-icon, 6, 9, 12, 13): опційні пропси (back-compatible, schemaVersion), ~1 день. Генерація/редактор/AI-edit автоматично отримують нові поля через реєстр.

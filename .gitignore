@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Template-mining sources — local only (MIT code, undocumented photo provenance, 122MB)
+template_sources/

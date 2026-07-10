@@ -28,16 +28,39 @@ export const heroSchema = z.object({
   imageUrl: assetUrl.optional(),
   ctaLabel: z.string().optional(),
   ctaHref: z.string().optional(), // usually an in-page anchor like "#contacts"
+  // Optional second (outline) CTA — template-mining wave 2.
+  secondaryCtaLabel: z.string().optional(),
+  secondaryCtaHref: z.string().optional(),
 });
 
 // ---------------------------------------------------------------------------
 // services
 // ---------------------------------------------------------------------------
+// Icon vocabulary for service items (inline SVGs in components/blocks/icons.tsx).
+// An enum (not free string) so the editor form renders a select and the model
+// can't invent icon names.
+export const SERVICE_ICONS = [
+  "star",
+  "heart",
+  "shield",
+  "clock",
+  "truck",
+  "wrench",
+  "leaf",
+  "award",
+  "phone",
+  "check",
+  "sparkles",
+  "users",
+] as const;
+
 export const serviceItemSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   price: z.string().optional(), // free-form ("від 500 грн") — a fact, copied 1:1
   imageUrl: assetUrl.optional(),
+  icon: z.enum(SERVICE_ICONS).optional().describe("Іконка пункту (для скінів без фото/цін)"),
+  badge: z.string().max(24).optional().describe("Короткий бейдж, напр. «Популярне»"),
 });
 export const servicesSchema = z.object({
   title: z.string().optional(),
@@ -50,6 +73,9 @@ export const servicesSchema = z.object({
 export const galleryImageSchema = z.object({
   url: assetUrl,
   alt: z.string().optional(),
+  // Optional hover caption (title + small category label) — wave 2.
+  title: z.string().optional(),
+  category: z.string().optional(),
 });
 export const gallerySchema = z.object({
   title: z.string().optional(),
@@ -100,6 +126,9 @@ export const switchbackItemSchema = z.object({
   heading: z.string().min(1),
   body: z.string().min(1),
   imageUrl: assetUrl,
+  // Optional inline CTA under the text — template-mining wave 2.
+  buttonLabel: z.string().optional(),
+  buttonHref: z.string().optional(),
 });
 export const switchbackSchema = z.object({
   title: z.string().optional(),
