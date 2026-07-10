@@ -61,6 +61,7 @@ export async function generateAndPublish(
         status: publish ? "published" : "draft",
         brand: {
           businessName: facts.businessName,
+          packId: site.packId,
           ...(media?.logoUrl && { logoUrl: media.logoUrl }),
           ...(media?.photos?.length && { photos: media.photos }),
           ...(media?.generatedHero && { generatedHero: media.generatedHero }),

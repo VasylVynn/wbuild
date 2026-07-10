@@ -16,6 +16,14 @@ export const THEME_PRESET_IDS = [
   "navy-trust",
   "bold-slate",
   "emerald-fresh",
+  // Design-pack presets (lib/design/packs.ts) — each faithful to one source in
+  // template_sources/. Added, never swapped, so packs get a stable palette.
+  "amber-craft",
+  "organic-emerald",
+  "market-green",
+  "construction-slate",
+  "clinic-blue",
+  "studio-violet",
 ] as const;
 export type ThemePresetId = (typeof THEME_PRESET_IDS)[number];
 
@@ -101,6 +109,66 @@ export const themePresets: Record<ThemePresetId, PresetEntry> = {
       colors: { primary: "#059669", primaryForeground: "#ffffff", background: "#f6faf8", foreground: "#1f2e28", muted: "#cfe3d9", accent: "#ddefe6" },
       fonts: { heading: "sans", body: "sans" },
       radius: "md",
+    },
+  },
+  // Faithful to artisan-bakery: warm amber on cream, display headings, soft lg radius.
+  "amber-craft": {
+    label: "Крафтова пекарня",
+    mood: "тепла, крафтова, апетитна",
+    theme: {
+      colors: { primary: "#a86523", primaryForeground: "#fff8ef", background: "#fdf7ee", foreground: "#3a2c1c", muted: "#e9d8bf", accent: "#f4e7d0" },
+      fonts: { heading: "display", body: "sans" },
+      radius: "lg",
+    },
+  },
+  // Faithful to organic-market: emerald, fully rounded fonts, generous xl radius.
+  "organic-emerald": {
+    label: "Органік-смарагд",
+    mood: "природна, свіжа, дружня",
+    theme: {
+      colors: { primary: "#047857", primaryForeground: "#ffffff", background: "#f4faf6", foreground: "#1c2e26", muted: "#cfe6d8", accent: "#dcefe4" },
+      fonts: { heading: "rounded", body: "rounded" },
+      radius: "xl",
+    },
+  },
+  // Faithful to whole-foods: fresh light green, clean sans, medium radius.
+  "market-green": {
+    label: "Свіжий маркет",
+    mood: "чиста, свіжа, легка",
+    theme: {
+      colors: { primary: "#16a34a", primaryForeground: "#ffffff", background: "#f7fbf5", foreground: "#1f2e1f", muted: "#d6e8cf", accent: "#e5f1dd" },
+      fonts: { heading: "sans", body: "sans" },
+      radius: "md",
+    },
+  },
+  // Faithful to construction-pro: solid slate with a warm amber accent, tight sm radius.
+  "construction-slate": {
+    label: "Будівельний слейт",
+    mood: "потужна, надійна, технічна",
+    theme: {
+      colors: { primary: "#1e293b", primaryForeground: "#ffffff", background: "#f8fafc", foreground: "#0f172a", muted: "#cbd5e1", accent: "#fde6c8" },
+      fonts: { heading: "sans", body: "sans" },
+      radius: "sm",
+    },
+  },
+  // Faithful to dental-care: soft calm blue, airy sans, rounded xl radius.
+  "clinic-blue": {
+    label: "Спокійна клініка",
+    mood: "спокійна, чиста, довірлива",
+    theme: {
+      colors: { primary: "#2b7fd4", primaryForeground: "#ffffff", background: "#f5f9fd", foreground: "#1e2b3a", muted: "#cfe0f0", accent: "#e0eaf8" },
+      fonts: { heading: "sans", body: "sans" },
+      radius: "xl",
+    },
+  },
+  // design-template-main adapted LIGHT: near-white neutral, violet accent, tight sm radius.
+  "studio-violet": {
+    label: "Преміум-студія",
+    mood: "мінімалістична, преміальна, сучасна",
+    theme: {
+      colors: { primary: "#7c3aed", primaryForeground: "#ffffff", background: "#fafafa", foreground: "#18181b", muted: "#e4e4e7", accent: "#ede9fe" },
+      fonts: { heading: "sans", body: "sans" },
+      radius: "sm",
     },
   },
 };

@@ -10,7 +10,13 @@ import {
   type StoredBlock,
 } from "@/lib/blocks/schema";
 import { blockLibrary, COMPOSITION_RULES } from "@/lib/blocks/library";
-import { randomSkin } from "@/lib/blocks/skins";
+import {
+  getPack,
+  packsFor,
+  randomPack,
+  DESIGN_PACK_IDS,
+  type DesignPack,
+} from "@/lib/design/packs";
 import { themePresets, resolveTheme, THEME_PRESET_IDS } from "@/lib/theme/presets";
 import type { Theme } from "@/lib/theme/tokens";
 import { getVertical } from "@/lib/verticals/registry";
@@ -28,6 +34,10 @@ import type { SiteMedia } from "@/lib/media/media";
 
 const generationSchema = z.object({
   themePresetId: z.enum(THEME_PRESET_IDS),
+  designPackId: z
+    .enum(DESIGN_PACK_IDS)
+    .optional()
+    .describe("Дизайн-пакет зі списку доступних — задає цілісний вигляд сайту (тему й макет секцій)."),
   blocks: z.array(blockInstanceSchema),
   // Atmospheric hero-image subject proposed by the model FOR THIS business —
   // consumed by generateHeroImage (§4.8 suffix + palette are appended in code,
@@ -40,6 +50,7 @@ export interface GeneratedSite {
   blocks: StoredBlock[];
   theme: Theme;
   themePresetId: string;
+  packId: string;
   imageSubject?: string;
 }
 
@@ -60,6 +71,12 @@ function buildThemeDoc(vertical: VerticalConfig): string {
     .join("\n");
 }
 
+function buildPackDoc(vertical: VerticalConfig): string {
+  return packsFor(vertical.id)
+    .map((p) => `- ${p.id} — ${p.label}: ${p.description}`)
+    .join("\n");
+}
+
 function buildSystem(vertical: VerticalConfig): string {
   return `Ти — досвідчений веб-дизайнер і копірайтер, що збирає односторінковий сайт українському бізнесу: ${vertical.label} (${vertical.personaHint}).
 Тон і акценти: ${vertical.genHint}.
@@ -77,7 +94,10 @@ GROUNDING (критично для довіри):
 - НІКОЛИ не вигадуй числа у stats — лише якщо є у фактах.
 - Не вигадуй посилань на зображення.
 
-ТЕМА: обери themePresetId ЛИШЕ зі списку доступних, що найкраще пасує бренду.
+ДИЗАЙН: обери designPackId — цілісний дизайн-пакет, що найкраще пасує настрою цього бізнесу. Пакет задає палітру, шрифти й макет УСІХ секцій, тож сайт виглядає як єдине ціле, а не набір випадкових стилів. Доступні пакети:
+${buildPackDoc(vertical)}
+
+ТЕМА (запасний варіант): якщо не впевнений із пакетом — обери themePresetId ЛИШЕ зі списку доступних, що найкраще пасує бренду. Пакет має пріоритет над темою.
 
 HERO-ЗОБРАЖЕННЯ: заповни imageSubject — короткий опис АНГЛІЙСЬКОЮ (до 15 слів) атмосферного ФОНОВОГО зображення, що асоціюється саме з цим бізнесом: текстури, матеріали, гра світла, природа. ЗАБОРОНЕНО: приміщення/фасади/вітрини, впізнавані товари як «наші», люди, будь-який текст. Приклад для хімчистки: "soft folded fresh linen textures in airy light".`;
 }
@@ -95,6 +115,9 @@ export async function generateSite(
   // drives the deterministic post-pass in assemble(). Optional so callers that
   // don't thread media keep working (no photos → no hero/gallery imagery).
   media?: SiteMedia,
+  // Force a specific design pack (e.g. regenerate keeps the site's existing
+  // design). When set, it overrides the model's pick and the random fallback.
+  packId?: string,
 ): Promise<GeneratedSite> {
   const client = getAnthropic();
   const vertical = getVertical(verticalId);
@@ -145,14 +168,21 @@ ${JSON.stringify(facts, null, 2)}
 
     const parsed = generationSchema.safeParse(toolUse.input);
     if (parsed.success) {
-      // Keep the model's theme only if it's allowed for this vertical.
-      const themePresetId = vertical.themePresetIds.includes(parsed.data.themePresetId)
-        ? parsed.data.themePresetId
-        : vertical.themePresetIds[0];
+      // The design pack decides the LOOK (theme + a fixed skin per block) so the
+      // site reads as ONE cohesive design, not a per-block skin lottery. Priority:
+      // caller's pack (regenerate keeps the design) → model's choice if compatible
+      // with this vertical → a random compatible pack. The pack ALWAYS wins over
+      // the model's themePresetId.
+      const compatible = packsFor(vertical.id);
+      const pack =
+        (packId ? getPack(packId) : undefined) ??
+        compatible.find((p) => p.id === parsed.data.designPackId) ??
+        randomPack(vertical.id);
       return {
-        theme: resolveTheme(themePresetId),
-        themePresetId,
-        blocks: assemble(parsed.data.blocks, facts, media),
+        theme: resolveTheme(pack.themePresetId),
+        themePresetId: pack.themePresetId,
+        packId: pack.id,
+        blocks: assemble(parsed.data.blocks, facts, pack, media),
         imageSubject: parsed.data.imageSubject,
       };
     }
@@ -168,7 +198,12 @@ ${JSON.stringify(facts, null, 2)}
 // ---------------------------------------------------------------------------
 // Post-generation: enforce composition, ground facts, project nav placement.
 // ---------------------------------------------------------------------------
-function assemble(raw: BlockInstance[], facts: BusinessFacts, media?: SiteMedia): StoredBlock[] {
+function assemble(
+  raw: BlockInstance[],
+  facts: BusinessFacts,
+  pack: DesignPack,
+  media?: SiteMedia,
+): StoredBlock[] {
   const photos = media?.photos ?? [];
   // The generated hero (§4.8) is a trusted, bucket-hosted URL like a real photo:
   // it may back the hero, so it belongs in the allow-set. Gallery stays photos-only.
@@ -232,7 +267,7 @@ function assemble(raw: BlockInstance[], facts: BusinessFacts, media?: SiteMedia)
 
   const seen: Partial<Record<BlockType, number>> = {};
   return ordered.map((b) =>
-    groundAndPlace(groundImages(b, photos, allowed, businessName, generatedHero), facts, seen),
+    groundAndPlace(groundImages(b, photos, allowed, businessName, generatedHero), facts, seen, pack),
   );
 }
 
@@ -272,11 +307,16 @@ function groundImages(
   }
 }
 
-function computePlacement(type: BlockType, seen: Partial<Record<BlockType, number>>): BlockPlacement {
+function computePlacement(
+  type: BlockType,
+  seen: Partial<Record<BlockType, number>>,
+  pack: DesignPack,
+): BlockPlacement {
   const lib = blockLibrary[type];
-  // Generation-time skin lottery (п.3): same content, varied layout — different
-  // sites stop looking like one template. The editor can switch it any time.
-  const skin = randomSkin(type);
+  // The design pack fixes the skin per block type — a cohesive, template-faithful
+  // look, NOT a per-block lottery. "" (or absent) means the component's default
+  // variant. The editor can still switch it any time.
+  const skin = pack.skins[type] || undefined;
   if (type === "contacts") {
     return { anchor: "#contacts", navLabel: lib.navLabel, showInNav: true, hidden: false, skin };
   }
@@ -300,8 +340,9 @@ function groundAndPlace(
   b: BlockInstance,
   facts: BusinessFacts,
   seen: Partial<Record<BlockType, number>>,
+  pack: DesignPack,
 ): StoredBlock {
-  const placement = computePlacement(b.type, seen);
+  const placement = computePlacement(b.type, seen, pack);
 
   // Grounding (§4.4): contact facts are known — force them verbatim.
   if (b.type === "contacts") {

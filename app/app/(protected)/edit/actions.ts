@@ -27,6 +27,9 @@ export interface EditorData {
   themeOptions: { id: string; label: string }[];
   blocks: StoredBlock[];
   telegramConnected: boolean;
+  // Active design pack id (undefined for sites generated before packs shipped) —
+  // the editor's pack picker reads this to show the current selection.
+  packId?: string;
 }
 
 export async function getEditorData(host: string): Promise<EditorData | null> {
@@ -58,6 +61,7 @@ export async function getEditorData(host: string): Promise<EditorData | null> {
     themeOptions: vertical.themePresetIds.map((id) => ({ id, label: themePresets[id].label })),
     blocks: ((p?.draft_content as { blocks?: StoredBlock[] } | null)?.blocks ?? []) as StoredBlock[],
     telegramConnected: Boolean(t.telegram_chat_id),
+    packId: (t.brand as { packId?: string } | null)?.packId,
   };
 }
 
@@ -145,12 +149,24 @@ export async function regenerateSite(
     // Real uploaded photos survive regeneration (§4.8: never fabricate imagery).
     // The generated hero is REUSED here (already paid for) — regeneration never
     // generates a new image; that only happens on the no-photos publish path.
-    const brand = (t.brand ?? {}) as { logoUrl?: string; photos?: string[]; generatedHero?: string };
-    const site = await generateSite(t.facts as BusinessFacts, t.vertical, {
-      logoUrl: brand.logoUrl,
-      photos: brand.photos ?? [],
-      generatedHero: brand.generatedHero,
-    });
+    const brand = (t.brand ?? {}) as {
+      logoUrl?: string;
+      photos?: string[];
+      generatedHero?: string;
+      packId?: string;
+    };
+    // Reuse the site's saved design pack so regeneration KEEPS the look — only
+    // the content/composition is re-rolled, not the palette or section layouts.
+    const site = await generateSite(
+      t.facts as BusinessFacts,
+      t.vertical,
+      {
+        logoUrl: brand.logoUrl,
+        photos: brand.photos ?? [],
+        generatedHero: brand.generatedHero,
+      },
+      brand.packId,
+    );
 
     const { data: p } = await sb
       .from("pages")
@@ -166,7 +182,15 @@ export async function regenerateSite(
       .from("pages")
       .update({ draft_content: { blocks: site.blocks, pocket: [...oldPocket, ...oldBlocks].slice(-40) } })
       .eq("id", p.id);
-    await sb.from("tenants").update({ draft_theme: site.theme }).eq("id", t.id);
+    // Pin the pack the first time (older sites have no packId yet) so future
+    // regenerations keep this design; merge into brand without clobbering it.
+    const tenantUpdate: { draft_theme: Theme; brand?: Record<string, unknown> } = {
+      draft_theme: site.theme,
+    };
+    if (!brand.packId) {
+      tenantUpdate.brand = { ...(t.brand as Record<string, unknown>), packId: site.packId };
+    }
+    await sb.from("tenants").update(tenantUpdate).eq("id", t.id);
 
     return { ok: true, blocks: site.blocks, theme: site.theme };
   } catch (e) {

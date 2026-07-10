@@ -10,6 +10,7 @@ import {
   customRequestAction,
   type EditorData,
 } from "@/app/app/(protected)/edit/actions";
+import { switchDesignPack } from "@/app/app/(protected)/edit/design-actions";
 import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-actions";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
@@ -65,6 +66,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   const { host } = initial;
   const [blocks, setBlocks] = useState<StoredBlock[]>(initial.blocks);
   const [theme, setTheme] = useState<Theme>(initial.theme);
+  const [packId, setPackId] = useState<string | undefined>(initial.packId);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [themeOpen, setThemeOpen] = useState(false);
   const [regenConfirmOpen, setRegenConfirmOpen] = useState(false);
@@ -146,6 +148,25 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       notify({ text: "Оформлення змінено" });
     } else {
       notify({ text: `Не вдалося змінити оформлення: ${res.error ?? "помилка"}` });
+    }
+  };
+
+  // Switch a whole design pack — theme AND every section's skin at once. Like
+  // pickTheme this persists the draft server-side, so we mirror its after-effects
+  // (dirty flag, close the sheet, toast) and also swap the previewed blocks.
+  const pickPack = async (id: string) => {
+    setBusyLabel("theme");
+    const res = await switchDesignPack(host, id);
+    setBusyLabel(null);
+    if (res.ok && res.theme && res.blocks) {
+      setTheme(res.theme);
+      setBlocks(res.blocks);
+      setPackId(id);
+      setDirty(true);
+      setThemeOpen(false);
+      notify({ text: "Дизайн змінено" });
+    } else {
+      notify({ text: `Не вдалося змінити дизайн: ${res.error ?? "помилка"}` });
     }
   };
 
@@ -391,8 +412,10 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
         <ThemePicker
           options={initial.themeOptions}
           currentTheme={theme}
+          currentPackId={packId}
           pending={themeBusy}
           onPick={(id) => void pickTheme(id)}
+          onPickPack={(id) => void pickPack(id)}
           onClose={() => setThemeOpen(false)}
         />
       )}
