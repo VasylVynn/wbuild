@@ -95,6 +95,13 @@ function randomSuffix(len = 4): string {
   return out;
 }
 
+// Exact shape of hosts adminTestGenerate creates. List/delete below match
+// against this, so no other host — including a client's custom domain that
+// happens to start with "test-" — can ever show up here or be deleted.
+const TEST_HOST_RE = new RegExp(
+  `^test-(?:${Object.keys(FIXTURES).join("|")})-[a-z0-9]{4}\\.${stripPort(ROOT_DOMAIN).replaceAll(".", "\\.")}$`,
+);
+
 export type AdminGenerateResult =
   | { ok: true; url: string; editHost: string; ms: number }
   | { ok: false; error: string };
@@ -150,13 +157,13 @@ export async function adminListTestSites(): Promise<TestSite[]> {
     .like("host", "test-%")
     .order("created_at", { ascending: false });
 
-  return (data ?? []) as TestSite[];
+  return ((data ?? []) as TestSite[]).filter((s) => TEST_HOST_RE.test(s.host));
 }
 
 export type AdminDeleteResult = { ok: true } | { ok: false; error: string };
 
 /**
- * Refuses anything whose host doesn't start with "test-" — this action must
+ * Refuses anything whose host doesn't match TEST_HOST_RE — this action must
  * never be able to delete a real client site, even given a wrong tenantId.
  */
 export async function adminDeleteTestSite(tenantId: string): Promise<AdminDeleteResult> {
@@ -169,7 +176,7 @@ export async function adminDeleteTestSite(tenantId: string): Promise<AdminDelete
     .eq("id", tenantId)
     .maybeSingle();
   if (!tenant) return { ok: false, error: "Сайт не знайдено." };
-  if (!tenant.host || !tenant.host.startsWith("test-")) {
+  if (!tenant.host || !TEST_HOST_RE.test(tenant.host)) {
     return { ok: false, error: "Можна видаляти тільки тест-сайти." };
   }
 

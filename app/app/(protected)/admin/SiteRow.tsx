@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { adminSetTenantStatus } from "./actions";
+import { adminSetTenantStatus, adminRevalidateTenant } from "./actions";
 import { Button, ConfirmDialog } from "@/components/ui";
 
 /**
@@ -40,8 +40,27 @@ export default function SiteRow({
     }
   }
 
+  // Cache purge is safe and idempotent — no confirm dialog needed.
+  async function refreshCache() {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await adminRevalidateTenant(tenantId);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
+      <Button variant="quiet" size="sm" disabled={busy} onClick={() => void refreshCache()}>
+        ↻ Кеш
+      </Button>
       <Button
         variant={suspended ? "secondary" : "danger"}
         size="sm"

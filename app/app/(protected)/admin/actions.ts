@@ -17,6 +17,24 @@ import { revalidateTenant } from "@/lib/cache";
  * home page had already been published at least once, else 'draft' (never
  * silently re-publish a site that was never live).
  */
+/**
+ * Purge a tenant's render cache on THIS (production) instance. Needed whenever
+ * tenant data changes outside the app's own actions (DB surgery, local-instance
+ * scripts) — revalidateTag only purges the instance it runs on.
+ */
+export async function adminRevalidateTenant(
+  tenantId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!(await isPlatformAdmin())) return { ok: false, error: "Немає доступу." };
+
+  const sb = getServiceClient();
+  const { data: tenant } = await sb.from("tenants").select("host").eq("id", tenantId).maybeSingle();
+  if (!tenant?.host) return { ok: false, error: "Сайт не знайдено." };
+
+  await revalidateTenant(tenant.host);
+  return { ok: true };
+}
+
 export async function adminSetTenantStatus(
   tenantId: string,
   action: "suspend" | "restore",

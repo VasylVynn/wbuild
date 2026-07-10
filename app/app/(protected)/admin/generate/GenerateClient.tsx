@@ -4,7 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ROOT_DOMAIN } from "@/lib/config";
-import { adminTestGenerate, adminDeleteTestSite, type TestSite } from "./actions";
+import {
+  adminTestGenerate,
+  adminDeleteTestSite,
+  adminListTestSites,
+  type TestSite,
+} from "./actions";
 import { Button, Card, Chip, ConfirmDialog, EmptyState } from "@/components/ui";
 
 const isProd = process.env.NODE_ENV === "production";
@@ -61,6 +66,9 @@ export default function GenerateClient({
         return;
       }
       setResult(r);
+      // `sites` was seeded from initialSites once — router.refresh() alone
+      // won't reset it, so pull the fresh list explicitly.
+      setSites(await adminListTestSites());
       router.refresh();
     } finally {
       setBusy(false);
