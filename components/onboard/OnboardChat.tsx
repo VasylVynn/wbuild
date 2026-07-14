@@ -414,7 +414,7 @@ export function OnboardChat() {
     setPhase("generating");
 
     try {
-      const result = await finalizeAction(fullFacts, verticalId, media);
+      const result = await finalizeAction(fullFacts, verticalId, media, convIdRef.current ?? undefined);
       if (result.ok) {
         setSiteUrl(result.url);
         setPhase("done");

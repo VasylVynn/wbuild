@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import Link from "next/link";
-import { Palette, ImageIcon, RefreshCw, Monitor, Tablet, Smartphone } from "lucide-react";
+import { Palette, ImageIcon, RefreshCw, Monitor, Tablet, Smartphone, Sparkles, Undo2 } from "lucide-react";
 import {
   saveDraftBlocks,
   switchTheme,
@@ -22,6 +22,7 @@ import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/com
 import EditableSection from "./EditableSection";
 import BlockSheet from "./BlockSheet";
 import BlockEditPanel from "./BlockEditPanel";
+import EditorChat from "./EditorChat";
 import PhotoField from "./PhotoField";
 import ThemePicker from "./ThemePicker";
 
@@ -121,6 +122,10 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   // tablet/mobile modes always show the current draft.
   const [frameVersion, setFrameVersion] = useState(0);
   const isDesktop = useIsDesktop();
+  // Agent chat (P3): left panel on desktop, full-screen overlay on mobile.
+  const [chatOpen, setChatOpen] = useState(false);
+  const [agentUndo, setAgentUndo] = useState<StoredBlock[] | null>(null);
+  const [undoBusy, setUndoBusy] = useState(false);
 
   const notify = (t: Toast) => {
     setToast(t);
@@ -306,10 +311,42 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     }
   };
 
+  // The agent mutated the draft server-side → adopt its state locally and give
+  // the owner one-click undo to the pre-turn snapshot.
+  const applyAgentResult = (nextBlocks: StoredBlock[], nextTheme: Theme) => {
+    setBlocks(nextBlocks);
+    setTheme(nextTheme);
+    setDirty(true);
+    setFrameVersion((v) => v + 1);
+    setSelectedIndex(null);
+  };
+
+  const undoAgent = async () => {
+    if (!agentUndo || undoBusy) return;
+    setUndoBusy(true);
+    const snapshot = agentUndo;
+    const ok = await persist(snapshot, "Зміни помічника скасовано");
+    setUndoBusy(false);
+    if (ok) {
+      setBlocks(snapshot);
+      setAgentUndo(null);
+    }
+  };
+
   const statusLabel = STATUS_LABELS[initial.status] ?? STATUS_LABELS.draft;
   const regenerating = busyLabel === "regenerate";
   const themeBusy = busyLabel === "theme";
   const selected = selectedIndex != null ? blocks[selectedIndex] : null;
+
+  const chatPanel = chatOpen ? (
+    <EditorChat
+      host={host}
+      getSnapshot={() => blocks}
+      onApply={applyAgentResult}
+      onUndoAvailable={(snapshot) => setAgentUndo(snapshot)}
+      onClose={() => setChatOpen(false)}
+    />
+  ) : null;
 
   const previewStyle = {
     ...themeToCssVars(theme),
@@ -370,6 +407,26 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+            <Button
+              variant={chatOpen ? "primary" : "secondary"}
+              size="sm"
+              className="shrink-0"
+              onClick={() => setChatOpen((v) => !v)}
+            >
+              <Sparkles size={15} /> Помічник
+            </Button>
+            {agentUndo && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={undoBusy}
+                className="shrink-0"
+                onClick={() => void undoAgent()}
+              >
+                <Undo2 size={15} />
+                <span className="hidden xl:inline">{undoBusy ? "Повертаємо…" : "Скасувати зміни ШІ"}</span>
+              </Button>
+            )}
             {/* Device preview toggle — desktop edits inline; tablet/mobile show
                 the draft in a real-viewport iframe (read-only). */}
             <div className="hidden shrink-0 items-center gap-0.5 rounded-[12px] bg-sunken p-1 md:flex">
@@ -438,7 +495,17 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       {/* Draft preview + desktop inspector. The preview column: «Компʼютер» =
           inline editable render; tablet/mobile = real-viewport iframe of the
           frame route (read-only responsiveness check). */}
-      <main className="mx-auto flex max-w-[1440px] items-start gap-5 px-2 py-4 sm:px-4 sm:py-6">
+      <main className="mx-auto flex max-w-[1600px] items-start gap-5 px-2 py-4 sm:px-4 sm:py-6">
+        {/* Agent chat — docked left on desktop, full-screen overlay on mobile. */}
+        {chatOpen && isDesktop && (
+          <aside className="sticky top-24 hidden w-[340px] shrink-0 lg:block">
+            <Card className="flex h-[calc(100vh-8rem)] flex-col overflow-hidden">{chatPanel}</Card>
+          </aside>
+        )}
+        {chatOpen && !isDesktop && (
+          <div className="fixed inset-0 z-40 flex flex-col bg-surface">{chatPanel}</div>
+        )}
+
         <div className="min-w-0 flex-1">
           {device === "desktop" ? (
             <div

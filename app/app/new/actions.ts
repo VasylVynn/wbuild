@@ -68,6 +68,7 @@ export async function finalizeAction(
   facts: BusinessFacts,
   verticalId?: string,
   media?: SiteMedia,
+  conversationId?: string,
 ): Promise<FinalizeResult> {
   // Re-validate media server-side (client input is untrusted): bad/foreign URLs
   // or an over-long list collapse to no media rather than reaching the site.
@@ -103,13 +104,22 @@ export async function finalizeAction(
 
     // Ownership (§3.1, journal #43): the creator is signed in by the gate above,
     // so the tenant gets its owner immediately. (Auth off = open mode, no owner.)
-    if (ownerId) {
-      const sb = getServiceClient();
-      const { data: t } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
-      if (t) {
+    // Memory (P3): the onboarding conversation was created against a placeholder
+    // tenant (host=null) — re-link it to the PUBLISHED tenant here, otherwise the
+    // transcript is unreachable from the editor agent (validator must-fix #1).
+    const sb = getServiceClient();
+    const { data: t } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
+    if (t) {
+      if (ownerId) {
         await sb
           .from("tenant_members")
           .insert({ tenant_id: t.id, user_id: ownerId, role: "owner" });
+      }
+      if (conversationId) {
+        await sb
+          .from("conversations")
+          .update({ tenant_id: t.id })
+          .eq("id", conversationId);
       }
     }
 

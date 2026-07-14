@@ -5,6 +5,7 @@ import { requireMember } from "@/lib/tenant/membership";
 import { revalidateTenant } from "@/lib/cache";
 import { parseBlockProps, type StoredBlock } from "@/lib/blocks/schema";
 import { blockPlacementSchema } from "@/lib/blocks/schema";
+import { getBlockFields } from "@/lib/blocks/fields";
 import { themePresets, resolveTheme, type ThemePresetId } from "@/lib/theme/presets";
 import { getVertical } from "@/lib/verticals/registry";
 import { generateSite } from "@/lib/ai/generate";
@@ -69,10 +70,47 @@ export async function getEditorData(host: string): Promise<EditorData | null> {
   };
 }
 
+/**
+ * §4.8 invariant, now enforced on the DRAFT-SAVE path too (adversarial-review
+ * must-fix): any image field whose URL is not our own Storage gets stripped.
+ * Generation already grounds images; this closes the editor/agent write path,
+ * where props land in the draft without a human-reviewed form in between.
+ */
+function allowedImageUrl(url: string): boolean {
+  if (!url) return true; // empty = "no image", always fine
+  const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return Boolean(supabase && url.startsWith(`${supabase}/storage/`));
+}
+
+function stripForeignImages(type: StoredBlock["type"], props: unknown): unknown {
+  if (!props || typeof props !== "object") return props;
+  const fields = getBlockFields(type);
+  const out = { ...(props as Record<string, unknown>) };
+  for (const f of fields) {
+    if (f.kind === "image") {
+      const v = out[f.key];
+      if (typeof v === "string" && !allowedImageUrl(v)) out[f.key] = "";
+    } else if (f.kind === "array" && Array.isArray(out[f.key])) {
+      out[f.key] = (out[f.key] as Record<string, unknown>[]).map((item) => {
+        if (!item || typeof item !== "object") return item;
+        const next = { ...item };
+        for (const inner of f.itemFields) {
+          if (inner.kind === "image") {
+            const v = next[inner.key];
+            if (typeof v === "string" && !allowedImageUrl(v)) next[inner.key] = "";
+          }
+        }
+        return next;
+      });
+    }
+  }
+  return out;
+}
+
 /** Validate each block against the registry; throw on structural garbage. */
 function validateBlocks(blocks: StoredBlock[]): StoredBlock[] {
   return blocks.map((b) => {
-    const parsed = parseBlockProps(b.type, b.props);
+    const parsed = parseBlockProps(b.type, stripForeignImages(b.type, b.props));
     if (!parsed.ok) {
       throw new Error(`Invalid block "${b.type}": ${"message" in parsed.error ? parsed.error.message : "schema mismatch"}`);
     }
