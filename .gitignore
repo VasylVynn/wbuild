@@ -43,3 +43,10 @@ next-env.d.ts
 
 # Template-mining sources — local only (MIT code, undocumented photo provenance, 122MB)
 template_sources/
+
+# Local captures / secrets — NEVER commit (roxybo.com.ua.har holds real auth cookies)
+roxybo*
+*.har
+
+# Playwright MCP artifacts
+.playwright-mcp/

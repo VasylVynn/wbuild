@@ -5,18 +5,20 @@ import StudioWrapper from "./StudioWrapper";
 import HeroSection from "./HeroSection";
 import FeaturesSection from "./FeaturesSection";
 import HowItWorksSection from "./HowItWorksSection";
-import PricingSection from "./PricingSection";
-import AboutSection from "./AboutSection";
+import StudioTeam from "./StudioTeam";
+import StudioGallery from "./StudioGallery";
 import StatsSection from "./StatsSection";
-import FAQSection from "./FAQSection";
-import CTASection from "./CTASection";
+import StudioBanner from "./StudioBanner";
 import LeadFormSection from "./LeadFormSection";
 import ContactsSection from "./ContactsSection";
+import StudioHeroAlt from "./StudioHeroAlt";
+import StudioHeroAlt2 from "./StudioHeroAlt2";
+import StudioFeaturesAlt from "./StudioFeaturesAlt";
 
 /**
  * A single section of the studio template.
  *  - `block`     — which of our block schemas feeds it (many sections may share
- *                  one block, e.g. features/howitworks/pricing all read `services`).
+ *                  one block, e.g. features/howitworks both read `services`).
  *  - `label`     — Ukrainian name, for the editor/registry.
  *  - `description` — one Ukrainian line, guidance for the generation model.
  *  - `component` — renders the section from `{ data }` (already-validated block
@@ -28,6 +30,13 @@ export interface TemplateSectionDef {
   label: string;
   description: string;
   component: ComponentType<{ data: unknown; extra?: unknown }>;
+  /**
+   * Alternate LAYOUTS of this same section (same block content, same design
+   * language, different arrangement). A block carries a `variant` id chosen by
+   * the MODEL per section (validated in code; falls back to `component` when
+   * absent/unknown). Keeps every site visually distinct without new templates.
+   */
+  variants?: Record<string, ComponentType<{ data: unknown; extra?: unknown }>>;
 }
 
 export const studioSections: Record<string, TemplateSectionDef> = {
@@ -37,12 +46,14 @@ export const studioSections: Record<string, TemplateSectionDef> = {
     description:
       "Великий заголовок на темному тлі з градієнтними плямами, підзаголовок і до двох кнопок дії; опційний ряд показників.",
     component: HeroSection,
+    variants: { split: StudioHeroAlt, minimal: StudioHeroAlt2 },
   },
   features: {
     block: "services",
     label: "Переваги",
     description: "Сітка карток з іконками — ключові переваги чи послуги, без цін.",
     component: FeaturesSection,
+    variants: { list: StudioFeaturesAlt },
   },
   howitworks: {
     block: "services",
@@ -50,19 +61,11 @@ export const studioSections: Record<string, TemplateSectionDef> = {
     description: "Пронумеровані кроки процесу (01, 02, 03…); ціни ігноруються.",
     component: HowItWorksSection,
   },
-  pricing: {
-    block: "services",
-    label: "Тарифи",
-    description:
-      "Картки з цінами; бейдж виділяє популярний тариф; рядки опису (через \\n) стають чеклістом.",
-    component: PricingSection,
-  },
-  about: {
-    block: "richText",
-    label: "Про нас",
-    description:
-      "Заголовок і текст історії; рядки, що починаються з «- », стають списком принципів поруч.",
-    component: AboutSection,
+  gallery: {
+    block: "gallery",
+    label: "Роботи",
+    description: "Сітка зображень робіт із підписом (назва/категорія) на наведенні.",
+    component: StudioGallery,
   },
   stats: {
     block: "stats",
@@ -70,17 +73,19 @@ export const studioSections: Record<string, TemplateSectionDef> = {
     description: "Смуга з числовими показниками та підписами (лише реальні цифри).",
     component: StatsSection,
   },
-  faq: {
-    block: "faq",
-    label: "Питання та відповіді",
-    description: "Акордеон із одним відкритим елементом і плавною анімацією.",
-    component: FAQSection,
+  team: {
+    block: "team",
+    label: "Команда",
+    description:
+      "Картки команди — фото або ініціали, ім'я, роль (+ короткий опис). Лише реальні люди бізнесу.",
+    component: StudioTeam,
   },
-  cta: {
+  banner: {
     block: "cta",
-    label: "Заклик до дії",
-    description: "Фінальний блок із заголовком, підзаголовком і кнопкою дії.",
-    component: CTASection,
+    label: "Смуга-твердження",
+    description:
+      "Повноширинна смуга з великим твердженням/гаслом і підзаголовком — без кнопки, розриває ритм сторінки.",
+    component: StudioBanner,
   },
   lead_form: {
     block: "lead_form",
@@ -107,17 +112,16 @@ export const studioMeta: {
   id: "studio",
   label: "«Студія — темний преміум»",
   description:
-    "Темний преміальний одноекранник із фіолетовими акцентами, тонкими анімаціями та мінімалістичними картками — для послуг, що продають експертність (юристи, автосервіс, студії).",
+    "Темний преміум-односторінник: глибокий майже-чорний фон, фіолетові акценти, чіткі мінімалістичні картки, тонкі анімації — технологічний, впевнений, дорогий настрій. Sans-типографіка.",
   verticalIds: ["generic", "lawyer", "autoservice"],
   order: [
     "hero",
     "features",
     "howitworks",
-    "pricing",
-    "about",
+    "gallery",
     "stats",
-    "faq",
-    "cta",
+    "team",
+    "banner",
     "lead_form",
     "contacts",
   ],

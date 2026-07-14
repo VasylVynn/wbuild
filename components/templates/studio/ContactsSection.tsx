@@ -36,7 +36,7 @@ export default function ContactsSection({ data }: { data: unknown }) {
   if (email) facts.push({ label: "Email", value: email });
 
   return (
-    <section className="py-20 md:py-28" aria-labelledby={title ? "contacts-title" : undefined}>
+    <section className="py-12 md:py-16" aria-labelledby={title ? "contacts-title" : undefined}>
       <div className="container mx-auto px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: 16 }}

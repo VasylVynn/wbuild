@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { parseBlockProps, type StoredBlock } from "@/lib/blocks/schema";
-import { getTemplate } from "@/lib/templates/registry";
+import { getTemplate, type TemplateBrand } from "@/lib/templates/registry";
 import UnknownBlock from "@/components/blocks/UnknownBlock";
 
 /**
@@ -25,9 +25,11 @@ import UnknownBlock from "@/components/blocks/UnknownBlock";
 export function PageRenderer({
   blocks,
   templateId,
+  brand,
 }: {
   blocks: StoredBlock[];
   templateId?: string;
+  brand?: TemplateBrand;
 }) {
   const template = getTemplate(templateId);
 
@@ -38,11 +40,23 @@ export function PageRenderer({
       if (!parsed.ok) {
         return <UnknownBlock key={i} type={block.type} />;
       }
-      const id = block.anchor?.replace(/^#/, "");
+      // On a template site the section id IS the template section id (so the
+      // template's nav anchors like #features/#pricing resolve); pack/legacy
+      // sites key on the block's own anchor.
+      const id = template && block.section ? block.section : block.anchor?.replace(/^#/, "");
 
       // Template path: render via the template's section component when one
       // exists for this block; otherwise fall through to the default registry.
-      const templateComponent = template?.sections[block.section ?? block.type]?.component;
+      // A block may carry a `variant` id → an alternate layout of that section;
+      // unknown/absent variants fall back to the section's default component.
+      const sectionDef = template?.sections[block.section ?? block.type];
+      // Only render through the template section when the stored block type
+      // matches the section's block schema — otherwise (corrupt/legacy data)
+      // wrong props would reach the wrong component. Fall through to default.
+      const matched = sectionDef?.block === parsed.type ? sectionDef : undefined;
+      const templateComponent =
+        (block.variant ? matched?.variants?.[block.variant] : undefined) ??
+        matched?.component;
       if (templateComponent) {
         const TemplateComponent = templateComponent as ComponentType<{ data: unknown }>;
         return (
@@ -52,10 +66,12 @@ export function PageRenderer({
         );
       }
 
-      const Component = blockRegistry[parsed.type] as ComponentType<{
-        data: unknown;
-        skin?: string;
-      }>;
+      const Component = blockRegistry[parsed.type] as
+        | ComponentType<{ data: unknown; skin?: string }>
+        | undefined;
+      // Template-only block types have no default component — off a template
+      // (pack/legacy path) they can't render, so fall back rather than crash.
+      if (!Component) return <UnknownBlock key={i} type={block.type} />;
       return (
         <section key={i} id={id}>
           <Component data={parsed.props} skin={block.skin} />
@@ -65,7 +81,7 @@ export function PageRenderer({
 
   if (template) {
     const Wrapper = template.wrapper;
-    return <Wrapper>{sections}</Wrapper>;
+    return <Wrapper brand={brand}>{sections}</Wrapper>;
   }
   return <>{sections}</>;
 }

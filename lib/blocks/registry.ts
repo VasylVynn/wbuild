@@ -17,10 +17,14 @@ import Contacts from "@/components/blocks/Contacts";
  * later the editing form and the AI block description — they cannot drift
  * (brief §4.1). Each component takes `{ data }` typed to its own props, so a
  * component/schema mismatch is a compile error.
+ *
+ * Partial: newer TEMPLATE-only block types (team/timeline/marquee/publications)
+ * have no default/pack component — they render ONLY through a template's section
+ * component. The render path falls back to UnknownBlock if one is ever missing.
  */
-export const blockRegistry: {
+export const blockRegistry: Partial<{
   [K in BlockType]: ComponentType<{ data: BlockProps[K]; skin?: string }>;
-} = {
+}> = {
   hero: Hero,
   richText: RichText,
   switchback: Switchback,

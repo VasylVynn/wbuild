@@ -17,7 +17,7 @@ export default function FAQSection({ data }: { data: unknown }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section className="py-20 md:py-28" aria-labelledby="faq-title">
+    <section className="py-12 md:py-16" aria-labelledby="faq-title">
       <div className="container mx-auto px-4 sm:px-6">
         {d.title && (
           <motion.div
@@ -28,6 +28,7 @@ export default function FAQSection({ data }: { data: unknown }) {
             className="text-center mb-16"
           >
             <h2 id="faq-title" className="section-title">{d.title}</h2>
+            {/* FIDELITY-TODO: needs schema field faq.subtitle — source renders a section-subtitle <p> here */}
           </motion.div>
         )}
 

@@ -22,6 +22,21 @@ export default async function TenantLayout({
   const [tenant, nav] = await Promise.all([getTenantByHost(host), getNav(host)]);
   if (!tenant) notFound();
 
+  // A TEMPLATE site brings its OWN chrome (Nav + Footer) and palette via the
+  // template wrapper inside PageRenderer. The shell must NOT add its default
+  // header/footer or theme-vars background, or they'd DUPLICATE the template's
+  // and clash. Pack/legacy sites keep the shared shell.
+  const isTemplate = Boolean(tenant.brand.templateId);
+
+  if (isTemplate) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <main className="flex-1">{children}</main>
+        <Beacon />
+      </div>
+    );
+  }
+
   return (
     <div
       style={{

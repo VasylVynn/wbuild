@@ -30,6 +30,9 @@ export interface EditorData {
   // Active design pack id (undefined for sites generated before packs shipped) —
   // the editor's pack picker reads this to show the current selection.
   packId?: string;
+  // Active site-template id (template sites): the preview renders through the
+  // template's OWN section components + wrapper, matching the published site.
+  templateId?: string;
 }
 
 export async function getEditorData(host: string): Promise<EditorData | null> {
@@ -62,6 +65,7 @@ export async function getEditorData(host: string): Promise<EditorData | null> {
     blocks: ((p?.draft_content as { blocks?: StoredBlock[] } | null)?.blocks ?? []) as StoredBlock[],
     telegramConnected: Boolean(t.telegram_chat_id),
     packId: (t.brand as { packId?: string } | null)?.packId,
+    templateId: (t.brand as { templateId?: string } | null)?.templateId,
   };
 }
 
@@ -82,6 +86,9 @@ function validateBlocks(blocks: StoredBlock[]): StoredBlock[] {
       // its look on the first edit.
       skin: b.skin,
       section: b.section,
+      // `variant` (the model-chosen layout) must round-trip too, or the first
+      // draft save silently reverts every section to its default layout.
+      variant: b.variant,
       schemaVersion: b.schemaVersion,
     });
     return { type: parsed.type, props: parsed.props, ...placement } as StoredBlock;

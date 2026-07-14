@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Templates that ship a dark theme (salon, nextly, …) use Tailwind `dark:`
+   variants; bind them to a template wrapper's own toggle (data-theme="dark")
+   rather than the OS. Product UI never uses `dark:`, and templates whose dark is
+   var-based (ferri) don't use `dark:` utilities, so matching any [data-theme]
+   subtree is safe. */
+@custom-variant dark (&:is([data-theme="dark"] *));
+
 /*
  * 3minsite product design system — direction B «Небо і мед» (design/CLAUDE.md).
  * These @theme tokens style the PRODUCT UI (dashboard, chat, editor chrome).
@@ -43,6 +50,64 @@
   --radius-sheet: 28px;
   /* shadow */
   --shadow-card: 0 1px 2px rgba(23, 36, 47, 0.05), 0 10px 30px rgba(23, 36, 47, 0.07);
+
+  /* ── Ferri template palette (dark defaults) ──────────────────────────────
+     Generates the navy/gold/cream/txt utilities the ported ferri sections use
+     (e.g. text-gold-500, bg-navy-800/30). Applied ONLY inside the `.tpl-ferri`
+     subtree; the light theme overrides these same vars on
+     `.tpl-ferri[data-theme="light"]` (components/templates/ferri/ferri.css), so
+     nothing leaks into the product UI. */
+  --color-navy-950: #070f18;
+  --color-navy-900: #0b1d2e;
+  --color-navy-800: #112840;
+  --color-navy-700: #183552;
+  --color-navy-600: #1f4264;
+  --color-gold-500: #b8965a;
+  --color-gold-400: #d4b27a;
+  --color-gold-300: #e2c99a;
+  --color-gold-600: #8a6f3e;
+  --color-cream-100: #f5f0e8;
+  --color-cream-200: #e8e0d0;
+  --color-cream-300: #d5cfc3;
+  --color-txt: #c8c4bc;
+  --color-txt-muted: #8a8680;
+
+  /* ── Salon template palette (LIGHT defaults; the dark theme overrides these
+     same vars on .tpl-salon[data-theme="dark"] below). shadcn-style tokens
+     generate the bg-background / text-accent / border-border utilities the
+     ported salon sections use — confined to the `.tpl-salon` subtree. ── */
+  --color-background: oklch(0.985 0 0);
+  --color-foreground: oklch(0.12 0 0);
+  --color-card: oklch(0.985 0 0);
+  --color-card-foreground: oklch(0.12 0 0);
+  --color-popover: oklch(0.985 0 0);
+  --color-popover-foreground: oklch(0.12 0 0);
+  --color-primary: oklch(0.108 0 0);
+  --color-primary-foreground: oklch(0.985 0 0);
+  --color-secondary: oklch(0.268 0 0);
+  --color-secondary-foreground: oklch(0.985 0 0);
+  --color-muted: oklch(0.968 0 0);
+  --color-muted-foreground: oklch(0.556 0 0);
+  --color-accent: oklch(0.558 0.179 84.76);
+  --color-accent-foreground: oklch(0.12 0 0);
+  --color-border: oklch(0.922 0 0);
+  --color-input: oklch(0.922 0 0);
+  --color-ring: oklch(0.558 0.179 84.76);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-beauty-pink: oklch(0.75 0.25 339.02);
+  --color-beauty-purple: oklch(0.7 0.28 252.97);
+  --color-gold: oklch(0.65 0.2 84.76);
+  --color-gold-light: oklch(0.85 0.15 88.51);
+  --color-sage: oklch(0.65 0.08 152.97);
+  --color-blush: oklch(0.7 0.18 338.5);
+  --color-platinum: oklch(0.95 0.02 92.3);
+  --color-navy: oklch(0.25 0.06 255.97);
+  --font-display: var(--font-playfair), "Playfair Display", Georgia, serif;
+
+  /* Portfolio template: only the extra token — background/primary/card/etc. reuse
+     the salon token NAMES above; the portfolio scopes its own VALUES on
+     `.tpl-portfolio` (surface reuses the product token, re-scoped there). */
+  --color-highlight: #f5a623;
 }
 
 /* Force light rendering everywhere — never adapt to the OS dark mode. */
@@ -54,4 +119,321 @@ body {
   /* Product base: Manrope 17px. Tenant shells override font/colors inline. */
   font-family: var(--font-body, var(--font-ui));
   font-size: 17px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Salon template ("luxe-salon") — scoped design system. Colours flip between
+ * the light (default) and dark themes via data-theme on the `.tpl-salon`
+ * wrapper; the token utilities are generated from the @theme block above.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.tpl-salon {
+  position: relative;
+  min-height: 100vh;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-poppins), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.6;
+  color-scheme: light;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.tpl-salon[data-theme="dark"] {
+  --color-background: oklch(0.145 0 0);
+  --color-foreground: oklch(0.985 0 0);
+  --color-card: oklch(0.205 0 0);
+  --color-card-foreground: oklch(0.985 0 0);
+  --color-popover: oklch(0.205 0 0);
+  --color-popover-foreground: oklch(0.985 0 0);
+  --color-primary: oklch(0.922 0 0);
+  --color-primary-foreground: oklch(0.205 0 0);
+  --color-secondary: oklch(0.269 0 0);
+  --color-muted: oklch(0.269 0 0);
+  --color-muted-foreground: oklch(0.75 0 0);
+  --color-accent: oklch(0.7 0.17 84.76);
+  --color-accent-foreground: oklch(0.12 0 0);
+  --color-border: oklch(1 0 0 / 10%);
+  --color-input: oklch(1 0 0 / 15%);
+  --color-ring: oklch(0.7 0.17 84.76);
+  color-scheme: dark;
+}
+
+.tpl-salon .font-display { font-family: var(--font-display); }
+.tpl-salon .font-body { font-family: var(--font-poppins), ui-sans-serif, system-ui, sans-serif; }
+.tpl-salon ::selection {
+  background: color-mix(in oklch, var(--color-accent) 30%, transparent);
+  color: var(--color-foreground);
+}
+
+.tpl-salon .section-container { @apply container mx-auto px-4 sm:px-6 lg:px-8 xl:px-12; }
+.tpl-salon .section-header { @apply text-center mb-16 space-y-5 max-w-4xl mx-auto; }
+.tpl-salon .section-tag { @apply text-accent font-medium text-sm md:text-base uppercase tracking-[0.3em] mb-4; }
+.tpl-salon .section-title { @apply font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-[1.1]; }
+.tpl-salon .section-description { @apply text-muted-foreground text-lg md:text-xl max-w-3xl mx-auto leading-relaxed font-light; }
+.tpl-salon .asym-grid { @apply grid grid-cols-1 lg:grid-cols-12 gap-8; }
+.tpl-salon .asym-left { @apply lg:col-span-5; }
+.tpl-salon .asym-right { @apply lg:col-span-7 lg:ml-auto; }
+.tpl-salon .space-y-elegant { @apply space-y-12 md:space-y-16; }
+
+.tpl-salon .text-gradient-gold { @apply bg-gradient-to-r from-accent via-gold-light to-beauty-pink bg-clip-text text-transparent; }
+.tpl-salon .text-gradient-primary { @apply bg-gradient-to-r from-foreground via-accent to-beauty-purple bg-clip-text text-transparent; }
+.tpl-salon .text-gradient-aurora { @apply bg-gradient-to-r from-accent via-beauty-pink to-blush bg-clip-text text-transparent; }
+
+.tpl-salon .btn-gradient { @apply bg-gradient-to-r from-accent to-beauty-pink transition-all duration-500; }
+.tpl-salon .btn-gradient-gold { @apply bg-gradient-to-r from-accent to-gold-light transition-all duration-500; }
+.tpl-salon .btn-gold-luxe {
+  @apply relative overflow-hidden bg-gradient-to-r from-accent via-gold-light to-accent text-white transition-all duration-500;
+  background-size: 200% auto;
+  box-shadow: 0 8px 32px rgba(202, 138, 4, 0.25);
+}
+.tpl-salon .btn-gold-luxe:hover { background-position: right center; }
+
+.tpl-salon .glass {
+  @apply backdrop-blur-xl border border-border shadow-lg;
+  background: color-mix(in oklch, var(--color-background) 80%, transparent);
+}
+.tpl-salon .glass-card {
+  @apply backdrop-blur-2xl border border-border shadow-xl rounded-3xl;
+  background: color-mix(in oklch, var(--color-background) 60%, transparent);
+}
+.tpl-salon .liquid-glass {
+  @apply backdrop-blur-2xl border;
+  background: color-mix(in oklch, var(--color-background) 60%, transparent);
+  border-color: color-mix(in oklch, var(--color-foreground) 12%, transparent);
+  transition: all 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tpl-salon .liquid-glass:hover {
+  transform: translateY(-0.75rem);
+  border-color: color-mix(in oklch, var(--color-accent) 30%, transparent);
+  box-shadow: 0 40px 80px -20px rgba(202, 138, 4, 0.15);
+}
+.tpl-salon .card-glass {
+  @apply backdrop-blur-2xl border border-border rounded-3xl p-8 transition-all duration-500;
+  background: linear-gradient(to bottom right, color-mix(in oklch, var(--color-background) 20%, transparent), color-mix(in oklch, var(--color-background) 5%, transparent));
+}
+.tpl-salon .card-modern {
+  @apply backdrop-blur-2xl border border-border p-10 cursor-pointer overflow-hidden relative;
+  border-radius: 3rem;
+  background: color-mix(in oklch, var(--color-background) 60%, transparent);
+  transition: transform 0.5s, box-shadow 0.5s;
+}
+.tpl-salon .card-modern:hover {
+  transform: translateY(-0.5rem);
+  box-shadow: 0 40px 80px -20px rgba(202, 138, 4, 0.15);
+}
+
+.tpl-salon .shadow-gold { box-shadow: 0 8px 32px 0 rgba(202, 138, 4, 0.25); }
+.tpl-salon .shadow-pink { box-shadow: 0 8px 32px 0 rgba(236, 72, 153, 0.25); }
+.tpl-salon .shadow-aurora { box-shadow: 0 8px 32px 0 rgba(202, 138, 4, 0.15), 0 16px 64px 0 rgba(236, 72, 153, 0.1); }
+.tpl-salon .shadow-elegant { box-shadow: 0 0 1px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 24px rgba(0, 0, 0, 0.05); }
+
+.tpl-salon .shape-organic { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+.tpl-salon .shape-blob { border-radius: 48% 52% 45% 55%; }
+
+@keyframes salonFloat { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
+@keyframes salonPulseSoft { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
+@keyframes salonGradientX { 0%, 100% { background-position: left center; } 50% { background-position: right center; } }
+@keyframes salonParticleFloat { 0% { transform: translateY(0) rotate(0deg); opacity: 0; } 10%, 90% { opacity: 1; } 100% { transform: translateY(-100vh) rotate(360deg); opacity: 0; } }
+.tpl-salon .animate-float { animation: salonFloat 6s ease-in-out infinite; }
+.tpl-salon .animate-float-delayed { animation: salonFloat 8s ease-in-out infinite 2s; }
+.tpl-salon .animate-spin-slow { animation: spin 3s linear infinite; }
+.tpl-salon .animate-pulse-soft { animation: salonPulseSoft 4s ease-in-out infinite; }
+.tpl-salon .animate-gradient-x { animation: salonGradientX 15s ease infinite; }
+.tpl-salon .animate-particle-float { animation: salonParticleFloat 12s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tpl-salon .animate-float,
+  .tpl-salon .animate-float-delayed,
+  .tpl-salon .animate-spin-slow,
+  .tpl-salon .animate-pulse-soft,
+  .tpl-salon .animate-gradient-x,
+  .tpl-salon .animate-particle-float { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Portfolio template ("portfolio-ui-6") — scoped design system. Single DARK
+ * teal theme. Reuses the shadcn token NAMES (values scoped below) + highlight/
+ * surface. Fonts (Inter body + Playfair serif accent) injected by the wrapper.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.tpl-portfolio {
+  --color-background: #0f1418;
+  --color-foreground: #f0f2f5;
+  --color-card: #141a1f;
+  --color-primary: #20b2a6;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #1f2830;
+  --color-secondary-foreground: #20b2a6;
+  --color-muted: #252e37;
+  --color-muted-foreground: #7a8491;
+  --color-border: #242b32;
+  --color-highlight: #f5a623;
+  --color-surface: #1a2329;
+
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-portfolio-sans), "Inter", ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.6;
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tpl-portfolio .font-serif {
+  font-family: var(--font-portfolio-serif), "Playfair Display", Georgia, serif;
+}
+.tpl-portfolio ::selection {
+  background: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  color: #fff;
+}
+
+/* ── glass / glow ── */
+.tpl-portfolio .glass {
+  background-color: color-mix(in srgb, var(--color-surface) 50%, transparent);
+  backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+}
+.tpl-portfolio .glass-strong {
+  background-color: color-mix(in srgb, var(--color-surface) 80%, transparent);
+  backdrop-filter: blur(24px);
+  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+.tpl-portfolio .glow-text {
+  text-shadow: 0 0 30px color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
+.tpl-portfolio .glow-border {
+  box-shadow: 0 0 20px color-mix(in srgb, var(--color-primary) 20%, transparent),
+    inset 0 0 20px color-mix(in srgb, var(--color-primary) 5%, transparent);
+}
+.tpl-portfolio .timeline-glow {
+  box-shadow: 0 0 40px color-mix(in srgb, var(--color-primary) 35%, transparent),
+    0 0 80px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+/* ── animations ── */
+@keyframes portfolioFadeIn {
+  from { opacity: 0; transform: translateY(20px); filter: blur(10px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes portfolioFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes portfolioMarquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes portfolioDrift {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(20px, -30px); }
+  50% { transform: translate(-15px, -20px); }
+  75% { transform: translate(30px, 10px); }
+}
+.tpl-portfolio .animate-fade-in { animation: portfolioFadeIn 0.8s ease-out both; }
+.tpl-portfolio .animate-float { animation: portfolioFloat 4s ease-in-out infinite; }
+.tpl-portfolio .animate-marquee { animation: portfolioMarquee 30s linear infinite; }
+.tpl-portfolio .animation-delay-100 { animation-delay: 100ms; }
+.tpl-portfolio .animation-delay-200 { animation-delay: 200ms; }
+.tpl-portfolio .animation-delay-300 { animation-delay: 300ms; }
+.tpl-portfolio .animation-delay-400 { animation-delay: 400ms; }
+.tpl-portfolio .animation-delay-500 { animation-delay: 500ms; }
+.tpl-portfolio .animation-delay-600 { animation-delay: 600ms; }
+.tpl-portfolio .animation-delay-800 { animation-delay: 800ms; }
+
+/* ── animated-border button ── */
+@keyframes portfolioAnimatedBorder {
+  0% { stroke-dashoffset: 400; }
+  100% { stroke-dashoffset: -550; }
+}
+.tpl-portfolio .group:hover .animated-border-path {
+  animation: portfolioAnimatedBorder 1.5s linear infinite;
+}
+.tpl-portfolio .animated-border:hover {
+  background-color: color-mix(in srgb, #26c4b8 15%, transparent);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 0 20px color-mix(in srgb, #26c4b8 20%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tpl-portfolio .animate-fade-in,
+  .tpl-portfolio .animate-float,
+  .tpl-portfolio .animate-marquee { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * AI-SaaS template ("ai-saas-landing") — light soft-pastel SaaS. The ported
+ * sections carry their OWN inline hex colours (lavender/coral/peach/blue), so
+ * the scope only binds the Quicksand typeface + a soft pulse animation.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.tpl-aisaas {
+  position: relative;
+  min-height: 100vh;
+  background: #ffffff;
+  color: #2f4550;
+  font-family: var(--font-aisaas), "Quicksand", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+@keyframes aisaasPulseLight {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.tpl-aisaas .animate-pulse-light { animation: aisaasPulseLight 2.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .tpl-aisaas .animate-pulse-light { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Nextly template ("nextly") — clean indigo marketing, light + dark. Sections
+ * use STANDARD Tailwind colours (indigo/gray/white) + `dark:` variants (bound to
+ * data-theme above), so the scope only sets the base surface + Inter typeface.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.tpl-nextly {
+  position: relative;
+  min-height: 100vh;
+  background: #ffffff;
+  color: #1f2937;
+  font-family: var(--font-nextly), "Inter", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.tpl-nextly[data-theme="dark"] {
+  background: #111827;
+  color: #e5e7eb;
+  color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * React-2021 template ("react2021") — energetic coral landing (Rubik, white
+ * canvas, coral #ec4755 accent, dark-ink #1a2e35 headings). Ported from
+ * template_sources/react-landing-page-template-2021. Colours are INLINE HEX in
+ * the sections (the source's palette names primary/background/border are too
+ * generic to promote to global @theme tokens), so the scope only sets the base
+ * surface + Rubik typeface + a CSS approximation of the source's animated
+ * <Canvas> wave (a slow horizontal drift on a wide repeating wave SVG). Single
+ * light theme → a plain server wrapper.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.tpl-react2021 {
+  position: relative;
+  min-height: 100vh;
+  background: #ffffff;
+  color: #1a2e35;
+  font-family: var(--font-react2021), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+@keyframes react2021-wave-drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.tpl-react2021 .animate-wave-drift {
+  animation: react2021-wave-drift 14s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tpl-react2021 .animate-wave-drift { animation: none; }
 }

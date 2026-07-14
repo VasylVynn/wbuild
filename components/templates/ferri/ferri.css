@@ -1,0 +1,95 @@
+/*
+ * Ferri template — port of template_sources/ferri-schoedl-main's design system,
+ * namespaced under `.tpl-ferri`. Colours are Tailwind @theme tokens
+ * (navy/gold/cream/txt — declared in app/globals.css so the utilities generate);
+ * here we (1) bind the base look, and (2) ship BOTH themes: dark is the default,
+ * and [data-theme="light"] overrides every colour var for the subtree only.
+ *
+ * The serif (Cormorant Garamond) is injected by the wrapper via next/font as
+ * `--font-cormorant`; sections use `font-[family-name:var(--font-cormorant)]`.
+ */
+
+.tpl-ferri {
+  /* dark theme (default) — mirrors the @theme defaults, restated so the
+     light override below has something to win against inside this subtree. */
+  --color-navy-950: #070f18;
+  --color-navy-900: #0b1d2e;
+  --color-navy-800: #112840;
+  --color-navy-700: #183552;
+  --color-navy-600: #1f4264;
+  --color-gold-500: #b8965a;
+  --color-gold-400: #d4b27a;
+  --color-gold-300: #e2c99a;
+  --color-gold-600: #8a6f3e;
+  --color-cream-100: #f5f0e8;
+  --color-cream-200: #e8e0d0;
+  --color-cream-300: #d5cfc3;
+  --color-txt: #c8c4bc;
+  --color-txt-muted: #8a8680;
+
+  position: relative;
+  min-height: 100vh;
+  background-color: var(--color-navy-950);
+  color: var(--color-txt);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* light theme — every colour var flips; scoped to this subtree so it never
+   touches the product UI. Toggled by the wrapper setting data-theme="light". */
+.tpl-ferri[data-theme="light"] {
+  --color-navy-950: #f8f5f0;
+  --color-navy-900: #f0ebe3;
+  --color-navy-800: #e8e2d8;
+  --color-navy-700: #ddd6ca;
+  --color-navy-600: #d2cabe;
+  --color-gold-500: #7a5c2a;
+  --color-gold-400: #6b4f22;
+  --color-gold-300: #5c431c;
+  --color-gold-600: #96783e;
+  --color-cream-100: #1a1714;
+  --color-cream-200: #2e2a25;
+  --color-cream-300: #433e38;
+  --color-txt: #352f28;
+  --color-txt-muted: #5e574e;
+  color-scheme: light;
+}
+
+.tpl-ferri ::selection {
+  background-color: rgba(184, 150, 90, 0.3);
+  color: var(--color-cream-100);
+}
+.tpl-ferri[data-theme="light"] ::selection {
+  background-color: rgba(122, 92, 42, 0.2);
+  color: #1a1714;
+}
+
+/* Source custom utilities (@utility → scoped plain CSS). */
+.tpl-ferri .text-gold-gradient {
+  background: linear-gradient(
+    135deg,
+    var(--color-gold-400),
+    var(--color-gold-500),
+    var(--color-gold-600)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tpl-ferri :focus-visible {
+  outline: 2px solid var(--color-gold-500);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tpl-ferri {
+    scroll-behavior: auto;
+  }
+}

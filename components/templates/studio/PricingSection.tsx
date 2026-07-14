@@ -13,15 +13,15 @@ import type { BlockProps } from "@/lib/blocks/schema";
  * a checklist (matching the source's feature list). An item with a `badge`
  * gets the promoted treatment and the badge text becomes the pill.
  *
- * Fidelity delta: the source's per-card CTA button is dropped — our schema
- * carries no button label here and inventing one would break the "content from
- * props" rule.
+ * Fidelity delta: the source's per-card CTA linked to a per-plan buttonHref
+ * our schema doesn't carry; restored with a generic "Замовити" anchor to
+ * #contacts (see FIDELITY-TODO below) instead of inventing per-item copy.
  */
 export default function PricingSection({ data }: { data: unknown }) {
   const d = data as BlockProps["services"];
 
   return (
-    <section className="py-20 md:py-28" aria-labelledby="pricing-title">
+    <section className="py-12 md:py-16" aria-labelledby="pricing-title">
       <div className="container mx-auto px-4 sm:px-6">
         {d.title && (
           <motion.div
@@ -35,7 +35,7 @@ export default function PricingSection({ data }: { data: unknown }) {
           </motion.div>
         )}
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-6xl mx-auto" role="list" aria-label="Тарифи">
+        <div className="flex flex-wrap justify-center gap-4 max-w-6xl mx-auto" role="list" aria-label="Тарифи">
           {d.items.map((item, i) => {
             const promoted = Boolean(item.badge);
             const features = (item.description ?? "")
@@ -51,7 +51,7 @@ export default function PricingSection({ data }: { data: unknown }) {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-80px" }}
                 transition={{ delay: i * 0.1, duration: 0.6 }}
-                className={`relative rounded-lg p-6 ${
+                className={`relative rounded-lg p-6 w-full sm:w-[264px] ${
                   promoted
                     ? "bg-[var(--color-surface)] border-2 border-[var(--color-accent)]"
                     : "bg-[var(--color-surface)] border border-[var(--color-border)]"
@@ -86,6 +86,18 @@ export default function PricingSection({ data }: { data: unknown }) {
                     ))}
                   </ul>
                 )}
+
+                {/* FIDELITY-TODO: needs schema field services.items[].buttonLabel / buttonHref — fallback used */}
+                <a
+                  href="#contacts"
+                  className={`block w-full py-3 rounded-md font-medium transition-all text-center text-sm ${
+                    promoted
+                      ? "btn-gradient"
+                      : "bg-white/5 text-white hover:bg-white/10 border border-[var(--color-border)]"
+                  }`}
+                >
+                  Замовити
+                </a>
               </motion.article>
             );
           })}

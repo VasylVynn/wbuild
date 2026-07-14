@@ -41,7 +41,7 @@ export default function LeadFormSection({ data }: { data: unknown }) {
     "w-full rounded-md bg-white/[0.03] border border-[var(--color-border)] px-4 py-3 text-sm text-white placeholder-zinc-500 transition-colors focus:outline-none focus:border-[var(--color-accent)]";
 
   return (
-    <section className="py-20 md:py-28" aria-labelledby="lead-form-title">
+    <section className="py-12 md:py-16" aria-labelledby="lead-form-title">
       <div className="container mx-auto px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: 16 }}

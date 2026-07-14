@@ -24,6 +24,15 @@ const assetUrl = z.string();
 export const heroSchema = z.object({
   eyebrow: z.string().optional(),
   title: z.string().min(1),
+  // Optional second-colour accent phrase shown after the title on its own line
+  // (the studio template's signature two-tone violet headline). Skins that don't
+  // use it simply ignore it.
+  titleAccent: z
+    .string()
+    .optional()
+    .describe(
+      "Короткий акцентний ХВІСТ заголовка (інший колір, окремий рядок). Це ПРОДОВЖЕННЯ title, НЕ повтор — не дублюй у ньому слова з title. Напр.: title «Ваш автомобіль у надійних», titleAccent «руках».",
+    ),
   subtitle: z.string().optional(),
   imageUrl: assetUrl.optional(),
   ctaLabel: z.string().optional(),
@@ -181,6 +190,57 @@ export const leadFormSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// team — real people of the business (staff / masters / experts). Template-only
+// section content. Photos are model-invented → grounded/stripped like gallery.
+// ---------------------------------------------------------------------------
+export const teamMemberSchema = z.object({
+  name: z.string().min(1),
+  role: z.string().optional(),
+  photo: assetUrl.optional(),
+  bio: z.string().optional(),
+});
+export const teamSchema = z.object({
+  title: z.string().optional(),
+  items: z.array(teamMemberSchema).min(1),
+});
+
+// ---------------------------------------------------------------------------
+// timeline — experience / journey / process: period + step (only real dates).
+// ---------------------------------------------------------------------------
+export const timelineItemSchema = z.object({
+  period: z.string().optional(),
+  title: z.string().min(1),
+  subtitle: z.string().optional(),
+  description: z.string().optional(),
+});
+export const timelineSchema = z.object({
+  title: z.string().optional(),
+  items: z.array(timelineItemSchema).min(1),
+});
+
+// ---------------------------------------------------------------------------
+// marquee — a scrolling strip of short keywords (skills / tech / directions).
+// ---------------------------------------------------------------------------
+export const marqueeSchema = z.object({
+  title: z.string().optional(),
+  items: z.array(z.string().min(1)).min(3),
+});
+
+// ---------------------------------------------------------------------------
+// publications — works / books / articles / cases: title + year + source.
+// ---------------------------------------------------------------------------
+export const publicationItemSchema = z.object({
+  title: z.string().min(1),
+  subtitle: z.string().optional(),
+  year: z.string().optional(),
+  source: z.string().optional(),
+});
+export const publicationsSchema = z.object({
+  title: z.string().optional(),
+  items: z.array(publicationItemSchema).min(1),
+});
+
+// ---------------------------------------------------------------------------
 // Registry of prop schemas, keyed by block type.
 // ---------------------------------------------------------------------------
 export const blockSchemas = {
@@ -195,6 +255,10 @@ export const blockSchemas = {
   cta: ctaSchema,
   lead_form: leadFormSchema,
   contacts: contactsSchema,
+  team: teamSchema,
+  timeline: timelineSchema,
+  marquee: marqueeSchema,
+  publications: publicationsSchema,
 } as const;
 
 export type BlockType = keyof typeof blockSchemas;
@@ -217,6 +281,14 @@ const sectionField = z
   .optional()
   .describe("id секції шаблону, з якої взято цей блок (лише для сайтів на шаблоні)");
 
+// Layout variant of the template section the model chose (e.g. "split",
+// "minimal"). Optional — absent means the section's default layout. The renderer
+// falls back to default for unknown ids; code re-validates it against the section.
+const variantField = z
+  .string()
+  .optional()
+  .describe("id layout-варіанту обраної секції (напр. split/minimal); пропусти для типового");
+
 // ---------------------------------------------------------------------------
 // Block instance (what the AI generates: type + validated props).
 // A discriminated union so generation output is strictly validated (§4.3).
@@ -224,17 +296,21 @@ const sectionField = z
 // fills; ignored on pack sites and stripped/validated in code either way.
 // ---------------------------------------------------------------------------
 export const blockInstanceSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("hero"), props: heroSchema, section: sectionField }),
-  z.object({ type: z.literal("richText"), props: richTextSchema, section: sectionField }),
-  z.object({ type: z.literal("switchback"), props: switchbackSchema, section: sectionField }),
-  z.object({ type: z.literal("services"), props: servicesSchema, section: sectionField }),
-  z.object({ type: z.literal("gallery"), props: gallerySchema, section: sectionField }),
-  z.object({ type: z.literal("stats"), props: statsSchema, section: sectionField }),
-  z.object({ type: z.literal("testimonials"), props: testimonialsSchema, section: sectionField }),
-  z.object({ type: z.literal("faq"), props: faqSchema, section: sectionField }),
-  z.object({ type: z.literal("cta"), props: ctaSchema, section: sectionField }),
-  z.object({ type: z.literal("lead_form"), props: leadFormSchema, section: sectionField }),
-  z.object({ type: z.literal("contacts"), props: contactsSchema, section: sectionField }),
+  z.object({ type: z.literal("hero"), props: heroSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("richText"), props: richTextSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("switchback"), props: switchbackSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("services"), props: servicesSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("gallery"), props: gallerySchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("stats"), props: statsSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("testimonials"), props: testimonialsSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("faq"), props: faqSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("cta"), props: ctaSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("lead_form"), props: leadFormSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("contacts"), props: contactsSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("team"), props: teamSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("timeline"), props: timelineSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("marquee"), props: marqueeSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("publications"), props: publicationsSchema, section: sectionField, variant: variantField }),
 ]);
 export type BlockInstance = z.infer<typeof blockInstanceSchema>;
 
@@ -260,6 +336,13 @@ export const blockPlacementSchema = z.object({
   // Template section this block belongs to (see blockInstanceSchema). Absent on
   // pack/legacy sites — the renderer then keys on the block type.
   section: sectionField,
+  // Alternate LAYOUT of the section (template sites only): the MODEL chooses it
+  // per section; code validates it against the section and the renderer falls
+  // back to the default component when absent/unknown. Presentation-only, like skin.
+  variant: z
+    .string()
+    .optional()
+    .describe("варіант layout секції шаблону (обраний моделлю; фолбек — типовий layout)"),
   // Per-block schema version for migrations (§4.6). Absent = v1.
   schemaVersion: z.number().int().optional(),
 });
@@ -304,4 +387,8 @@ export const factPaths: Record<BlockType, string[]> = {
   cta: [], // creative marketing copy
   lead_form: [], // labels only; submitted data goes to /api/leads, not props
   contacts: ["phone", "address", "hours", "email", "viber", "telegram"],
+  team: [], // real people — kept honest by the prompt, not string-compared
+  timeline: [], // real dates/steps — kept honest by the prompt
+  marquee: [], // short real keywords — kept honest by the prompt
+  publications: [], // real works — kept honest by the prompt
 };

@@ -190,6 +190,21 @@
   border-color: var(--color-accent) !important;
 }
 
+/* ===== Scrollbar (scoped to internal scroll containers) ===== */
+.tpl-studio ::-webkit-scrollbar {
+  width: 6px;
+}
+.tpl-studio ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tpl-studio ::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 3px;
+}
+.tpl-studio ::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 1024px) {
   .tpl-studio .saas-hero__content {

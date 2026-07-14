@@ -12,7 +12,7 @@ export default function StatsSection({ data }: { data: unknown }) {
   const d = data as BlockProps["stats"];
 
   return (
-    <section className="py-20 md:py-28" aria-labelledby={d.title ? "stats-title" : undefined}>
+    <section className="py-12 md:py-16" aria-labelledby={d.title ? "stats-title" : undefined}>
       <div className="container mx-auto px-4 sm:px-6">
         {d.title && (
           <motion.div

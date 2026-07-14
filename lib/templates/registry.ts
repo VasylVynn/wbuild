@@ -4,6 +4,12 @@ import {
   studioSections,
   type TemplateSectionDef,
 } from "@/components/templates/studio";
+import { ferriMeta, ferriSections } from "@/components/templates/ferri";
+import { salonMeta, salonSections } from "@/components/templates/salon";
+import { portfolioMeta, portfolioSections } from "@/components/templates/portfolio";
+import { aisaasMeta, aisaasSections } from "@/components/templates/aisaas";
+import { nextlyMeta, nextlySections } from "@/components/templates/nextly";
+import { react2021Meta, react2021Sections } from "@/components/templates/react2021";
 
 /**
  * Site templates — the owner mandate (2026-07): a generated site must BE a
@@ -20,6 +26,26 @@ import {
  */
 export type { TemplateSectionDef };
 
+/**
+ * Real business identity the template chrome (Nav/Footer) shows instead of its
+ * demo defaults. Absent in previews/fixtures → the chrome keeps its own defaults.
+ */
+export interface TemplateBrand {
+  brandName?: string;
+  brandAccent?: string;
+  navLinks?: { href: string; label: string }[];
+  ctaHref?: string;
+  /** Real contact facts for the footer's «Контакти» column. */
+  contact?: {
+    phone?: string;
+    address?: string;
+    hours?: string;
+    email?: string;
+    telegram?: string;
+    viber?: string;
+  };
+}
+
 export interface SiteTemplate {
   id: string;
   label: string;
@@ -30,8 +56,17 @@ export interface SiteTemplate {
   order: string[];
   /** Section id → its block type + preview component. */
   sections: Record<string, TemplateSectionDef>;
-  /** Outer shell that owns the template's global look (bg, fonts, may be dark). */
-  wrapper: ComponentType<{ children: ReactNode }>;
+  /** Outer shell that owns the template's global look (bg, fonts, may be dark)
+   *  and its chrome (Nav/Footer); `brand` feeds it the real business identity. */
+  wrapper: ComponentType<{ children: ReactNode; brand?: TemplateBrand }>;
+  /**
+   * Themes this template ships — the per-template theming foundation. Colours
+   * are CSS vars on the wrapper; each theme is one value-set toggled by a
+   * `data-theme` attribute. First entry is the default. A template may ship
+   * one (studio: dark only) or several (ferri: dark + light).
+   */
+  themes: string[];
+  defaultTheme: string;
 }
 
 export const siteTemplates: Record<string, SiteTemplate> = {
@@ -43,6 +78,74 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: studioMeta.order,
     sections: studioSections,
     wrapper: studioMeta.wrapper,
+    themes: ["dark"],
+    defaultTheme: "dark",
+  },
+  ferri: {
+    id: ferriMeta.id,
+    label: ferriMeta.label,
+    description: ferriMeta.description,
+    verticalIds: ferriMeta.verticalIds,
+    order: ferriMeta.order,
+    sections: ferriSections,
+    wrapper: ferriMeta.wrapper,
+    themes: ["dark", "light"],
+    defaultTheme: "dark",
+  },
+  salon: {
+    id: salonMeta.id,
+    label: salonMeta.label,
+    description: salonMeta.description,
+    verticalIds: salonMeta.verticalIds,
+    order: salonMeta.order,
+    sections: salonSections,
+    wrapper: salonMeta.wrapper,
+    themes: ["light", "dark"],
+    defaultTheme: "light",
+  },
+  portfolio: {
+    id: portfolioMeta.id,
+    label: portfolioMeta.label,
+    description: portfolioMeta.description,
+    verticalIds: portfolioMeta.verticalIds,
+    order: portfolioMeta.order,
+    sections: portfolioSections,
+    wrapper: portfolioMeta.wrapper,
+    themes: ["dark"],
+    defaultTheme: "dark",
+  },
+  aisaas: {
+    id: aisaasMeta.id,
+    label: aisaasMeta.label,
+    description: aisaasMeta.description,
+    verticalIds: aisaasMeta.verticalIds,
+    order: aisaasMeta.order,
+    sections: aisaasSections,
+    wrapper: aisaasMeta.wrapper,
+    themes: ["light"],
+    defaultTheme: "light",
+  },
+  nextly: {
+    id: nextlyMeta.id,
+    label: nextlyMeta.label,
+    description: nextlyMeta.description,
+    verticalIds: nextlyMeta.verticalIds,
+    order: nextlyMeta.order,
+    sections: nextlySections,
+    wrapper: nextlyMeta.wrapper,
+    themes: ["light", "dark"],
+    defaultTheme: "light",
+  },
+  react2021: {
+    id: react2021Meta.id,
+    label: react2021Meta.label,
+    description: react2021Meta.description,
+    verticalIds: react2021Meta.verticalIds,
+    order: react2021Meta.order,
+    sections: react2021Sections,
+    wrapper: react2021Meta.wrapper,
+    themes: ["light"],
+    defaultTheme: "light",
   },
 };
 

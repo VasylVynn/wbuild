@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getTenantByHost, getPublishedPage } from "@/lib/tenant/data";
 import { getCachedPublishedPage } from "@/lib/cache";
 import { PageRenderer } from "@/components/PageRenderer";
+import { getTemplate, type TemplateBrand } from "@/lib/templates/registry";
 import {
   canonicalUrl,
   faviconDataUri,
@@ -84,12 +85,55 @@ export default async function TenantPage({ params }: { params: Params }) {
     jsonLd = localBusinessJsonLd(tenant, firstImageFromBlocks(page.blocks));
   }
 
+  // Feed the template chrome (Nav/Footer) the REAL business identity: the name
+  // (its last word becomes the two-tone accent), a nav built from the sections
+  // actually on the page, and the "leave a request" CTA target. Absent for
+  // pack/legacy sites → the shell renders their own header/footer instead.
+  const templateId = tenant?.brand.templateId;
+  const template = templateId ? getTemplate(templateId) : undefined;
+  let brand: TemplateBrand | undefined;
+  if (template && tenant) {
+    const name = (tenant.brand.businessName ?? "").trim();
+    const words = name.split(/\s+/).filter(Boolean);
+    const NAV_SKIP = new Set(["hero", "stats", "cta", "lead_form", "contacts"]);
+    const seen = new Set<string>();
+    const navLinks: { href: string; label: string }[] = [];
+    for (const b of page.blocks) {
+      const s = b.section;
+      if (!s || b.hidden || NAV_SKIP.has(s) || seen.has(s)) continue;
+      const label = template.sections[s]?.label;
+      if (!label) continue;
+      seen.add(s);
+      navLinks.push({ href: `#${s}`, label });
+    }
+    // Real contact facts for the footer's «Контакти» column, straight off the
+    // grounded contacts block (already the owner's verbatim data).
+    const contact = page.blocks.find((b) => b.type === "contacts")?.props as
+      | {
+          phone?: string;
+          address?: string;
+          hours?: string;
+          email?: string;
+          telegram?: string;
+          viber?: string;
+        }
+      | undefined;
+
+    brand = {
+      brandName: words.length > 1 ? words.slice(0, -1).join(" ") + " " : name,
+      brandAccent: words.length > 1 ? words[words.length - 1] : "",
+      navLinks,
+      ctaHref: "#lead_form",
+      contact,
+    };
+  }
+
   return (
     <>
       {jsonLd && (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
       )}
-      <PageRenderer blocks={page.blocks} templateId={tenant?.brand.templateId} />
+      <PageRenderer blocks={page.blocks} templateId={templateId} brand={brand} />
     </>
   );
 }

@@ -13,8 +13,12 @@ import type { BlockProps } from "@/lib/blocks/schema";
  * paragraphs (left card). When there are no principle lines the right card is
  * hidden and the story card spans the full width.
  *
- * Fidelity deltas: the source's eyebrow label, per-card sub-headings and the
- * hard-coded tech-stack chip card have no field in our schema and are dropped.
+ * Fidelity deltas: the source's eyebrow label and per-card sub-headings have
+ * no field in our schema — restored with generic fallback copy (see
+ * FIDELITY-TODO below). The source's third card is a hard-coded chip list of
+ * ITS OWN tech stack (Next.js, React, Claude API…) — vertical-specific to the
+ * source product, not something we can fabricate for an arbitrary tenant site,
+ * so it stays dropped rather than rendered with invented content.
  */
 export default function AboutSection({ data }: { data: unknown }) {
   const d = data as BlockProps["richText"];
@@ -33,7 +37,7 @@ export default function AboutSection({ data }: { data: unknown }) {
   const hasPrinciples = principles.length > 0;
 
   return (
-    <section className="py-20 md:py-28 border-t border-white/[0.04]" aria-labelledby="about-title">
+    <section className="py-12 md:py-16 border-t border-white/[0.04]" aria-labelledby="about-title">
       <div className="container mx-auto px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
           {d.title && (
@@ -44,6 +48,10 @@ export default function AboutSection({ data }: { data: unknown }) {
               transition={{ duration: 0.6 }}
               className="mb-12"
             >
+              {/* FIDELITY-TODO: needs schema field richText.eyebrow — fallback used */}
+              <span className="inline-block text-xs font-medium tracking-widest uppercase text-[var(--color-accent)] mb-4">
+                Про нас
+              </span>
               <h2 id="about-title" className="section-title">{d.title}</h2>
             </motion.div>
           )}
@@ -56,6 +64,8 @@ export default function AboutSection({ data }: { data: unknown }) {
               transition={{ delay: 0.1, duration: 0.5 }}
               className={`card ${hasPrinciples ? "" : "md:col-span-2"}`}
             >
+              {/* FIDELITY-TODO: needs schema field richText.storyHeading — fallback used */}
+              <h3 className="text-lg font-semibold text-white mb-3">Наша історія</h3>
               {paragraphs.map((p, i) => (
                 <p
                   key={i}
@@ -74,6 +84,8 @@ export default function AboutSection({ data }: { data: unknown }) {
                 transition={{ delay: 0.2, duration: 0.5 }}
                 className="card"
               >
+                {/* FIDELITY-TODO: needs schema field richText.principlesHeading — fallback used */}
+                <h3 className="text-lg font-semibold text-white mb-3">Наші принципи</h3>
                 <ul className="space-y-2.5">
                   {principles.map((principle, i) => (
                     <li key={i} className="flex items-start gap-2.5">
@@ -84,6 +96,10 @@ export default function AboutSection({ data }: { data: unknown }) {
                 </ul>
               </motion.div>
             )}
+
+            {/* FIDELITY-TODO: needs schema field richText.techStack (chip list) — source's
+                third card is its own product's hard-coded stack, so omitted rather than
+                faked for arbitrary tenant verticals. */}
           </div>
         </div>
       </div>

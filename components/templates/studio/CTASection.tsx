@@ -9,14 +9,16 @@ import type { BlockProps } from "@/lib/blocks/schema";
  * button with a trailing arrow.
  *
  * Parameterised: fed by our `cta` block (title, subtitle, buttonLabel,
- * buttonHref). Fidelity deltas: the source's secondary "Telegram Bot" button
- * and small note line have no field in our schema and are dropped.
+ * buttonHref). Fidelity delta: the source's secondary button links to ITS OWN
+ * Telegram bot and its note line is product-specific copy — neither has a
+ * schema field and both are vertical-specific content we can't fabricate for
+ * an arbitrary tenant, so they stay dropped (see FIDELITY-TODO below).
  */
 export default function CTASection({ data }: { data: unknown }) {
   const d = data as BlockProps["cta"];
 
   return (
-    <section className="py-20 md:py-28 relative" aria-labelledby="cta-title">
+    <section className="py-12 md:py-16 relative" aria-labelledby="cta-title">
       <div
         className="absolute inset-0 bg-gradient-to-b from-transparent via-[var(--color-accent)]/[0.03] to-transparent"
         aria-hidden="true"
@@ -40,7 +42,10 @@ export default function CTASection({ data }: { data: unknown }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
             </a>
+            {/* FIDELITY-TODO: needs schema field cta.secondaryButtonLabel / secondaryButtonHref — omitted (source's was a Telegram-bot-specific link) */}
           </div>
+
+          {/* FIDELITY-TODO: needs schema field cta.note — omitted (source's note line was product-specific copy) */}
         </motion.div>
       </div>
     </section>

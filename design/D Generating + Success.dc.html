@@ -1,119 +1,779 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="./support.js"></script>
-</head>
-<body>
-<x-dc>
-<helmet>
-<meta name="design_doc_mode" content="canvas">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Unbounded:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
-<style>
-  body { margin: 0; background: #ECEEF0; font-family: 'Manrope', sans-serif; color: #17242F; }
-  a { color: #1B5BBF; } a:hover { color: #14489C; }
-  @keyframes gen-bar { 0% { width: 12%; } 60% { width: 78%; } 100% { width: 92%; } }
-  @keyframes float-3 { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-10px) rotate(4deg); } }
-  @keyframes confetti-fall { 0% { transform: translateY(-20px) rotate(0deg); opacity: 1; } 100% { transform: translateY(160px) rotate(240deg); opacity: 0; } }
-</style>
-</helmet>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="./support.js"></script>
+  </head>
+  <body>
+    <x-dc
+      >Давай почнемо розмову з того, що нам дійсно потрібно. Нормальні шаблони,
+      бо з цих прев'юшанів. Все, що я зараз розумію, що ти робиш, це. Взяти
+      якісь секції, структуру секції, додавати теми, тобто кольори, мені таке не
+      потрібно і не цікаво. Я думаю, що це неправильний підхід. Що я зараз
+      зробив? Я дав два template sources Які ти так і не використав. Завдання
+      було витягнути всі їхні секції, так, як у них є. З тим дизайном, який у
+      них є. Нам не потрібно зараз робити інші теми, тобто інші кольори. Давай
+      почнемо з цього. Я хочу зараз повністю відмовитися від всіх секцій, які в
+      нас зараз є. І використати тільки один шаблон. А именно.'/Users/vasyl/Docu
+      ments/GitHub/wbuild/template_sources/design-template-main' Не знаю, на мою
+      думку, ми маємо скопіювати з цього шаблону у C-compoненts. Можливо, леяут.
+      Тобто поскладати собі по папках. Це буде наш перший шаблон. Він зараз має
+      відповідати повністю тому дизайні, які є у цьому проекті, який я додав.
+      Один в один. Чи, зрозуміло, зараз завдання. Ще раз повторюю. Видалити всі
+      компоненти секції, які у нас зараз є. І створити структуру для шаблонів. І
+      створити перший шаблон. Який ми повністю скопіюємо з цього, які я додав.
+      Що має робити AI? AI має використовувати компоненти з цього шаблону, які
+      ми перемістимо. Тобто секції. І додавати в них структуру контент. Тобто,
+      що нам треба зробити. Нам треба добавити типи для кожної секції. Я маю на
+      увазі Z-типи для кожної секції. Опис тої секції. Тобто я маю розуміти, що
+      це за секція, чи краще її вибрати для того контенту згенерованого, чи ні.
+      Скільки в нас є секцій для цього шаблону, я маю на увазі. можливих секцій,
+      які може обрати AI. Тобто, якщо потрібно нам переробити структуру бази
+      даних для шаблонів, якщо нам потрібно переробити структуру тих задтипів,
+      Тоді ми оце все все все маємо робити. Зараз ми маємо сконцентруватися
+      тільки на цьому шаблоні. Не роби зараз нічого, чи тобі все зараз
+      зрозуміло.
+      <helmet>
+        <meta name="design_doc_mode" content="canvas" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossorigin="anonymous"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Unbounded:wght@400;500;600;700&amp;display=swap"
+          rel="stylesheet"
+        />
+        <style>
+          body {
+            margin: 0;
+            background: #eceef0;
+            font-family: "Manrope", sans-serif;
+            color: #17242f;
+          }
+          a {
+            color: #1b5bbf;
+          }
+          a:hover {
+            color: #14489c;
+          }
+          @keyframes gen-bar {
+            0% {
+              width: 12%;
+            }
+            60% {
+              width: 78%;
+            }
+            100% {
+              width: 92%;
+            }
+          }
+          @keyframes float-3 {
+            0%,
+            100% {
+              transform: translateY(0) rotate(-4deg);
+            }
+            50% {
+              transform: translateY(-10px) rotate(4deg);
+            }
+          }
+          @keyframes confetti-fall {
+            0% {
+              transform: translateY(-20px) rotate(0deg);
+              opacity: 1;
+            }
+            100% {
+              transform: translateY(160px) rotate(240deg);
+              opacity: 0;
+            }
+          }
+        </style>
+      </helmet>
 
-<section style="padding: 56px; display: flex; flex-direction: column; gap: 32px;">
-  <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 30px;">Генерація і успіх</div>
+      <section
+        style="padding: 56px; display: flex; flex-direction: column; gap: 32px"
+      >
+        <div
+          style="
+            font-family: &quot;Unbounded&quot;, sans-serif;
+            font-weight: 600;
+            font-size: 30px;
+          "
+        >
+          Генерація і успіх
+        </div>
 
-  <div style="display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start;">
-
-    <!-- Mobile generating -->
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · генеруємо</span>
-      <div data-screen-label="Generating mobile" style="width: 390px; height: 780px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 32px; overflow: hidden;">
-        <div style="width: 96px; height: 96px; border-radius: 999px; background: #FCF1DD; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 42px; color: #E9A23B; animation: float-3 2.4s ease-in-out infinite;">3</div>
-        <div style="font-family: 'Unbounded', sans-serif; font-weight: 500; font-size: 24px; margin-top: 32px; text-align: center;">Генеруємо ваш сайт…</div>
-        <div style="font-size: 17px; color: #5A6B7A; margin-top: 12px; text-align: center; line-height: 1.5;">Це може зайняти до 30 секунд. Нікуди не йдіть — уже майже готово.</div>
-        <div style="width: 100%; height: 10px; border-radius: 999px; background: #E7EEF9; margin-top: 32px; overflow: hidden;">
-          <div style="height: 10px; border-radius: 999px; background: #1B5BBF; animation: gen-bar 24s ease-out forwards;"></div>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 28px; align-self: stretch;">
-          <div style="display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: #177E53;"><span>✓</span><span>Тексти про ваш бізнес</span></div>
-          <div style="display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: #177E53;"><span>✓</span><span>Послуги та ціни</span></div>
-          <div style="display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: #17242F;"><span style="width: 16px; height: 16px; border-radius: 999px; border: 2.5px solid #1B5BBF; border-top-color: transparent; display: inline-block;"></span><span>Оформлення і кольори…</span></div>
-          <div style="display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; color: #8A99A6;"><span style="width: 16px; height: 16px; border-radius: 999px; border: 2px solid #C9D2D9; display: inline-block;"></span><span>Форма замовлення</span></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Mobile success -->
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">mobile 390 · сайт готовий</span>
-      <div data-screen-label="Success mobile" style="width: 390px; height: 780px; background: #F7F8F8; border-radius: 28px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 24px; overflow: hidden; position: relative;">
-        <div style="position: absolute; top: 40px; left: 60px; width: 10px; height: 14px; background: #E9A23B; border-radius: 3px; animation: confetti-fall 2.6s ease-in infinite;"></div>
-        <div style="position: absolute; top: 30px; left: 150px; width: 8px; height: 12px; background: #1B5BBF; border-radius: 3px; animation: confetti-fall 3.1s ease-in infinite 0.4s;"></div>
-        <div style="position: absolute; top: 50px; left: 240px; width: 10px; height: 10px; background: #177E53; border-radius: 999px; animation: confetti-fall 2.8s ease-in infinite 0.8s;"></div>
-        <div style="position: absolute; top: 36px; left: 320px; width: 8px; height: 13px; background: #E9A23B; border-radius: 3px; animation: confetti-fall 3.4s ease-in infinite 1.2s;"></div>
-        <div style="position: absolute; top: 44px; left: 105px; width: 9px; height: 9px; background: #C03A32; border-radius: 999px; animation: confetti-fall 3s ease-in infinite 1.6s;"></div>
-        <div style="font-size: 64px; line-height: 1;">🎉</div>
-        <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 26px; margin-top: 24px; text-align: center;">Ваш сайт готовий!</div>
-        <div style="font-size: 17px; color: #5A6B7A; margin-top: 10px; text-align: center;">Він уже працює за адресою:</div>
-        <div style="align-self: stretch; margin-top: 20px; background: #FFFFFF; border: 1.5px solid #E2E7EB; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
-          <span style="font-weight: 800; font-size: 18px; color: #1B5BBF; word-break: break-all; text-align: center;">kvity-oksana.3minsite.com.ua</span>
-          <div style="display: flex; gap: 10px;">
-            <div style="flex: 1.3; display: flex; height: 54px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 16px; font-weight: 700; font-size: 16px; cursor: pointer;" style-hover="background: #14489C;">Відкрити сайт ↗</div>
-            <div style="flex: 1; display: flex; height: 54px; align-items: center; justify-content: center; border: 1.5px solid #C9D2D9; border-radius: 16px; font-weight: 700; font-size: 16px; cursor: pointer;" style-hover="background: #EEF1F3;">Копіювати</div>
-          </div>
-        </div>
-        <div style="align-self: stretch; margin-top: 14px; background: #FFFFFF; border: 1.5px solid #E2E7EB; border-radius: 18px; padding: 18px 20px; display: flex; align-items: center; gap: 14px;">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#229ED9"></circle><path d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z" fill="#FFFFFF"></path></svg>
-          <div style="flex: 1;">
-            <div style="font-weight: 800; font-size: 16px;">Наступний крок</div>
-            <div style="font-size: 14px; color: #5A6B7A; font-weight: 600; line-height: 1.4;">Підключіть Telegram, щоб отримувати заявки від клієнтів</div>
-          </div>
-          <span style="color: #229ED9; font-weight: 800; font-size: 15px; white-space: nowrap; cursor: pointer;">Підключити ›</span>
-        </div>
-        <div style="margin-top: 18px; font-size: 15px; color: #5A6B7A; font-weight: 600; text-align: center;"><a href="#" style="color: #1B5BBF; font-weight: 700;">Зареєструйтесь</a>, щоб керувати сайтом</div>
-      </div>
-    </div>
-
-    <!-- Desktop success -->
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <span style="font-family: monospace; font-size: 12px; text-transform: uppercase; color: #8A99A6;">desktop 1440 · сайт готовий</span>
-      <div data-screen-label="Success desktop" style="width: 1440px; height: 800px; background: #F7F8F8; border-radius: 20px; border: 1px solid #E2E7EB; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07); display: flex; flex-direction: column; overflow: hidden; position: relative;">
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px 40px; background: #FFFFFF; border-bottom: 1px solid #EEF1F3;">
-          <span style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 21px;"><span style="color: #E9A23B;">3</span>minsite</span>
-          <span style="font-weight: 700; font-size: 15px; color: #1B5BBF; cursor: pointer;">Увійти</span>
-        </div>
-        <div style="position: absolute; top: 90px; left: 480px; width: 12px; height: 16px; background: #E9A23B; border-radius: 3px; animation: confetti-fall 2.8s ease-in infinite;"></div>
-        <div style="position: absolute; top: 80px; left: 640px; width: 10px; height: 14px; background: #1B5BBF; border-radius: 3px; animation: confetti-fall 3.2s ease-in infinite 0.5s;"></div>
-        <div style="position: absolute; top: 96px; left: 800px; width: 11px; height: 11px; background: #177E53; border-radius: 999px; animation: confetti-fall 2.9s ease-in infinite 1s;"></div>
-        <div style="position: absolute; top: 84px; left: 920px; width: 10px; height: 15px; background: #C03A32; border-radius: 3px; animation: confetti-fall 3.5s ease-in infinite 1.5s;"></div>
-        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;">
-          <div style="font-size: 72px; line-height: 1;">🎉</div>
-          <div style="font-family: 'Unbounded', sans-serif; font-weight: 600; font-size: 34px; margin-top: 28px;">Ваш сайт готовий!</div>
-          <div style="font-size: 18px; color: #5A6B7A; margin-top: 12px;">Він уже працює за адресою:</div>
-          <div style="margin-top: 26px; background: #FFFFFF; border: 1.5px solid #E2E7EB; border-radius: 20px; padding: 26px 32px; display: flex; align-items: center; gap: 24px; box-shadow: 0 1px 2px rgba(23,36,47,.05), 0 10px 30px rgba(23,36,47,.07);">
-            <span style="font-weight: 800; font-size: 24px; color: #1B5BBF;">kvity-oksana.3minsite.com.ua</span>
-            <div style="display: flex; gap: 10px;">
-              <div style="display: flex; height: 54px; padding: 0 26px; align-items: center; justify-content: center; background: #1B5BBF; color: #FFFFFF; border-radius: 16px; font-weight: 700; font-size: 16px; cursor: pointer;" style-hover="background: #14489C;">Відкрити сайт ↗</div>
-              <div style="display: flex; height: 54px; padding: 0 22px; align-items: center; justify-content: center; border: 1.5px solid #C9D2D9; border-radius: 16px; font-weight: 700; font-size: 16px; cursor: pointer;" style-hover="background: #EEF1F3;">Копіювати</div>
+        <div
+          style="
+            display: flex;
+            gap: 32px;
+            flex-wrap: wrap;
+            align-items: flex-start;
+          "
+        >
+          <!-- Mobile generating -->
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <span
+              style="
+                font-family: monospace;
+                font-size: 12px;
+                text-transform: uppercase;
+                color: #8a99a6;
+              "
+              >mobile 390 · генеруємо</span
+            >
+            <div
+              data-screen-label="Generating mobile"
+              style="
+                width: 390px;
+                height: 780px;
+                background: #f7f8f8;
+                border-radius: 28px;
+                border: 1px solid #e2e7eb;
+                box-shadow:
+                  0 1px 2px rgba(23, 36, 47, 0.05),
+                  0 10px 30px rgba(23, 36, 47, 0.07);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 0 32px;
+                overflow: hidden;
+              "
+            >
+              <div
+                style="
+                  width: 96px;
+                  height: 96px;
+                  border-radius: 999px;
+                  background: #fcf1dd;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-family: &quot;Unbounded&quot;, sans-serif;
+                  font-weight: 600;
+                  font-size: 42px;
+                  color: #e9a23b;
+                  animation: float-3 2.4s ease-in-out infinite;
+                "
+              >
+                3
+              </div>
+              <div
+                style="
+                  font-family: &quot;Unbounded&quot;, sans-serif;
+                  font-weight: 500;
+                  font-size: 24px;
+                  margin-top: 32px;
+                  text-align: center;
+                "
+              >
+                Генеруємо ваш сайт…
+              </div>
+              <div
+                style="
+                  font-size: 17px;
+                  color: #5a6b7a;
+                  margin-top: 12px;
+                  text-align: center;
+                  line-height: 1.5;
+                "
+              >
+                Це може зайняти до 30 секунд. Нікуди не йдіть — уже майже
+                готово.
+              </div>
+              <div
+                style="
+                  width: 100%;
+                  height: 10px;
+                  border-radius: 999px;
+                  background: #e7eef9;
+                  margin-top: 32px;
+                  overflow: hidden;
+                "
+              >
+                <div
+                  style="
+                    height: 10px;
+                    border-radius: 999px;
+                    background: #1b5bbf;
+                    animation: gen-bar 24s ease-out forwards;
+                  "
+                ></div>
+              </div>
+              <div
+                style="
+                  display: flex;
+                  flex-direction: column;
+                  gap: 10px;
+                  margin-top: 28px;
+                  align-self: stretch;
+                "
+              >
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: #177e53;
+                  "
+                >
+                  <span>✓</span><span>Тексти про ваш бізнес</span>
+                </div>
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: #177e53;
+                  "
+                >
+                  <span>✓</span><span>Послуги та ціни</span>
+                </div>
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: #17242f;
+                  "
+                >
+                  <span
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      border-radius: 999px;
+                      border: 2.5px solid #1b5bbf;
+                      border-top-color: transparent;
+                      display: inline-block;
+                    "
+                  ></span
+                  ><span>Оформлення і кольори…</span>
+                </div>
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: #8a99a6;
+                  "
+                >
+                  <span
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      border-radius: 999px;
+                      border: 2px solid #c9d2d9;
+                      display: inline-block;
+                    "
+                  ></span
+                  ><span>Форма замовлення</span>
+                </div>
+              </div>
             </div>
           </div>
-          <div style="margin-top: 16px; width: 640px; background: #FFFFFF; border: 1.5px solid #E2E7EB; border-radius: 20px; padding: 20px 26px; display: flex; align-items: center; gap: 16px;">
-            <svg width="38" height="38" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="#229ED9"></circle><path d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z" fill="#FFFFFF"></path></svg>
-            <div style="flex: 1;">
-              <div style="font-weight: 800; font-size: 17px;">Наступний крок — Telegram</div>
-              <div style="font-size: 15px; color: #5A6B7A; font-weight: 600;">Підключіть Telegram, щоб заявки від клієнтів приходили прямо вам</div>
-            </div>
-            <div style="display: flex; height: 48px; padding: 0 22px; align-items: center; background: #229ED9; color: #FFFFFF; border-radius: 999px; font-weight: 700; font-size: 15px; cursor: pointer; white-space: nowrap;" style-hover="background: #1787BD;">Підключити</div>
-          </div>
-          <div style="margin-top: 22px; font-size: 16px; color: #5A6B7A; font-weight: 600;"><a href="#" style="color: #1B5BBF; font-weight: 700;">Зареєструйтесь</a>, щоб керувати сайтом</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
 
-</x-dc>
-</body>
+          <!-- Mobile success -->
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <span
+              style="
+                font-family: monospace;
+                font-size: 12px;
+                text-transform: uppercase;
+                color: #8a99a6;
+              "
+              >mobile 390 · сайт готовий</span
+            >
+            <div
+              data-screen-label="Success mobile"
+              style="
+                width: 390px;
+                height: 780px;
+                background: #f7f8f8;
+                border-radius: 28px;
+                border: 1px solid #e2e7eb;
+                box-shadow:
+                  0 1px 2px rgba(23, 36, 47, 0.05),
+                  0 10px 30px rgba(23, 36, 47, 0.07);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 0 24px;
+                overflow: hidden;
+                position: relative;
+              "
+            >
+              <div
+                style="
+                  position: absolute;
+                  top: 40px;
+                  left: 60px;
+                  width: 10px;
+                  height: 14px;
+                  background: #e9a23b;
+                  border-radius: 3px;
+                  animation: confetti-fall 2.6s ease-in infinite;
+                "
+              ></div>
+              <div
+                style="
+                  position: absolute;
+                  top: 30px;
+                  left: 150px;
+                  width: 8px;
+                  height: 12px;
+                  background: #1b5bbf;
+                  border-radius: 3px;
+                  animation: confetti-fall 3.1s ease-in infinite 0.4s;
+                "
+              ></div>
+              <div
+                style="
+                  position: absolute;
+                  top: 50px;
+                  left: 240px;
+                  width: 10px;
+                  height: 10px;
+                  background: #177e53;
+                  border-radius: 999px;
+                  animation: confetti-fall 2.8s ease-in infinite 0.8s;
+                "
+              ></div>
+              <div
+                style="
+                  position: absolute;
+                  top: 36px;
+                  left: 320px;
+                  width: 8px;
+                  height: 13px;
+                  background: #e9a23b;
+                  border-radius: 3px;
+                  animation: confetti-fall 3.4s ease-in infinite 1.2s;
+                "
+              ></div>
+              <div
+                style="
+                  position: absolute;
+                  top: 44px;
+                  left: 105px;
+                  width: 9px;
+                  height: 9px;
+                  background: #c03a32;
+                  border-radius: 999px;
+                  animation: confetti-fall 3s ease-in infinite 1.6s;
+                "
+              ></div>
+              <div style="font-size: 64px; line-height: 1">🎉</div>
+              <div
+                style="
+                  font-family: &quot;Unbounded&quot;, sans-serif;
+                  font-weight: 600;
+                  font-size: 26px;
+                  margin-top: 24px;
+                  text-align: center;
+                "
+              >
+                Ваш сайт готовий!
+              </div>
+              <div
+                style="
+                  font-size: 17px;
+                  color: #5a6b7a;
+                  margin-top: 10px;
+                  text-align: center;
+                "
+              >
+                Він уже працює за адресою:
+              </div>
+              <div
+                style="
+                  align-self: stretch;
+                  margin-top: 20px;
+                  background: #ffffff;
+                  border: 1.5px solid #e2e7eb;
+                  border-radius: 18px;
+                  padding: 20px;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 14px;
+                  box-shadow:
+                    0 1px 2px rgba(23, 36, 47, 0.05),
+                    0 10px 30px rgba(23, 36, 47, 0.07);
+                "
+              >
+                <span
+                  style="
+                    font-weight: 800;
+                    font-size: 18px;
+                    color: #1b5bbf;
+                    word-break: break-all;
+                    text-align: center;
+                  "
+                  >kvity-oksana.3minsite.com.ua</span
+                >
+                <div style="display: flex; gap: 10px">
+                  <div
+                    style="
+                      flex: 1.3;
+                      display: flex;
+                      height: 54px;
+                      align-items: center;
+                      justify-content: center;
+                      background: #1b5bbf;
+                      color: #ffffff;
+                      border-radius: 16px;
+                      font-weight: 700;
+                      font-size: 16px;
+                      cursor: pointer;
+                    "
+                    style-hover="background: #14489C;"
+                  >
+                    Відкрити сайт ↗
+                  </div>
+                  <div
+                    style="
+                      flex: 1;
+                      display: flex;
+                      height: 54px;
+                      align-items: center;
+                      justify-content: center;
+                      border: 1.5px solid #c9d2d9;
+                      border-radius: 16px;
+                      font-weight: 700;
+                      font-size: 16px;
+                      cursor: pointer;
+                    "
+                    style-hover="background: #EEF1F3;"
+                  >
+                    Копіювати
+                  </div>
+                </div>
+              </div>
+              <div
+                style="
+                  align-self: stretch;
+                  margin-top: 14px;
+                  background: #ffffff;
+                  border: 1.5px solid #e2e7eb;
+                  border-radius: 18px;
+                  padding: 18px 20px;
+                  display: flex;
+                  align-items: center;
+                  gap: 14px;
+                "
+              >
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="12" fill="#229ED9"></circle>
+                  <path
+                    d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z"
+                    fill="#FFFFFF"
+                  ></path>
+                </svg>
+                <div style="flex: 1">
+                  <div style="font-weight: 800; font-size: 16px">
+                    Наступний крок
+                  </div>
+                  <div
+                    style="
+                      font-size: 14px;
+                      color: #5a6b7a;
+                      font-weight: 600;
+                      line-height: 1.4;
+                    "
+                  >
+                    Підключіть Telegram, щоб отримувати заявки від клієнтів
+                  </div>
+                </div>
+                <span
+                  style="
+                    color: #229ed9;
+                    font-weight: 800;
+                    font-size: 15px;
+                    white-space: nowrap;
+                    cursor: pointer;
+                  "
+                  >Підключити ›</span
+                >
+              </div>
+              <div
+                style="
+                  margin-top: 18px;
+                  font-size: 15px;
+                  color: #5a6b7a;
+                  font-weight: 600;
+                  text-align: center;
+                "
+              >
+                <a href="#" style="color: #1b5bbf; font-weight: 700"
+                  >Зареєструйтесь</a
+                >, щоб керувати сайтом
+              </div>
+            </div>
+          </div>
+
+          <!-- Desktop success -->
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <span
+              style="
+                font-family: monospace;
+                font-size: 12px;
+                text-transform: uppercase;
+                color: #8a99a6;
+              "
+              >desktop 1440 · сайт готовий</span
+            >
+            <div
+              data-screen-label="Success desktop"
+              style="
+                width: 1440px;
+                height: 800px;
+                background: #f7f8f8;
+                border-radius: 20px;
+                border: 1px solid #e2e7eb;
+                box-shadow:
+                  0 1px 2px rgba(23, 36, 47, 0.05),
+                  0 10px 30px rgba(23, 36, 47, 0.07);
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                position: relative;
+              "
+            >
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  padding: 16px 40px;
+                  background: #ffffff;
+                  border-bottom: 1px solid #eef1f3;
+                "
+              >
+                <span
+                  style="
+                    font-family: &quot;Unbounded&quot;, sans-serif;
+                    font-weight: 600;
+                    font-size: 21px;
+                  "
+                  ><span style="color: #e9a23b">3</span>minsite</span
+                >
+                <span
+                  style="
+                    font-weight: 700;
+                    font-size: 15px;
+                    color: #1b5bbf;
+                    cursor: pointer;
+                  "
+                  >Увійти</span
+                >
+              </div>
+              <div
+                style="
+                  position: absolute;
+                  top: 90px;
+                  left: 480px;
+                  width: 12px;
+                  height: 16px;
+                  background: #e9a23b;
+                  border-radius: 3px;
+                  animation: confetti-fall 2.8s ease-in infinite;
+                "
+              ></div>
+              <div
+                style="
+                  position: absolute;
+                  top: 80px;
+                  left: 640px;
+                  width: 10px;
+                  height: 14px;
+                  background: #1b5bbf;
+                  border-radius: 3px;
+                  animation: confetti-fall 3.2s ease-in infinite 0.5s;
+                "
+              ></div>
+              <div
+                style="
+                  position: absolute;
+                  top: 96px;
+                  left: 800px;
+                  width: 11px;
+                  height: 11px;
+                  background: #177e53;
+                  border-radius: 999px;
+                  animation: confetti-fall 2.9s ease-in infinite 1s;
+                "
+              ></div>
+              <div
+                style="
+                  position: absolute;
+                  top: 84px;
+                  left: 920px;
+                  width: 10px;
+                  height: 15px;
+                  background: #c03a32;
+                  border-radius: 3px;
+                  animation: confetti-fall 3.5s ease-in infinite 1.5s;
+                "
+              ></div>
+              <div
+                style="
+                  flex: 1;
+                  display: flex;
+                  flex-direction: column;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 0;
+                "
+              >
+                <div style="font-size: 72px; line-height: 1">🎉</div>
+                <div
+                  style="
+                    font-family: &quot;Unbounded&quot;, sans-serif;
+                    font-weight: 600;
+                    font-size: 34px;
+                    margin-top: 28px;
+                  "
+                >
+                  Ваш сайт готовий!
+                </div>
+                <div style="font-size: 18px; color: #5a6b7a; margin-top: 12px">
+                  Він уже працює за адресою:
+                </div>
+                <div
+                  style="
+                    margin-top: 26px;
+                    background: #ffffff;
+                    border: 1.5px solid #e2e7eb;
+                    border-radius: 20px;
+                    padding: 26px 32px;
+                    display: flex;
+                    align-items: center;
+                    gap: 24px;
+                    box-shadow:
+                      0 1px 2px rgba(23, 36, 47, 0.05),
+                      0 10px 30px rgba(23, 36, 47, 0.07);
+                  "
+                >
+                  <span
+                    style="font-weight: 800; font-size: 24px; color: #1b5bbf"
+                    >kvity-oksana.3minsite.com.ua</span
+                  >
+                  <div style="display: flex; gap: 10px">
+                    <div
+                      style="
+                        display: flex;
+                        height: 54px;
+                        padding: 0 26px;
+                        align-items: center;
+                        justify-content: center;
+                        background: #1b5bbf;
+                        color: #ffffff;
+                        border-radius: 16px;
+                        font-weight: 700;
+                        font-size: 16px;
+                        cursor: pointer;
+                      "
+                      style-hover="background: #14489C;"
+                    >
+                      Відкрити сайт ↗
+                    </div>
+                    <div
+                      style="
+                        display: flex;
+                        height: 54px;
+                        padding: 0 22px;
+                        align-items: center;
+                        justify-content: center;
+                        border: 1.5px solid #c9d2d9;
+                        border-radius: 16px;
+                        font-weight: 700;
+                        font-size: 16px;
+                        cursor: pointer;
+                      "
+                      style-hover="background: #EEF1F3;"
+                    >
+                      Копіювати
+                    </div>
+                  </div>
+                </div>
+                <div
+                  style="
+                    margin-top: 16px;
+                    width: 640px;
+                    background: #ffffff;
+                    border: 1.5px solid #e2e7eb;
+                    border-radius: 20px;
+                    padding: 20px 26px;
+                    display: flex;
+                    align-items: center;
+                    gap: 16px;
+                  "
+                >
+                  <svg width="38" height="38" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="12" fill="#229ED9"></circle>
+                    <path
+                      d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z"
+                      fill="#FFFFFF"
+                    ></path>
+                  </svg>
+                  <div style="flex: 1">
+                    <div style="font-weight: 800; font-size: 17px">
+                      Наступний крок — Telegram
+                    </div>
+                    <div
+                      style="font-size: 15px; color: #5a6b7a; font-weight: 600"
+                    >
+                      Підключіть Telegram, щоб заявки від клієнтів приходили
+                      прямо вам
+                    </div>
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      height: 48px;
+                      padding: 0 22px;
+                      align-items: center;
+                      background: #229ed9;
+                      color: #ffffff;
+                      border-radius: 999px;
+                      font-weight: 700;
+                      font-size: 15px;
+                      cursor: pointer;
+                      white-space: nowrap;
+                    "
+                    style-hover="background: #1787BD;"
+                  >
+                    Підключити
+                  </div>
+                </div>
+                <div
+                  style="
+                    margin-top: 22px;
+                    font-size: 16px;
+                    color: #5a6b7a;
+                    font-weight: 600;
+                  "
+                >
+                  <a href="#" style="color: #1b5bbf; font-weight: 700"
+                    >Зареєструйтесь</a
+                  >, щоб керувати сайтом
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </x-dc>
+  </body>
 </html>

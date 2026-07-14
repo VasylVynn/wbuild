@@ -14,6 +14,7 @@ import { switchDesignPack } from "@/app/app/(protected)/edit/design-actions";
 import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-actions";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
+import { getTemplate, type SiteTemplate } from "@/lib/templates/registry";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { themeToCssVars, type Theme } from "@/lib/theme/tokens";
 import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/components/ui";
@@ -41,10 +42,22 @@ const STATUS_LABELS: Record<string, string> = {
 const statusTone = (s: string): "ok" | "warn" | "neutral" =>
   s === "published" ? "ok" : s === "draft" ? "warn" : "neutral";
 
-// Render one block via the shared registry. The registry value is keyed to its
-// own props type; for a dynamic block we widen the component to accept the
-// stored props object (validation already happened server-side).
-function BlockView({ block }: { block: StoredBlock }) {
+// Render one block. On a TEMPLATE site, mirror PageRenderer: render through the
+// template's own section component (honouring the block's `variant`), keyed by
+// `section` and gated on the section actually accepting this block type — so the
+// editor preview matches the published site. Otherwise (pack/legacy sites) use
+// the shared registry with the block's skin. Props were validated on save.
+function BlockView({ block, template }: { block: StoredBlock; template?: SiteTemplate }) {
+  if (template) {
+    const def = template.sections[block.section ?? block.type];
+    const matched = def?.block === block.type ? def : undefined;
+    const Section =
+      (block.variant ? matched?.variants?.[block.variant] : undefined) ?? matched?.component;
+    if (Section) {
+      const S = Section as ComponentType<{ data: unknown }>;
+      return <S data={block.props} />;
+    }
+  }
   const Comp = blockRegistry[block.type] as unknown as ComponentType<{
     data: unknown;
     skin?: string;
@@ -276,6 +289,27 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     fontFamily: "var(--font-body)",
   };
 
+  // Template sites render inside the template's OWN wrapper (its palette/fonts +
+  // Nav/Footer), each section through its template component — matching the
+  // published site. Pack/legacy sites keep the theme-vars framed preview.
+  const template = getTemplate(initial.templateId);
+  const TemplateWrapper = template?.wrapper;
+  const sectionEls = blocks.map((block, index) => (
+    <EditableSection
+      key={index}
+      label={blockLibrary[block.type]?.label ?? block.type}
+      hidden={!!block.hidden}
+      isFirst={index === 0}
+      isLast={index === blocks.length - 1}
+      onEdit={() => setSelectedIndex(index)}
+      onMoveUp={() => move(index, -1)}
+      onMoveDown={() => move(index, 1)}
+      onToggleHidden={() => toggleHidden(index)}
+    >
+      <BlockView block={block} template={template} />
+    </EditableSection>
+  ));
+
   return (
     <div className="min-h-screen bg-sunken font-ui text-ink">
       {/* Top bar — business + status, then design / regenerate / publish actions. */}
@@ -350,29 +384,22 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
 
       {/* Draft preview — the tenant theme renders inside a neutral white frame. */}
       <main className="mx-auto max-w-5xl px-2 py-4 sm:px-4 sm:py-6">
-        <div className="overflow-hidden rounded-[24px] border border-line bg-surface shadow-card">
+        <div
+          className="overflow-hidden rounded-[24px] border border-line bg-surface shadow-card"
+          // A template preview's Nav (and theme toggle) use `position: fixed`;
+          // a transform here makes this the containing block for them so they
+          // stay INSIDE the framed preview instead of floating over the editor
+          // chrome. No effect on pack/legacy previews.
+          style={TemplateWrapper ? { transform: "translateZ(0)" } : undefined}
+        >
           {blocks.length === 0 ? (
             <div className="px-6 py-24 text-center text-[15px] font-medium text-ink-faint">
               Тут поки порожньо. Натисніть «Перегенерувати», щоб зібрати сайт із ваших даних.
             </div>
+          ) : TemplateWrapper ? (
+            <TemplateWrapper>{sectionEls}</TemplateWrapper>
           ) : (
-            <div style={previewStyle}>
-              {blocks.map((block, index) => (
-                <EditableSection
-                  key={index}
-                  label={blockLibrary[block.type]?.label ?? block.type}
-                  hidden={!!block.hidden}
-                  isFirst={index === 0}
-                  isLast={index === blocks.length - 1}
-                  onEdit={() => setSelectedIndex(index)}
-                  onMoveUp={() => move(index, -1)}
-                  onMoveDown={() => move(index, 1)}
-                  onToggleHidden={() => toggleHidden(index)}
-                >
-                  <BlockView block={block} />
-                </EditableSection>
-              ))}
-            </div>
+            <div style={previewStyle}>{sectionEls}</div>
           )}
         </div>
         <p className="mx-auto mt-4 max-w-md text-center text-[14px] font-semibold text-ink-faint">

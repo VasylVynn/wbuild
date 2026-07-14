@@ -19,7 +19,7 @@ import {
 } from "@/lib/design/packs";
 import {
   getTemplate,
-  templatesFor,
+  siteTemplates,
   TEMPLATE_IDS,
   type SiteTemplate,
 } from "@/lib/templates/registry";
@@ -86,12 +86,6 @@ function buildThemeDoc(vertical: VerticalConfig): string {
     .join("\n");
 }
 
-function buildPackDoc(vertical: VerticalConfig): string {
-  return packsFor(vertical.id)
-    .map((p) => `- ${p.id} — ${p.label}: ${p.description}`)
-    .join("\n");
-}
-
 /**
  * Full template menu for the model: every available template with its section
  * list (id — label — description — «контент за схемою блоку X»). All templates'
@@ -106,7 +100,10 @@ function buildTemplateDoc(templates: SiteTemplate[]): string {
         .map((id) => {
           const def = t.sections[id];
           if (!def) return null;
-          return `    · ${id} — ${def.label}: ${def.description} (контент за схемою блоку ${def.block})`;
+          const vs = def.variants
+            ? ` [layout: default | ${Object.keys(def.variants).join(" | ")}]`
+            : "";
+          return `    · ${id} — ${def.label}: ${def.description} (блок ${def.block})${vs}`;
         })
         .filter(Boolean)
         .join("\n");
@@ -115,21 +112,31 @@ function buildTemplateDoc(templates: SiteTemplate[]): string {
     .join("\n\n");
 }
 
-function buildSystem(vertical: VerticalConfig): string {
-  const templates = templatesFor(vertical.id);
-  const templateRule =
-    templates.length > 0
-      ? `ШАБЛОН (пріоритет над дизайн-пакетом): обери ОДИН templateId — цілісний шаблон, що найкраще пасує цьому бізнесу. Шаблон диктує ВЕСЬ вигляд (палітру, шрифти, анімації, може бути темним) і меню секцій, з яких збирається сторінка. Правила:
-- Компонуй сторінку ЛИШЕ із секцій обраного шаблону.
-- Для КОЖНОГО блоку вкажи поле section = id секції шаблону; тип блоку має відповідати вказаному в секції («контент за схемою блоку X»).
-- hero-секція — перша, contacts-секція — остання; порядок з переліку секцій — орієнтир, не догма.
-- Кожну СЕКЦІЮ використовуй щонайбільше один раз. РІЗНІ секції можуть живитись ОДНИМ типом блоку (напр. features, howitworks і pricing — три РІЗНІ секції зі схемою services) — у шаблоні ліміт «макс ×» діє на секцію, не на тип блоку.
-- НЕ обирай designPackId, якщо обрав templateId.
-Доступні шаблони та їхні секції:
+function buildSystem(vertical: VerticalConfig, forced?: SiteTemplate): string {
+  // When a template is forced (regenerate keeps the site's template), offer the
+  // model ONLY that template's section menu — otherwise it may compose from a
+  // different template's sections that assemble() would then drop/remap.
+  const templates = forced ? [forced] : Object.values(siteTemplates);
+  const templateRule = forced
+    ? `ШАБЛОН зафіксовано (регенерація): ${forced.id} — ${forced.label}. Встанови templateId="${forced.id}" і компонуй сторінку ЛИШЕ із секцій цього шаблону. Правила:
+- Для КОЖНОГО блоку вкажи section = id секції шаблону; тип блоку має відповідати вказаному («блок X»).
+- Якщо секція має layout-варіанти [layout: default | …] — обери variant, що найкраще пасує цьому бізнесу; якщо не впевнений, не вказуй (буде default).
+- hero-секція — перша, contacts-секція — остання; порядок — орієнтир, не догма.
+- Кожну СЕКЦІЮ щонайбільше один раз. РІЗНІ секції можуть живитись ОДНИМ типом блоку (ліміт «макс ×» діє на секцію, не на тип).
+Секції цього шаблону та layout-варіанти:
 ${buildTemplateDoc(templates)}
 
 `
-      : "";
+    : `ШАБЛОН (обов'язково): обери ОДИН templateId, чий ХАРАКТЕР і настрій найкраще передають суть цього бізнесу — за відчуттям, НЕ за нішею (жоден шаблон не «закріплений» за галуззю). Шаблон диктує ВЕСЬ вигляд (палітру, шрифти, анімації, може бути темним) і меню секцій. Правила:
+- Компонуй сторінку ЛИШЕ із секцій обраного шаблону.
+- Для КОЖНОГО блоку вкажи section = id секції шаблону; тип блоку має відповідати вказаному («блок X»).
+- Якщо секція має layout-варіанти [layout: default | …] — обери variant, що найкраще пасує цьому бізнесу; якщо не впевнений, не вказуй (буде default).
+- hero-секція — перша, contacts-секція — остання; порядок — орієнтир, не догма.
+- Кожну СЕКЦІЮ щонайбільше один раз. РІЗНІ секції можуть живитись ОДНИМ типом блоку (ліміт «макс ×» діє на секцію, не на тип).
+Доступні шаблони, їхні секції та layout-варіанти:
+${buildTemplateDoc(templates)}
+
+`;
   return `Ти — досвідчений веб-дизайнер і копірайтер, що збирає односторінковий сайт українському бізнесу: ${vertical.label} (${vertical.personaHint}).
 Тон і акценти: ${vertical.genHint}.
 Ти НЕ пишеш HTML. Ти КОМПОНУЄШ сторінку з фіксованої бібліотеки блоків: обираєш, які блоки і в якому порядку, і заповнюєш їхній вміст. Виклич інструмент build_site.
@@ -137,7 +144,7 @@ ${buildTemplateDoc(templates)}
 ПРАВИЛА КОМПОЗИЦІЇ (обов'язкові):
 - Перший блок — завжди hero. Останній — завжди contacts.
 - Між ними — від ${COMPOSITION_RULES.minMiddle} до ${COMPOSITION_RULES.maxMiddle} блоків із бібліотеки; набір і порядок обираєш під конкретний бізнес.
-- Не використовуй жоден тип блоку частіше за його ліміт "макс ×".
+- Не використовуй жоден тип блоку частіше за його ліміт "макс ×". (На сайті-ШАБЛОНІ цей ліміт діє на СЕКЦІЮ, а не на тип блоку — РІЗНІ секції можуть мати однаковий тип; див. правила шаблону нижче.)
 - Різні бізнеси мають отримувати РІЗНІ набори й порядок блоків — не роби однаковий шаблон.
 
 GROUNDING (критично для довіри):
@@ -146,10 +153,7 @@ GROUNDING (критично для довіри):
 - НІКОЛИ не вигадуй числа у stats — лише якщо є у фактах.
 - Не вигадуй посилань на зображення.
 
-${templateRule}ДИЗАЙН: обери designPackId — цілісний дизайн-пакет, що найкраще пасує настрою цього бізнесу. Пакет задає палітру, шрифти й макет УСІХ секцій, тож сайт виглядає як єдине ціле, а не набір випадкових стилів. Доступні пакети:
-${buildPackDoc(vertical)}
-
-ТЕМА (запасний варіант): якщо не впевнений із пакетом — обери themePresetId ЛИШЕ зі списку доступних, що найкраще пасує бренду. Пакет має пріоритет над темою.
+${templateRule}ТЕМА: обери themePresetId ЛИШЕ зі списку доступних, що найкраще пасує бренду (використовується для favicon/прев'ю — вигляд самої сторінки повністю задає обраний шаблон).
 
 HERO-ЗОБРАЖЕННЯ: заповни imageSubject — короткий опис АНГЛІЙСЬКОЮ (до 15 слів) атмосферного ФОНОВОГО зображення, що асоціюється саме з цим бізнесом: текстури, матеріали, гра світла, природа. ЗАБОРОНЕНО: приміщення/фасади/вітрини, впізнавані товари як «наші», люди, будь-який текст. Приклад для хімчистки: "soft folded fresh linen textures in airy light".`;
 }
@@ -176,6 +180,9 @@ export async function generateSite(
 ): Promise<GeneratedSite> {
   const client = getAnthropic();
   const vertical = getVertical(verticalId);
+  // Resolve a forced template once (regenerate keeps the site's template) — it
+  // both constrains the model's section menu and wins the final resolution.
+  const forcedTemplate = templateId ? getTemplate(templateId) : undefined;
 
   const userPrompt = `Бібліотека блоків:
 ${buildLibraryDoc()}
@@ -209,7 +216,7 @@ ${JSON.stringify(facts, null, 2)}
       // incompatible with a forced tool_choice → "auto"; a missing tool call is
       // handled as a failed attempt by this retry loop.
       thinking: { type: "enabled", budget_tokens: 6000 },
-      system: buildSystem(vertical),
+      system: buildSystem(vertical, forcedTemplate),
       tools: [buildSiteTool],
       tool_choice: { type: "auto" },
       messages,
@@ -228,10 +235,14 @@ ${JSON.stringify(facts, null, 2)}
       // the template dictates the whole look and packs are IGNORED. The persisted
       // theme is still the model's preset (favicon/OG metadata) — the wrapper
       // overrides the actual on-page colors.
-      const affinity = templatesFor(vertical.id);
+      // Template is the primary design path: the model picks any template BY
+      // CHARACTER (no vertical gate), regenerate keeps the caller's, and a fixed
+      // default is the last-resort safety net — never a random pick.
       const template =
-        (templateId ? getTemplate(templateId) : undefined) ??
-        affinity.find((t) => t.id === parsed.data.templateId);
+        forcedTemplate ??
+        getTemplate(parsed.data.templateId) ??
+        getTemplate("studio") ??
+        Object.values(siteTemplates)[0];
       if (template) {
         return {
           theme: resolveTheme(parsed.data.themePresetId),
@@ -293,6 +304,18 @@ function resolvedSection(template: SiteTemplate | undefined, b: BlockInstance): 
   const s = b.section;
   if (s && template.sections[s]?.block === b.type) return s;
   return sectionForType(template, b.type);
+}
+
+// The section's layout variant is the MODEL's choice (b.variant). Validate it
+// against the section — keep it only if that section actually defines it;
+// otherwise fall back to the default layout. No lottery: the model decides.
+function resolvedVariant(
+  template: SiteTemplate | undefined,
+  section: string | undefined,
+  requested: string | undefined,
+): string | undefined {
+  if (!template || !section || !requested) return undefined;
+  return template.sections[section]?.variants?.[requested] ? requested : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -374,12 +397,18 @@ function assemble(
         ]
       : [];
 
+  // The contacts closer is part of the funnel invariant (§5.6): if the model
+  // omitted it, synthesize one — groundAndPlace then fills it with the real
+  // contact facts, so every generated site ends with lead_form + contacts.
+  const contactsBlock: BlockInstance =
+    contacts ?? { type: "contacts", props: { title: "Контакти" } };
+
   const ordered: BlockInstance[] = [
     ...(hero ? [hero] : []),
     ...middle,
     ...injectedGallery,
     leadForm,
-    ...(contacts ? [contacts] : []),
+    contactsBlock,
   ];
 
   const seen: Partial<Record<BlockType, number>> = {};
@@ -425,6 +454,19 @@ function groundImages(
     case "gallery":
       // Any surviving gallery (kept or injected) is filled with the real photos.
       return { ...b, props: { ...b.props, images: photos.map((url) => ({ url, alt: businessName })) } };
+    case "team":
+      // Per-person photos are model-invented → strip any not in the uploaded set
+      // (like services), so team cards fall back to initials rather than showing a
+      // fabricated/hotlinked portrait. Honours the schema's grounding promise.
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          items: b.props.items.map((it) =>
+            it.photo && !allowed.has(it.photo) ? { ...it, photo: undefined } : it,
+          ),
+        },
+      };
     default:
       return b;
   }
@@ -471,6 +513,7 @@ function groundAndPlace(
   template: SiteTemplate | undefined,
 ): StoredBlock {
   const section = resolvedSection(template, b);
+  const variant = resolvedVariant(template, section, b.variant);
   const placement = computePlacement(b.type, seen, pack, template, section);
 
   // Grounding (§4.4): contact facts are known — force them verbatim.
@@ -486,8 +529,9 @@ function groundAndPlace(
         telegram: facts.telegram ?? b.props.telegram,
       },
       ...placement,
+      variant,
     };
   }
 
-  return { ...b, ...placement };
+  return { ...b, ...placement, variant };
 }

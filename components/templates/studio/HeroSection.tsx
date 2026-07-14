@@ -11,14 +11,14 @@ type HeroStat = { value: string; label: string };
  * with two drifting gradient blobs, a scroll parallax (content fades + lifts
  * as you scroll past), an eyebrow badge, headline, subline and up to two CTAs.
  *
- * Parameterised: badge=eyebrow, headline=title, subline=subtitle, the two CTAs
- * from ctaLabel/secondaryCtaLabel (+ hrefs). The 3-stat row is fed by the
- * optional `extra` prop (stats items) and only renders when provided.
+ * Parameterised: badge=eyebrow, headline=title (+ optional violet
+ * `titleAccent` second line), subline=subtitle, the two CTAs from
+ * ctaLabel/secondaryCtaLabel (+ hrefs). The 3-stat row is fed by the optional
+ * `extra` prop (stats items) and only renders when provided.
  *
- * Fidelity deltas: the source split the headline into a plain + violet
- * `.gradient-text` span — we render the single `title` string plain; the
- * source's secondary CTA carried a messenger glyph — dropped (vertical-neutral).
- * The infinite blob drift is gated on prefers-reduced-motion.
+ * Fidelity: the source's two-tone headline (plain line + violet `.gradient-text`
+ * span) is restored via `titleAccent`. The infinite blob drift is gated on
+ * prefers-reduced-motion.
  */
 export default function HeroSection({ data, extra }: { data: unknown; extra?: unknown }) {
   const d = data as BlockProps["hero"];
@@ -75,6 +75,12 @@ export default function HeroSection({ data, extra }: { data: unknown; extra?: un
           transition={{ delay: 0.2, duration: 0.8, ease: [0.76, 0, 0.24, 1] }}
         >
           {d.title}
+          {d.titleAccent && (
+            <>
+              <br />
+              <span className="gradient-text">{d.titleAccent}</span>
+            </>
+          )}
         </motion.h1>
 
         {d.subtitle && (

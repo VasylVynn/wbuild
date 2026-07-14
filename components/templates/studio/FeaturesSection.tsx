@@ -18,7 +18,7 @@ export default function FeaturesSection({ data }: { data: unknown }) {
   const d = data as BlockProps["services"];
 
   return (
-    <section className="py-20 md:py-28" aria-labelledby="features-title">
+    <section className="py-12 md:py-16" aria-labelledby="features-title">
       <div className="container mx-auto px-4 sm:px-6">
         {d.title && (
           <motion.div
@@ -29,6 +29,7 @@ export default function FeaturesSection({ data }: { data: unknown }) {
             className="text-center mb-16"
           >
             <h2 id="features-title" className="section-title">{d.title}</h2>
+            {/* FIDELITY-TODO: needs schema field services.subtitle — source renders a section-subtitle <p> here */}
           </motion.div>
         )}
 

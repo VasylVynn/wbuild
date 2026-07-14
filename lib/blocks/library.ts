@@ -129,6 +129,43 @@ export const blockLibrary: Record<BlockType, BlockLibraryEntry> = {
     inNav: true,
     navLabel: "Контакти",
   },
+  // ── Distinctive TEMPLATE sections (rendered only where a template defines a
+  // section for them; on other templates the model omits them and code drops
+  // any that slip through). Kept honest: use ONLY real business data. ──
+  team: {
+    label: "Команда",
+    description:
+      "Картки людей команди: ім'я + роль (+ опис/фото). ЛИШЕ реальні люди бізнесу; не вигадувати імена.",
+    role: "middle",
+    maxPerPage: 1,
+    inNav: true,
+    navLabel: "Команда",
+  },
+  timeline: {
+    label: "Досвід / шлях",
+    description:
+      "Хронологія: період + етап/роль + опис. Для досвіду, кар'єри, процесу. ЛИШЕ реальні дати й етапи.",
+    role: "middle",
+    maxPerPage: 1,
+    inNav: false,
+  },
+  marquee: {
+    label: "Стрічка ключових слів",
+    description:
+      "Рухома стрічка коротких слів (навички, технології, напрямки). 6–15 РЕАЛЬНИХ пунктів; не вигадувати.",
+    role: "middle",
+    maxPerPage: 1,
+    inNav: false,
+  },
+  publications: {
+    label: "Праці / публікації",
+    description:
+      "Список праць/книг/статей/кейсів: назва + рік + джерело. ЛИШЕ реальні; не вигадувати назви.",
+    role: "middle",
+    maxPerPage: 1,
+    inNav: true,
+    navLabel: "Праці",
+  },
 };
 
 /** Composition constraints (guided freedom — owner decision 2026-07-07). */
@@ -138,5 +175,5 @@ export const COMPOSITION_RULES = {
   closer: "contacts" as BlockType,
   /** number of MIDDLE blocks (between hero and contacts). */
   minMiddle: 3,
-  maxMiddle: 7,
+  maxMiddle: 8,
 } as const;

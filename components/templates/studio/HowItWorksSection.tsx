@@ -15,7 +15,7 @@ export default function HowItWorksSection({ data }: { data: unknown }) {
   const d = data as BlockProps["services"];
 
   return (
-    <section className="py-20 md:py-28 relative" aria-labelledby="how-it-works-title">
+    <section className="py-12 md:py-16 relative" aria-labelledby="how-it-works-title">
       <div className="container mx-auto px-4 sm:px-6">
         {d.title && (
           <motion.div
@@ -26,6 +26,7 @@ export default function HowItWorksSection({ data }: { data: unknown }) {
             className="text-center mb-16"
           >
             <h2 id="how-it-works-title" className="section-title">{d.title}</h2>
+            {/* FIDELITY-TODO: needs schema field services.subtitle — source renders a section-subtitle <p> here */}
           </motion.div>
         )}
 
