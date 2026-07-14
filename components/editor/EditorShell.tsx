@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import Link from "next/link";
+import { Palette, ImageIcon, RefreshCw, Monitor, Tablet, Smartphone } from "lucide-react";
 import {
   saveDraftBlocks,
   switchTheme,
@@ -20,8 +21,27 @@ import { themeToCssVars, type Theme } from "@/lib/theme/tokens";
 import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/components/ui";
 import EditableSection from "./EditableSection";
 import BlockSheet from "./BlockSheet";
+import BlockEditPanel from "./BlockEditPanel";
 import PhotoField from "./PhotoField";
 import ThemePicker from "./ThemePicker";
+
+/** Device modes: «Компʼютер» edits inline; tablet/mobile render the draft in an
+ * iframe whose width IS the simulated viewport (frame route), read-only. */
+type Device = "desktop" | "tablet" | "mobile";
+const DEVICE_WIDTH: Record<Exclude<Device, "desktop">, number> = { tablet: 768, mobile: 375 };
+
+/** lg-breakpoint media query — decides sheet (mobile) vs inspector (desktop). */
+function useIsDesktop(): boolean {
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return isDesktop;
+}
 
 /**
  * The site EDITOR (§3): the owner sees their DRAFT rendered with the live theme,
@@ -96,6 +116,11 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   const [logoOpen, setLogoOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
   const [logoBusy, setLogoBusy] = useState(false);
+  const [device, setDevice] = useState<Device>("desktop");
+  // Bumped after every persisted draft change → remounts the preview iframe so
+  // tablet/mobile modes always show the current draft.
+  const [frameVersion, setFrameVersion] = useState(0);
+  const isDesktop = useIsDesktop();
 
   const notify = (t: Toast) => {
     setToast(t);
@@ -113,6 +138,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       return false;
     }
     if (successToast) notify({ text: successToast });
+    setFrameVersion((v) => v + 1);
     return true;
   };
 
@@ -158,6 +184,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       setTheme(res.theme);
       setDirty(true);
       setThemeOpen(false);
+      setFrameVersion((v) => v + 1);
       notify({ text: "Оформлення змінено" });
     } else {
       notify({ text: `Не вдалося змінити оформлення: ${res.error ?? "помилка"}` });
@@ -177,6 +204,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       setPackId(id);
       setDirty(true);
       setThemeOpen(false);
+      setFrameVersion((v) => v + 1);
       notify({ text: "Дизайн змінено" });
     } else {
       notify({ text: `Не вдалося змінити дизайн: ${res.error ?? "помилка"}` });
@@ -194,6 +222,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       setBlocks(res.blocks);
       if (res.theme) setTheme(res.theme);
       setDirty(true);
+      setFrameVersion((v) => v + 1);
       notify({ text: "Сайт зібрано наново" });
     } else {
       notify({ text: `Не вдалося перегенерувати: ${res.error ?? "помилка"}` });
@@ -341,39 +370,63 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+            {/* Device preview toggle — desktop edits inline; tablet/mobile show
+                the draft in a real-viewport iframe (read-only). */}
+            <div className="hidden shrink-0 items-center gap-0.5 rounded-[12px] bg-sunken p-1 md:flex">
+              {(
+                [
+                  { id: "desktop", icon: Monitor, title: "Компʼютер — редагування" },
+                  { id: "tablet", icon: Tablet, title: "Планшет — перегляд" },
+                  { id: "mobile", icon: Smartphone, title: "Телефон — перегляд" },
+                ] as const
+              ).map(({ id, icon: Icon, title }) => (
+                <button
+                  key={id}
+                  type="button"
+                  title={title}
+                  aria-pressed={device === id}
+                  onClick={() => setDevice(id)}
+                  className={`flex h-8 w-9 items-center justify-center rounded-[9px] transition-colors ${
+                    device === id ? "bg-surface text-brand shadow-card" : "text-ink-muted hover:text-ink"
+                  }`}
+                >
+                  <Icon size={16} />
+                </button>
+              ))}
+            </div>
             <Button
               variant="secondary"
-              size="md"
-              className="shrink-0 rounded-full"
+              size="sm"
+              className="shrink-0"
               onClick={() => setThemeOpen(true)}
             >
-              <span aria-hidden>🎨</span> Оформлення
+              <Palette size={15} /> Оформлення
             </Button>
             <Button
               variant="secondary"
-              size="md"
-              className="shrink-0 rounded-full"
+              size="sm"
+              className="shrink-0"
               onClick={() => void openLogo()}
             >
-              <span aria-hidden>🖼️</span> Лого
+              <ImageIcon size={15} /> Лого
             </Button>
             <Button
               variant="secondary"
-              size="md"
+              size="sm"
               disabled={regenerating}
-              className="shrink-0 rounded-full"
+              className="shrink-0"
               onClick={() => setRegenConfirmOpen(true)}
             >
-              <span aria-hidden>↻</span>
+              <RefreshCw size={15} className={regenerating ? "animate-spin" : undefined} />
               <span className="hidden sm:inline">
                 {regenerating ? "Збираємо…" : "Перегенерувати"}
               </span>
             </Button>
             <Button
               variant="primary"
-              size="md"
+              size="sm"
               disabled={publishing}
-              className="w-full rounded-full sm:w-auto"
+              className="w-full sm:w-auto"
               onClick={publish}
             >
               {publishing ? "Публікуємо…" : "Опублікувати"}
@@ -382,47 +435,113 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
         </div>
       </header>
 
-      {/* Draft preview — the tenant theme renders inside a neutral white frame. */}
-      <main className="mx-auto max-w-5xl px-2 py-4 sm:px-4 sm:py-6">
-        <div
-          className="overflow-hidden rounded-[24px] border border-line bg-surface shadow-card"
-          // A template preview's Nav (and theme toggle) use `position: fixed`;
-          // a transform here makes this the containing block for them so they
-          // stay INSIDE the framed preview instead of floating over the editor
-          // chrome. No effect on pack/legacy previews.
-          style={TemplateWrapper ? { transform: "translateZ(0)" } : undefined}
-        >
-          {blocks.length === 0 ? (
-            <div className="px-6 py-24 text-center text-[15px] font-medium text-ink-faint">
-              Тут поки порожньо. Натисніть «Перегенерувати», щоб зібрати сайт із ваших даних.
+      {/* Draft preview + desktop inspector. The preview column: «Компʼютер» =
+          inline editable render; tablet/mobile = real-viewport iframe of the
+          frame route (read-only responsiveness check). */}
+      <main className="mx-auto flex max-w-[1440px] items-start gap-5 px-2 py-4 sm:px-4 sm:py-6">
+        <div className="min-w-0 flex-1">
+          {device === "desktop" ? (
+            <div
+              className="overflow-hidden rounded-[24px] border border-line bg-surface shadow-card"
+              // A template preview's Nav (and theme toggle) use `position: fixed`;
+              // a transform here makes this the containing block for them so they
+              // stay INSIDE the framed preview instead of floating over the editor
+              // chrome. No effect on pack/legacy previews.
+              style={TemplateWrapper ? { transform: "translateZ(0)" } : undefined}
+            >
+              {blocks.length === 0 ? (
+                <div className="px-6 py-24 text-center text-[15px] font-medium text-ink-faint">
+                  Тут поки порожньо. Натисніть «Перегенерувати», щоб зібрати сайт із ваших даних.
+                </div>
+              ) : TemplateWrapper ? (
+                <TemplateWrapper>{sectionEls}</TemplateWrapper>
+              ) : (
+                <div style={previewStyle}>{sectionEls}</div>
+              )}
             </div>
-          ) : TemplateWrapper ? (
-            <TemplateWrapper>{sectionEls}</TemplateWrapper>
           ) : (
-            <div style={previewStyle}>{sectionEls}</div>
+            <div className="flex flex-col items-center gap-3">
+              <iframe
+                key={`${device}-${frameVersion}`}
+                src={`/edit/${encodeURIComponent(host)}/frame`}
+                title="Перегляд сайту"
+                style={{ width: DEVICE_WIDTH[device], maxWidth: "100%" }}
+                className="h-[calc(100vh-220px)] min-h-[480px] rounded-[24px] border border-line bg-white shadow-card"
+              />
+              <p className="text-[13px] font-semibold text-ink-faint">
+                Перегляд {device === "tablet" ? "планшета" : "телефона"} — редагування в режимі
+                «Компʼютер».
+              </p>
+            </div>
           )}
-        </div>
-        <p className="mx-auto mt-4 max-w-md text-center text-[14px] font-semibold text-ink-faint">
-          Натисніть на будь-яку секцію, щоб змінити текст або фото. Зміни зберігаються в чернетку —
-          натисніть «Опублікувати», щоб вони зʼявились на сайті.
-        </p>
+          {device === "desktop" && (
+            <p className="mx-auto mt-4 max-w-md text-center text-[14px] font-semibold text-ink-faint">
+              Натисніть на будь-яку секцію, щоб змінити текст або фото. Зміни зберігаються в
+              чернетку — натисніть «Опублікувати», щоб вони зʼявились на сайті.
+            </p>
+          )}
 
-        <Card className="mt-4 flex flex-col items-start gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[15px] font-semibold text-ink-muted">
-            Потрібно щось особливе — інша структура, дизайн, додаткові сторінки?
-          </p>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="w-full shrink-0 rounded-full sm:w-auto"
-            onClick={() => setCustomOpen(true)}
-          >
-            Хочу кастомні зміни
-          </Button>
-        </Card>
+          <Card className="mt-4 flex flex-col items-start gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[15px] font-semibold text-ink-muted">
+              Потрібно щось особливе — інша структура, дизайн, додаткові сторінки?
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="w-full shrink-0 sm:w-auto"
+              onClick={() => setCustomOpen(true)}
+            >
+              Хочу кастомні зміни
+            </Button>
+          </Card>
+        </div>
+
+        {/* Desktop inspector (P2): the same BlockEditPanel the mobile sheet uses,
+            docked as a sticky right column instead of covering the preview. */}
+        {isDesktop && (
+          <aside className="sticky top-24 hidden w-[380px] shrink-0 lg:block">
+            <Card className="flex max-h-[calc(100vh-8rem)] flex-col overflow-hidden">
+              {selected && selectedIndex != null ? (
+                <>
+                  <div className="flex items-center justify-between border-b border-sunken px-5 py-3.5">
+                    <div>
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-faint">
+                        Редагування секції
+                      </div>
+                      <div className="font-brand text-[17px] font-medium text-ink">
+                        {blockLibrary[selected.type]?.label ?? selected.type}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIndex(null)}
+                      className="flex h-9 w-9 items-center justify-center rounded-full text-[20px] text-ink-faint transition-colors hover:bg-sunken hover:text-ink"
+                      aria-label="Закрити"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <BlockEditPanel
+                    key={selectedIndex}
+                    block={selected}
+                    host={host}
+                    saving={saving}
+                    onSave={(props) => void handleSaveBlock(selectedIndex, props)}
+                    onSkinChange={(skin) => handleSkinChange(selectedIndex, skin)}
+                    onClose={() => setSelectedIndex(null)}
+                  />
+                </>
+              ) : (
+                <div className="px-5 py-10 text-center text-[14px] font-semibold text-ink-faint">
+                  Натисніть на секцію у превʼю ліворуч, щоб редагувати її тут.
+                </div>
+              )}
+            </Card>
+          </aside>
+        )}
       </main>
 
-      {selected && selectedIndex != null && (
+      {!isDesktop && selected && selectedIndex != null && (
         <BlockSheet
           key={selectedIndex}
           block={selected}
