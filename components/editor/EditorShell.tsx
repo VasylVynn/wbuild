@@ -122,8 +122,16 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   // tablet/mobile modes always show the current draft.
   const [frameVersion, setFrameVersion] = useState(0);
   const isDesktop = useIsDesktop();
-  // Agent chat (P3): left panel on desktop, full-screen overlay on mobile.
+  // Agent chat (P3): docked left panel on desktop (ON by default — owner
+  // request), full-screen overlay on mobile (opened via the toolbar button).
   const [chatOpen, setChatOpen] = useState(false);
+  const chatAutoOpened = useRef(false);
+  useEffect(() => {
+    if (isDesktop && !chatAutoOpened.current) {
+      chatAutoOpened.current = true;
+      setChatOpen(true);
+    }
+  }, [isDesktop]);
   const [agentUndo, setAgentUndo] = useState<StoredBlock[] | null>(null);
   const [undoBusy, setUndoBusy] = useState(false);
 
@@ -563,50 +571,42 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           </Card>
         </div>
 
-        {/* Desktop inspector (P2): the same BlockEditPanel the mobile sheet uses,
-            docked as a sticky right column instead of covering the preview. */}
-        {isDesktop && (
-          <aside className="sticky top-24 hidden w-[380px] shrink-0 lg:block">
-            <Card className="flex max-h-[calc(100vh-8rem)] flex-col overflow-hidden">
-              {selected && selectedIndex != null ? (
-                <>
-                  <div className="flex items-center justify-between border-b border-sunken px-5 py-3.5">
-                    <div>
-                      <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-faint">
-                        Редагування секції
-                      </div>
-                      <div className="font-brand text-[17px] font-medium text-ink">
-                        {blockLibrary[selected.type]?.label ?? selected.type}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedIndex(null)}
-                      className="flex h-9 w-9 items-center justify-center rounded-full text-[20px] text-ink-faint transition-colors hover:bg-sunken hover:text-ink"
-                      aria-label="Закрити"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <BlockEditPanel
-                    key={selectedIndex}
-                    block={selected}
-                    host={host}
-                    saving={saving}
-                    onSave={(props) => void handleSaveBlock(selectedIndex, props)}
-                    onSkinChange={(skin) => handleSkinChange(selectedIndex, skin)}
-                    onClose={() => setSelectedIndex(null)}
-                  />
-                </>
-              ) : (
-                <div className="px-5 py-10 text-center text-[14px] font-semibold text-ink-faint">
-                  Натисніть на секцію у превʼю ліворуч, щоб редагувати її тут.
-                </div>
-              )}
-            </Card>
-          </aside>
-        )}
       </main>
+
+      {/* Desktop block editor — a right DRAWER over the preview (owner request):
+          slides in on section click, no permanent right column. No backdrop, so
+          clicking another section switches the drawer to it. */}
+      {isDesktop && selected && selectedIndex != null && (
+        <div className="fixed inset-y-0 right-0 z-40 flex w-[400px] flex-col border-l border-line bg-surface shadow-[-16px_0_48px_rgba(23,36,47,.2)]">
+          <div className="flex items-center justify-between border-b border-sunken px-5 py-3.5">
+            <div>
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-faint">
+                Редагування секції
+              </div>
+              <div className="font-brand text-[17px] font-medium text-ink">
+                {blockLibrary[selected.type]?.label ?? selected.type}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedIndex(null)}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-[20px] text-ink-faint transition-colors hover:bg-sunken hover:text-ink"
+              aria-label="Закрити"
+            >
+              ×
+            </button>
+          </div>
+          <BlockEditPanel
+            key={selectedIndex}
+            block={selected}
+            host={host}
+            saving={saving}
+            onSave={(props) => void handleSaveBlock(selectedIndex, props)}
+            onSkinChange={(skin) => handleSkinChange(selectedIndex, skin)}
+            onClose={() => setSelectedIndex(null)}
+          />
+        </div>
+      )}
 
       {!isDesktop && selected && selectedIndex != null && (
         <BlockSheet
