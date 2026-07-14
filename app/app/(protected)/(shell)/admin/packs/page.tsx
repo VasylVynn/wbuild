@@ -12,7 +12,7 @@ export default async function PacksIndexPage() {
   if (!(await isPlatformAdmin())) notFound();
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl bg-canvas px-6 py-12">
+    <div>
       <div className="mb-8">
         <Link href="/admin" className="text-[14px] font-bold text-ink-muted transition-colors hover:text-ink">
           ← Адмінка
@@ -51,6 +51,6 @@ export default async function PacksIndexPage() {
           );
         })}
       </div>
-    </main>
+    </div>
   );
 }

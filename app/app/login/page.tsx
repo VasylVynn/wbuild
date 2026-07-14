@@ -3,17 +3,43 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { Check, MailCheck } from "lucide-react";
 import { signInAction, signUpAction } from "./actions";
 import { Button, Field, Input, Wordmark } from "@/components/ui";
 
 /**
  * Auth page for the dashboard host (public path /login). One screen, two modes
- * («Увійти» / «Зареєструватися»). Big touch targets and plain-language errors
- * for a non-technical 50+ audience. On success the server action redirects to
+ * («Увійти» / «Зареєструватися»), split-panel on desktop (brand left, form
+ * right). Plain-language errors. On success the server action redirects to
  * /sites (or ?next=, when present and same-origin); here we only surface
  * errors and the "confirm your email" state.
  */
 type Mode = "signin" | "signup";
+
+function BrandPanel() {
+  return (
+    <div className="hidden flex-col justify-center gap-8 bg-brand px-12 py-16 text-white lg:flex xl:px-20">
+      <span className="select-none font-brand text-[24px] font-semibold tracking-tight">
+        <span className="text-honey">3</span>minsite
+      </span>
+      <h2 className="max-w-md font-brand text-[32px] font-semibold leading-tight">
+        Клієнти з інтернету — прямо у ваш Telegram
+      </h2>
+      <ul className="flex max-w-md flex-col gap-3 text-[16px] text-brand-soft">
+        {[
+          "Сайт створюється за коротку розмову з помічником",
+          "Кожна заявка з сайту миттєво падає в месенджер",
+          "Редагується дотиком — без конструкторів і налаштувань",
+        ].map((line) => (
+          <li key={line} className="flex items-start gap-3">
+            <Check size={18} className="mt-0.5 shrink-0 text-honey" />
+            <span>{line}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export default function LoginPage() {
   // useSearchParams opts the page out of static rendering — Next.js requires
@@ -72,8 +98,8 @@ function LoginForm() {
   if (confirmSent) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 bg-canvas px-6 py-16 text-center">
-        <div className="flex h-[84px] w-[84px] items-center justify-center rounded-full bg-honey-soft text-[38px]">
-          📬
+        <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-honey-soft text-honey-text">
+          <MailCheck size={32} />
         </div>
         <h1 className="mt-6 font-brand text-[24px] font-medium text-ink">Перевірте пошту</h1>
         <p className="text-[17px] leading-relaxed text-ink-muted">
@@ -88,9 +114,12 @@ function LoginForm() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 bg-canvas px-6 py-16">
+    <main className="min-h-screen bg-canvas lg:grid lg:grid-cols-2">
+      <BrandPanel />
+      <div className="flex min-h-screen flex-col justify-center px-6 py-16">
+        <div className="mx-auto flex w-full max-w-md flex-col gap-6">
       <div className="flex items-center justify-between">
-        <Link href="/" className="text-[15px] font-bold text-ink-muted transition-colors hover:text-ink">
+        <Link href="/" className="text-[14px] font-semibold text-ink-muted transition-colors hover:text-ink">
           ← На головну
         </Link>
         <Wordmark />
@@ -151,6 +180,15 @@ function LoginForm() {
           />
         </Field>
 
+        {!isSignup && (
+          <Link
+            href="/reset"
+            className="-mt-1 self-end text-[14px] font-semibold text-brand transition-colors hover:text-brand-hover"
+          >
+            Забули пароль?
+          </Link>
+        )}
+
         {error && (
           <p className="rounded-[14px] bg-danger-soft px-4 py-3.5 text-[15px] font-semibold text-danger">
             {error}
@@ -161,6 +199,8 @@ function LoginForm() {
           {loading ? "Зачекайте…" : isSignup ? "Зареєструватися" : "Увійти"}
         </Button>
       </form>
+        </div>
+      </div>
     </main>
   );
 }

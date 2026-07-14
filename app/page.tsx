@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Leaf, MessageCircle, PenLine, Lightbulb } from "lucide-react";
 import { ROOT_DOMAIN } from "@/lib/config";
 
 /**
@@ -124,16 +125,16 @@ export default function PlatformHome() {
             </h2>
           </div>
           <div className="mt-10 grid gap-5 sm:mt-12 sm:grid-cols-2">
-            <Feature emoji="🌿" title="Сайт, що викликає довіру">
+            <Feature icon={<Leaf size={22} />} title="Сайт, що викликає довіру">
               Охайний, теплий і сучасний — такий, що клієнту хочеться залишитись і написати вам.
             </Feature>
-            <Feature emoji="💬" title="Заявки в Telegram" accent>
+            <Feature icon={<MessageCircle size={22} />} title="Заявки в Telegram" accent>
               Ніяких пропущених листів і незручних форм — усі звернення падають прямо у ваш чат.
             </Feature>
-            <Feature emoji="✏️" title="Простий редактор — жодних конструкторів">
+            <Feature icon={<PenLine size={22} />} title="Простий редактор — жодних конструкторів">
               Змінити текст чи ціну можна за хвилину, з телефону. Без блоків, сіток і налаштувань.
             </Feature>
-            <Feature emoji="💡" title="Помічник, який радить, що написати">
+            <Feature icon={<Lightbulb size={22} />} title="Помічник, який радить, що написати">
               Не знаєте, як описати послугу? Помічник підкаже слова, які працюють на клієнта.
             </Feature>
           </div>
@@ -218,12 +219,12 @@ function Step({ n, title, children }: { n: string; title: string; children: Reac
 }
 
 function Feature({
-  emoji,
+  icon,
   title,
   children,
   accent,
 }: {
-  emoji: string;
+  icon: ReactNode;
   title: string;
   children: ReactNode;
   accent?: boolean;
@@ -235,11 +236,11 @@ function Feature({
       }`}
     >
       <div
-        className={`flex h-12 w-12 items-center justify-center rounded-[14px] text-[24px] ${
-          accent ? "bg-white" : "bg-sunken"
+        className={`flex h-12 w-12 items-center justify-center rounded-[14px] ${
+          accent ? "bg-white text-tg-dark" : "bg-sunken text-ink-muted"
         }`}
       >
-        <span aria-hidden>{emoji}</span>
+        <span aria-hidden>{icon}</span>
       </div>
       <h3 className={`mt-5 text-[20px] font-bold leading-snug ${accent ? "text-tg-dark" : "text-ink"}`}>
         {title}

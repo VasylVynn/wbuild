@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Palette, Puzzle, FlaskConical } from "lucide-react";
 import { isPlatformAdmin } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase/server";
 import { getVertical } from "@/lib/verticals/registry";
@@ -190,32 +191,27 @@ export default async function AdminPage() {
   const urlFor = (host: string) => `${isProd ? "https" : "http"}://${host}${isProd ? "" : port}`;
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl bg-canvas px-6 py-12">
+    <div>
       <div className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <Link href="/" className="text-[14px] font-bold text-ink-muted transition-colors hover:text-ink">
-            ← Панель
-          </Link>
-          <h1 className="mt-1.5 font-brand text-[24px] font-medium text-ink">Адмінка</h1>
-        </div>
+        <h1 className="font-brand text-[24px] font-medium text-ink">Адмінка</h1>
         <div className="flex shrink-0 items-center gap-2.5">
           <Link
             href="/admin/packs"
-            className="inline-flex min-h-12 items-center gap-2 rounded-[16px] border-[1.5px] border-line-strong bg-surface px-5 font-ui text-[15px] font-bold text-ink transition-colors hover:border-brand hover:text-brand"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-surface px-4 font-ui text-[14px] font-semibold text-ink transition-colors hover:border-brand hover:text-brand"
           >
-            🎨 Прев&apos;ю дизайнів
+            <Palette size={16} /> Прев&apos;ю дизайнів
           </Link>
           <Link
             href="/admin/templates"
-            className="inline-flex min-h-12 items-center gap-2 rounded-[16px] border-[1.5px] border-line-strong bg-surface px-5 font-ui text-[15px] font-bold text-ink transition-colors hover:border-brand hover:text-brand"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-surface px-4 font-ui text-[14px] font-semibold text-ink transition-colors hover:border-brand hover:text-brand"
           >
-            🧩 Шаблони
+            <Puzzle size={16} /> Шаблони
           </Link>
           <Link
             href="/admin/generate"
-            className="inline-flex min-h-12 items-center gap-2 rounded-[16px] bg-brand px-5 font-ui text-[15px] font-bold text-white transition-colors hover:bg-brand-hover"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] bg-brand px-4 font-ui text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover"
           >
-            🧪 Тест-генерація
+            <FlaskConical size={16} /> Тест-генерація
           </Link>
         </div>
       </div>
@@ -364,6 +360,6 @@ export default async function AdminPage() {
           </ul>
         )}
       </section>
-    </main>
+    </div>
   );
 }

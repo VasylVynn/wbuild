@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { isAuthConfigured, getAuthClient } from "@/lib/supabase/auth";
+import { ROOT_DOMAIN } from "@/lib/config";
 
 /**
  * Auth server actions (§3.1). Sign-in/up run here (not in the browser) so the
@@ -81,4 +82,53 @@ export async function signOutAction(): Promise<void> {
     await sb.auth.signOut();
   }
   redirect("/login");
+}
+
+/** Public origin of the dashboard host — reset links must land back on app.<root>. */
+function appOrigin(): string {
+  const isProd = process.env.NODE_ENV === "production";
+  return `${isProd ? "https" : "http"}://app.${ROOT_DOMAIN}`;
+}
+
+export type ResetRequestResult = { error: string } | { sent: true };
+
+export async function resetPasswordAction(email: string): Promise<ResetRequestResult> {
+  if (!isAuthConfigured()) return { error: "Скидання пароля тимчасово недоступне." };
+  const e = email.trim().toLowerCase();
+  if (!e) return { error: "Введіть email." };
+
+  const sb = await getAuthClient();
+  const { error } = await sb.auth.resetPasswordForEmail(e, {
+    redirectTo: `${appOrigin()}/reset/confirm`,
+  });
+  if (error) return { error: uaError(error.message) };
+  return { sent: true };
+}
+
+export type UpdatePasswordResult = { error: string } | undefined;
+
+/**
+ * Second step of the reset flow: the email link lands on /reset/confirm?code=…
+ * (PKCE — the verifier cookie was set by resetPasswordForEmail, so the link
+ * must be opened in the same browser). The code→session exchange happens here,
+ * in a Server Action, because only actions may write session cookies.
+ */
+export async function updatePasswordAction(code: string | null, password: string): Promise<UpdatePasswordResult> {
+  if (!isAuthConfigured()) return { error: "Скидання пароля тимчасово недоступне." };
+  if (password.length < 6) return { error: "Пароль має містити щонайменше 6 символів." };
+
+  const sb = await getAuthClient();
+  if (code) {
+    const { error } = await sb.auth.exchangeCodeForSession(code);
+    if (error)
+      return {
+        error:
+          "Посилання застаріло або відкрите в іншому браузері. Запросіть новий лист і відкрийте його там само, де ввели email.",
+      };
+  }
+
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) return { error: uaError(error.message) };
+
+  redirect("/sites");
 }

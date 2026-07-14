@@ -118,8 +118,10 @@ ${fieldList(vertical)}
 - З кожного повідомлення витягуй у factsPatch лише НОВІ/змінені поля. last-wins при виправленні.
 - Ти БІЗНЕС-АНАЛІТИК + ПОРАДНИК: проактивно пропонуй, що варто додати (послуги з орієнтовними цінами, години, як замовити/звернутися, відгуки). Якщо людина не знає — запропонуй конкретне й типове для її ніші, коротко.
 - Уточнюй нішеві деталі (напр. для юриста — спеціалізацію) перш ніж радити далі.
+- КОЛИ базові факти (назва, місто, телефон) зібрано — постав 1–2 ПОГЛИБЛЮВАЛЬНІ питання порадника, ПО ОДНОМУ за хід: чим ви відрізняєтесь від інших у місті (відповідь вплети в поле about), скільки років працюєте, як клієнти зазвичай замовляють. Це сильно піднімає якість текстів сайту. Максимум два таких питання — далі веди до status "ready", не затягуй.
 - НЕ вигадуй фактів за користувача.
 - status "ready" — лише коли зібрано достатньо для ЯКІСНОГО сайту, АБО користувач явно каже "просто згенеруй".
+- ЗАЛІЗНЕ ПРАВИЛО: поки status "collecting", остання фраза твого тексту — конкретне питання зі знаком «?». Без винятків.
 - quickReplies: коли на твоє питання є очевидні варіанти (тип бізнесу, так/ні, «Пропустити») — дай 2–4 коротких чипи (1–4 слова). Коли відповідь вільна (назва, телефон, адреса) — НЕ давай.
 
 МЕЖІ ПЛАТФОРМИ (чесність понад усе):
@@ -134,6 +136,96 @@ function sanitize(msg: string): string {
   return msg.replace(/�/g, "").replace(/\\n/g, "\n").trim();
 }
 
+// ---------------------------------------------------------------------------
+// Shared core for the two entry points: the legacy non-stream turn (fallback)
+// and the streaming route handler (app/api/onboard). Both must build the SAME
+// call and parse the SAME final message.
+// ---------------------------------------------------------------------------
+
+export interface OnboardCall {
+  system: string;
+  messages: Anthropic.MessageParam[];
+  vertical: VerticalConfig;
+}
+
+/** Build system+messages for a turn; null = nothing to answer (no user msg yet). */
+export function prepareOnboardCall(
+  history: ChatMsg[],
+  currentFacts: Partial<BusinessFacts>,
+  currentVerticalId?: string,
+): OnboardCall | null {
+  const vertical = getVertical(currentVerticalId);
+  const issues = validateFacts(currentFacts, vertical);
+
+  const all: Anthropic.MessageParam[] = history.map((m) => ({ role: m.role, content: m.content }));
+  const firstUser = all.findIndex((m) => m.role === "user");
+  const messages = firstUser >= 0 ? all.slice(firstUser) : all;
+  if (messages.length === 0) return null;
+
+  const system = `${buildSystem(vertical, issues.map((i) => i.note))}\n\nПоточні зібрані факти (JSON): ${JSON.stringify(currentFacts)}`;
+  return { system, messages, vertical };
+}
+
+export interface ParsedOnboardMessage {
+  message: string;
+  facts: Partial<BusinessFacts>;
+  verticalId: string;
+  ready: boolean;
+  quickReplies: string[];
+}
+
+/** Extract text + save_facts payload from a completed model message. */
+export function parseOnboardMessage(
+  res: Anthropic.Message,
+  baseFacts: Partial<BusinessFacts>,
+  baseVerticalId: string,
+): ParsedOnboardMessage {
+  const textMsg = res.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+
+  let facts: Partial<BusinessFacts> = baseFacts;
+  let verticalId = baseVerticalId;
+  let ready = false;
+  let quickReplies: string[] = [];
+
+  const toolUse = res.content.find((b) => b.type === "tool_use");
+  if (toolUse && toolUse.type === "tool_use") {
+    const parsed = saveFactsSchema.safeParse(toolUse.input);
+    if (parsed.success) {
+      facts = { ...baseFacts, ...parsed.data.factsPatch };
+      verticalId = VERTICAL_IDS.includes(parsed.data.verticalId) ? parsed.data.verticalId : baseVerticalId;
+      ready = parsed.data.status === "ready";
+      quickReplies = (parsed.data.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4);
+    }
+  }
+
+  const message = sanitize(textMsg) || "Розкажіть, будь ласка, ще трохи про ваш бізнес?";
+  return { message, facts, verticalId, ready, quickReplies };
+}
+
+export { saveFactsTool, computeProgress };
+
+/**
+ * Deterministic follow-up for a collecting turn that arrived without a
+ * question (streaming path can't do the corrective retry the non-stream turn
+ * does). Zero extra tokens: ask for the first still-missing key fact.
+ */
+export function fallbackQuestion(facts: Partial<BusinessFacts>): string {
+  const missing = (k: keyof BusinessFacts) => {
+    const v = facts[k];
+    return v == null || String(v).trim().length === 0;
+  };
+  if (missing("businessName")) return "Як називається ваш бізнес?";
+  if (missing("city")) return "У якому місті ви працюєте?";
+  if (missing("phone")) return "Який телефон для звʼязку з клієнтами?";
+  if (missing("address")) return "За якою адресою вас знайти?";
+  if (missing("hours")) return "Які у вас години роботи?";
+  return "Додати щось іще — чи натиснемо «Переглянути й створити сайт»?";
+}
+
 export async function onboardTurn(
   history: ChatMsg[],
   currentFacts: Partial<BusinessFacts>,
@@ -143,24 +235,18 @@ export async function onboardTurn(
 
   // Vertical guidance comes from the MODEL's own classification, threaded from
   // the previous turn (generic until it decides).
-  const vertical = getVertical(currentVerticalId);
-  const issues = validateFacts(currentFacts, vertical);
-
-  const all: Anthropic.MessageParam[] = history.map((m) => ({ role: m.role, content: m.content }));
-  const firstUser = all.findIndex((m) => m.role === "user");
-  const messages = firstUser >= 0 ? all.slice(firstUser) : all;
-  if (messages.length === 0) {
+  const call = prepareOnboardCall(history, currentFacts, currentVerticalId);
+  if (!call) {
     return {
       message: "Розкажіть трохи про ваш бізнес — що це за справа, у якому місті, і який телефон?",
       facts: currentFacts,
-      verticalId: vertical.id,
+      verticalId: getVertical(currentVerticalId).id,
       ready: false,
       quickReplies: [],
       progress: computeProgress(currentFacts),
     };
   }
-
-  const system = `${buildSystem(vertical, issues.map((i) => i.note))}\n\nПоточні зібрані факти (JSON): ${JSON.stringify(currentFacts)}`;
+  const { system, messages, vertical } = call;
 
   const ask = (msgs: Anthropic.MessageParam[]) =>
     client.messages.create({
@@ -172,36 +258,7 @@ export async function onboardTurn(
       messages: msgs,
     });
 
-  const parse = (
-    res: Anthropic.Message,
-    baseFacts: Partial<BusinessFacts>,
-    baseVerticalId: string,
-  ) => {
-    const textMsg = res.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim();
-
-    let facts: Partial<BusinessFacts> = baseFacts;
-    let verticalId = baseVerticalId;
-    let ready = false;
-    let quickReplies: string[] = [];
-
-    const toolUse = res.content.find((b) => b.type === "tool_use");
-    if (toolUse && toolUse.type === "tool_use") {
-      const parsed = saveFactsSchema.safeParse(toolUse.input);
-      if (parsed.success) {
-        facts = { ...baseFacts, ...parsed.data.factsPatch };
-        verticalId = VERTICAL_IDS.includes(parsed.data.verticalId) ? parsed.data.verticalId : baseVerticalId;
-        ready = parsed.data.status === "ready";
-        quickReplies = (parsed.data.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4);
-      }
-    }
-
-    const message = sanitize(textMsg) || "Розкажіть, будь ласка, ще трохи про ваш бізнес?";
-    return { message, facts, verticalId, ready, quickReplies };
-  };
+  const parse = parseOnboardMessage;
 
   let out = parse(await ask(messages), currentFacts, vertical.id);
 

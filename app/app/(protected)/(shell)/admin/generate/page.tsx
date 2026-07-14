@@ -21,7 +21,7 @@ export default async function AdminGeneratePage() {
   const verticalList = Object.values(verticals).map((v) => ({ id: v.id, label: v.label }));
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl bg-canvas px-6 py-12">
+    <div>
       <div className="mb-8">
         <Link
           href="/admin"
@@ -33,6 +33,6 @@ export default async function AdminGeneratePage() {
       </div>
 
       <GenerateClient verticals={verticalList} initialSites={sites} />
-    </main>
+    </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   adminListTestSites,
   type TestSite,
 } from "./actions";
+import { FlaskConical } from "lucide-react";
 import { Button, Card, Chip, ConfirmDialog, EmptyState } from "@/components/ui";
 
 const isProd = process.env.NODE_ENV === "production";
@@ -141,7 +142,7 @@ export default function GenerateClient({
           Тест-сайти <span className="text-ink-faint">({sites.length})</span>
         </h2>
         {sites.length === 0 ? (
-          <EmptyState emoji="🧪" title="Ще немає тест-сайтів">
+          <EmptyState icon={<FlaskConical size={20} />} title="Ще немає тест-сайтів">
             Згенеруйте перший вище.
           </EmptyState>
         ) : (

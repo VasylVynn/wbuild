@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getTelegramConnectLink } from "@/app/app/(protected)/sites/actions";
+import { getTelegramConnectLink } from "@/app/app/(protected)/(shell)/sites/actions";
 import { Button, Chip } from "@/components/ui";
 
 interface TelegramConnectProps {

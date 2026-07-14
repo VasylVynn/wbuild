@@ -1,15 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { ArrowUp, ArrowDown, Eye, EyeOff, Pencil } from "lucide-react";
 
 /**
  * Wraps one rendered block in the editor preview. The block itself is made
  * `pointer-events-none` and a transparent overlay button sits on top, so a tap
  * anywhere on the section opens its editor sheet instead of following links or
  * submitting the demo lead form inside the preview. An always-visible label +
- * reorder/hide/edit bar rides on top — big (44px) tap targets for the 50+
- * owner. Hidden sections collapse to a labelled dashed placeholder instead of
- * rendering their full content.
+ * reorder/hide/edit bar rides on top. Hidden sections collapse to a labelled
+ * dashed placeholder instead of rendering their full content.
  */
 
 type CtrlVariant = "float" | "inline" | "brand";
@@ -42,7 +42,7 @@ function ControlButton({
         e.stopPropagation();
         onClick();
       }}
-      className={`flex h-11 w-11 items-center justify-center rounded-full text-[17px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${ctrlVariants[variant]}`}
+      className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${ctrlVariants[variant]}`}
     >
       {children}
     </button>
@@ -73,24 +73,24 @@ export default function EditableSection({
   const controls = (variant: "float" | "inline") => (
     <div className="flex items-center gap-1.5">
       <ControlButton title="Вгору" variant={variant} onClick={onMoveUp}>
-        <span className={isFirst ? "opacity-30" : ""}>↑</span>
+        <ArrowUp size={16} className={isFirst ? "opacity-30" : ""} />
       </ControlButton>
       <ControlButton title="Вниз" variant={variant} onClick={onMoveDown}>
-        <span className={isLast ? "opacity-30" : ""}>↓</span>
+        <ArrowDown size={16} className={isLast ? "opacity-30" : ""} />
       </ControlButton>
       <ControlButton
         title={hidden ? "Показати" : "Приховати"}
         variant={variant}
         onClick={onToggleHidden}
       >
-        {hidden ? "🙈" : "👁"}
+        {hidden ? <EyeOff size={16} /> : <Eye size={16} />}
       </ControlButton>
       <ControlButton
         title="Редагувати"
         variant={variant === "inline" ? "inline" : "brand"}
         onClick={onEdit}
       >
-        ✏️
+        <Pencil size={15} />
       </ControlButton>
     </div>
   );

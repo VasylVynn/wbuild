@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { CircleAlert, PartyPopper } from "lucide-react";
 import type { ChatMsg, ProgressItem } from "@/lib/ai/onboard";
 import {
   onboardAction,
@@ -25,6 +26,7 @@ import type { BusinessFacts } from "@/lib/verticals/schema";
 import type { SiteMedia } from "@/lib/media/media";
 import { Button, Field, Input, Textarea, Chip, Card } from "@/components/ui";
 import PhotoField from "@/components/editor/PhotoField";
+import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -101,6 +103,8 @@ export function OnboardChat() {
   const [verticalId, setVerticalId] = useState<string | undefined>(undefined);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
+  // Extended-thinking phase of the streaming turn — «Думаю…» label.
+  const [thinking, setThinking] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   // «✓ Записав: …» під останньою відповіддю — реальний diff прогресу за хід.
   const [savedNote, setSavedNote] = useState<string | null>(null);
@@ -165,6 +169,74 @@ export function OnboardChat() {
   // Chat handlers
   // ---------------------------------------------------------------------------
 
+  // One turn over the streaming endpoint (P4). Text deltas paint into the last
+  // assistant bubble as they arrive; the trailing "final" event carries the
+  // structured result. Refusals (rate limit etc.) come back as plain JSON.
+  type TurnPayload = {
+    message: string;
+    facts: Partial<BusinessFacts>;
+    verticalId: string;
+    ready: boolean;
+    quickReplies: string[];
+  };
+
+  const streamTurn = async (nextMessages: ChatMsg[]): Promise<TurnPayload> => {
+    const res = await fetch("/api/onboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: nextMessages, facts, verticalId }),
+    });
+    const ct = res.headers.get("content-type") ?? "";
+    if (ct.includes("application/json")) {
+      const j = (await res.json()) as { message?: string };
+      if (typeof j.message === "string") {
+        return { message: j.message, facts, verticalId: verticalId ?? "generic", ready: false, quickReplies: [] };
+      }
+      throw new Error("bad refusal payload");
+    }
+    if (!res.ok || !res.body) throw new Error(`stream failed: ${res.status}`);
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    let acc = "";
+    let final: TurnPayload | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const chunks = buf.split("\n\n");
+      buf = chunks.pop() ?? "";
+      for (const c of chunks) {
+        const line = c.trim();
+        if (!line.startsWith("data:")) continue;
+        let obj: { t?: string; text?: string; message?: string } & Partial<TurnPayload>;
+        try {
+          obj = JSON.parse(line.slice(5));
+        } catch {
+          continue;
+        }
+        if (obj.t === "think") {
+          setThinking(true);
+        } else if (obj.t === "d" && typeof obj.text === "string") {
+          if (!acc) {
+            setTyping(false);
+            setThinking(false);
+          }
+          acc += obj.text;
+          setMessages([...nextMessages, { role: "assistant", content: acc }]);
+        } else if (obj.t === "final") {
+          final = obj as TurnPayload;
+        } else if (obj.t === "error") {
+          throw new Error(obj.message || "stream error");
+        }
+      }
+    }
+    if (!final) throw new Error("stream ended without final event");
+    return final;
+  };
+
   // Core send — used by the input row AND by quick-reply chips.
   const send = async (raw: string) => {
     const text = raw.trim();
@@ -181,6 +253,7 @@ export function OnboardChat() {
     setSavedNote(null);
     setLoading(true);
     setTyping(true);
+    setThinking(false);
 
     // Lazily create the DB row on the first user send (avoids empty rows)
     if (convIdRef.current === null) {
@@ -191,10 +264,8 @@ export function OnboardChat() {
       }
     }
 
-    try {
-      const result = await onboardAction(nextMessages, facts, verticalId);
-      const assistantMsg: ChatMsg = { role: "assistant", content: result.message };
-      const finalMessages = [...nextMessages, assistantMsg];
+    const applyResult = (result: TurnPayload) => {
+      const finalMessages: ChatMsg[] = [...nextMessages, { role: "assistant", content: result.message }];
       setMessages(finalMessages);
       setFacts(result.facts);
       setReady(result.ready);
@@ -210,17 +281,23 @@ export function OnboardChat() {
 
       // Persist turn fire-and-forget — never blocks the UI
       if (convIdRef.current) {
-        void saveTurn(
-          convIdRef.current,
-          finalMessages,
-          result.facts,
-          result.verticalId,
-          result.ready,
-        );
+        void saveTurn(convIdRef.current, finalMessages, result.facts, result.verticalId, result.ready);
+      }
+    };
+
+    try {
+      try {
+        applyResult(await streamTurn(nextMessages));
+      } catch {
+        // Streaming path failed (network, SSE parse, server) → the proven
+        // non-stream server action still answers the turn.
+        setTyping(true);
+        applyResult(await onboardAction(nextMessages, facts, verticalId));
       }
     } finally {
       setLoading(false);
       setTyping(false);
+      setThinking(false);
       // Return focus to input so the owner can keep typing
       setTimeout(() => inputRef.current?.focus(), 50);
     }
@@ -383,8 +460,9 @@ export function OnboardChat() {
 
   if (phase === "chat") {
     return (
-      <div className={`flex h-[100dvh] flex-col ${rootBase}`}>
+      <div className={`h-[100dvh] ${rootBase} lg:grid lg:grid-cols-[minmax(0,1fr)_420px]`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
+        <div className="flex h-full min-h-0 flex-col">
 
         {/* Header: honey «3» avatar + Помічник + status */}
         <header className="bg-surface">
@@ -436,7 +514,7 @@ export function OnboardChat() {
               <div className="pl-1 text-[13px] font-bold text-ok">✓ Записав: {savedNote}</div>
             )}
 
-            {typing && <AgentTyping />}
+            {typing && <AgentTyping thinking={thinking} />}
 
             <div ref={messagesEndRef} />
           </div>
@@ -490,6 +568,15 @@ export function OnboardChat() {
             </button>
           </div>
         </footer>
+        </div>
+
+        <SitePreviewPanel
+          facts={facts}
+          verticalId={verticalId}
+          photosCount={media.photos.length}
+          hasLogo={!!media.logoUrl}
+          className="hidden lg:flex"
+        />
       </div>
     );
   }
@@ -636,7 +723,7 @@ export function OnboardChat() {
           <form onSubmit={handleSubmitForm} noValidate className="flex flex-col gap-5">
             {hasErrors && (
               <div className="flex items-start gap-2.5 rounded-[14px] bg-danger-soft px-4 py-3.5">
-                <span className="text-[17px]">☝️</span>
+                <CircleAlert size={18} className="mt-0.5 shrink-0 text-danger" />
                 <span className="text-[15px] font-bold leading-snug text-danger">
                   Заповніть, будь ласка, обовʼязкові поля нижче — без них клієнти не зможуть звʼязатися.
                 </span>
@@ -853,7 +940,9 @@ export function OnboardChat() {
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <Confetti />
         <div className="flex w-full max-w-md flex-col items-center text-center">
-          <div className="text-[64px] leading-none">🎉</div>
+          <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-honey-soft text-honey-text">
+            <PartyPopper size={34} />
+          </div>
           <h2 className="mt-6 font-brand text-[26px] font-semibold">Ваш сайт готовий!</h2>
           <p className="mt-2.5 text-[17px] text-ink-muted">Він уже працює за адресою:</p>
 
@@ -929,7 +1018,9 @@ export function OnboardChat() {
     <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 ${rootBase}`}>
       <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
       <div className="flex w-full max-w-md flex-col items-center text-center">
-        <div className="text-[64px] leading-none">😕</div>
+        <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-danger-soft text-danger">
+          <CircleAlert size={34} />
+        </div>
         <h2 className="mt-6 font-brand text-[24px] font-semibold">Щось пішло не так</h2>
         <p className="mt-4 rounded-[14px] bg-danger-soft px-5 py-4 text-[15px] font-semibold leading-relaxed text-danger">
           {errorMsg}
@@ -976,19 +1067,10 @@ function ChatBubble({ msg }: { msg: ChatMsg }) {
   );
 }
 
-// Staged working indicator: dots + a label that advances through the real
-// stages of a turn (read → save → next step) and holds on the last one.
-const AGENT_STAGES = ["Читаю відповідь…", "Оновлюю дані сайту…", "Готую наступний крок…"];
-
-function AgentTyping() {
-  const [stage, setStage] = useState(0);
-  useEffect(() => {
-    const t = setInterval(
-      () => setStage((s) => Math.min(s + 1, AGENT_STAGES.length - 1)),
-      1400,
-    );
-    return () => clearInterval(t);
-  }, []);
+// Working indicator: dots + a label. While the model is in its extended-
+// thinking phase we say so honestly («Думаю…» — real state from the stream,
+// not a fake stage); before that a short "reading" label.
+function AgentTyping({ thinking = false }: { thinking?: boolean }) {
   return (
     <div className="flex justify-start">
       <div className="flex items-center gap-2.5 rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface px-[18px] py-4">
@@ -1001,7 +1083,9 @@ function AgentTyping() {
             />
           ))}
         </span>
-        <span className="text-[14px] font-semibold text-ink-muted">{AGENT_STAGES[stage]}</span>
+        <span className="text-[14px] font-semibold text-ink-muted">
+          {thinking ? "Думаю, як допомогти найкраще…" : "Читаю відповідь…"}
+        </span>
       </div>
     </div>
   );
