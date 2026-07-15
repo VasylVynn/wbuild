@@ -451,7 +451,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
                   title={title}
                   aria-pressed={device === id}
                   onClick={() => setDevice(id)}
-                  className={`flex h-8 w-9 items-center justify-center rounded-[9px] transition-colors ${
+                  className={`flex h-8 w-9 items-center justify-center rounded-[9px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                     device === id ? "bg-surface text-brand shadow-card" : "text-ink-muted hover:text-ink"
                   }`}
                 >

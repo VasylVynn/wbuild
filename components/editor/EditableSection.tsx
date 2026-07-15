@@ -42,7 +42,7 @@ function ControlButton({
         e.stopPropagation();
         onClick();
       }}
-      className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${ctrlVariants[variant]}`}
+      className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${ctrlVariants[variant]}`}
     >
       {children}
     </button>
@@ -126,7 +126,7 @@ export default function EditableSection({
         type="button"
         onClick={onEdit}
         aria-label={`Редагувати: ${label}`}
-        className="absolute inset-0 z-10 cursor-pointer bg-transparent outline-none ring-inset transition group-hover:bg-brand/[0.04] group-hover:ring-2 group-hover:ring-brand/30"
+        className="absolute inset-0 z-10 cursor-pointer bg-transparent outline-none ring-inset transition group-hover:bg-brand/[0.04] group-hover:ring-2 group-hover:ring-brand/30 focus-visible:bg-brand/[0.04] focus-visible:ring-2 focus-visible:ring-brand/50"
       />
 
       {/* Always-visible label + controls. */}

@@ -197,19 +197,19 @@ export default async function AdminPage() {
         <div className="flex shrink-0 items-center gap-2.5">
           <Link
             href="/admin/packs"
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-surface px-4 font-ui text-[14px] font-semibold text-ink transition-colors hover:border-brand hover:text-brand"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-surface px-4 font-ui text-[14px] font-semibold text-ink transition-colors hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <Palette size={16} /> Прев&apos;ю дизайнів
           </Link>
           <Link
             href="/admin/templates"
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-surface px-4 font-ui text-[14px] font-semibold text-ink transition-colors hover:border-brand hover:text-brand"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-surface px-4 font-ui text-[14px] font-semibold text-ink transition-colors hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <Puzzle size={16} /> Шаблони
           </Link>
           <Link
             href="/admin/generate"
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] bg-brand px-4 font-ui text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] bg-brand px-4 font-ui text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
           >
             <FlaskConical size={16} /> Тест-генерація
           </Link>
@@ -228,21 +228,19 @@ export default async function AdminPage() {
         <h2 className="mb-3 font-brand text-[19px] font-medium text-ink">
           Сайти <span className="text-ink-faint">({sites.length})</span>
         </h2>
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full min-w-[960px] border-collapse text-[14px]">
+        {/* P5: fits ≤1280 without horizontal scroll — host+business merged into
+            one cell, secondary columns hide below xl instead of forcing min-w. */}
+        <Card className="overflow-hidden p-0">
+          <table className="w-full border-collapse text-[13px]">
             <thead>
-              <tr className="border-b border-line text-left text-[12px] font-bold uppercase tracking-wide text-ink-faint">
-                <th className="px-4 py-3">Сайт</th>
-                {/* Actions sit right after the host: the table scrolls horizontally,
-                    and controls hidden past the fold were being missed. */}
-                <th className="px-4 py-3">Дії</th>
-                <th className="px-4 py-3">Бізнес</th>
-                <th className="px-4 py-3">Напрям</th>
-                <th className="px-4 py-3">Статус</th>
-                <th className="px-4 py-3">Заявок</th>
-                <th className="px-4 py-3">Telegram</th>
-                <th className="px-4 py-3">Власник</th>
-                <th className="px-4 py-3">Створено</th>
+              <tr className="border-b border-line text-left text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+                <th className="px-3.5 py-2.5">Сайт</th>
+                <th className="px-3.5 py-2.5">Дії</th>
+                <th className="px-3.5 py-2.5">Статус</th>
+                <th className="px-3.5 py-2.5">Заявок</th>
+                <th className="px-3.5 py-2.5">TG</th>
+                <th className="hidden px-3.5 py-2.5 xl:table-cell">Власник</th>
+                <th className="hidden px-3.5 py-2.5 2xl:table-cell">Створено</th>
               </tr>
             </thead>
             <tbody>
@@ -250,29 +248,32 @@ export default async function AdminPage() {
                 const status = STATUS[s.status] ?? STATUS.demo;
                 const host = s.host as string; // filtered by "host IS NOT NULL" above
                 return (
-                  <tr key={s.id} className="border-b border-line last:border-0">
-                    <td className="px-4 py-3">
+                  <tr key={s.id} className="border-b border-line transition-colors last:border-0 hover:bg-sunken/60">
+                    <td className="max-w-[280px] px-3.5 py-2.5">
                       <a
                         href={urlFor(host)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-bold text-brand hover:underline"
+                        className="block truncate font-bold text-brand hover:underline"
                       >
                         {host}
                       </a>
+                      <div className="truncate text-[12px] text-ink-muted">
+                        {s.brand?.businessName || "—"} · {getVertical(s.vertical).label}
+                      </div>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td className="whitespace-nowrap px-3.5 py-2.5">
                       <SiteRow tenantId={s.id} host={host} suspended={s.status === "suspended"} />
                     </td>
-                    <td className="px-4 py-3 text-ink">{s.brand?.businessName || "—"}</td>
-                    <td className="px-4 py-3 text-ink-muted">{getVertical(s.vertical).label}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-3.5 py-2.5">
                       <Chip tone={status.tone}>{status.label}</Chip>
                     </td>
-                    <td className="px-4 py-3 text-ink">{leadCounts.get(s.id) ?? 0}</td>
-                    <td className="px-4 py-3">{s.telegram_chat_id ? "✓" : "—"}</td>
-                    <td className="px-4 py-3 text-ink-muted">{ownerByTenant.get(s.id) ?? "—"}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-ink-faint">
+                    <td className="px-3.5 py-2.5 text-ink">{leadCounts.get(s.id) ?? 0}</td>
+                    <td className="px-3.5 py-2.5">{s.telegram_chat_id ? "✓" : "—"}</td>
+                    <td className="hidden max-w-[180px] truncate px-3.5 py-2.5 text-ink-muted xl:table-cell">
+                      {ownerByTenant.get(s.id) ?? "—"}
+                    </td>
+                    <td className="hidden whitespace-nowrap px-3.5 py-2.5 text-ink-faint 2xl:table-cell">
                       {formatDate(s.created_at)}
                     </td>
                   </tr>

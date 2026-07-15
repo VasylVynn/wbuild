@@ -54,7 +54,7 @@ function NavLink({
     <Link
       href={item.href}
       onClick={onNavigate}
-      className={`flex items-center gap-3 rounded-[12px] px-3 py-2.5 text-[15px] font-semibold transition-colors ${
+      className={`flex items-center gap-3 rounded-[12px] px-3 py-2.5 text-[15px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
         active ? "bg-brand-soft text-brand" : "text-ink-muted hover:bg-sunken hover:text-ink"
       }`}
     >
@@ -118,7 +118,7 @@ export default function AppShell({
         </Link>
         <Link
           href="/new"
-          className="flex min-h-[40px] items-center justify-center gap-2 rounded-[12px] bg-brand px-4 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover"
+          className="flex min-h-[40px] items-center justify-center gap-2 rounded-[12px] bg-brand px-4 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
         >
           <Plus size={16} /> Створити сайт
         </Link>
