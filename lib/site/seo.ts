@@ -90,10 +90,157 @@ export function siteDescription(tenant: Tenant, seo?: PageSeo): string | undefin
   return trimmed.length > 150 ? `${trimmed.slice(0, 150).trimEnd()}…` : trimmed;
 }
 
+// ── openingHours parsing (wave D2) ──────────────────────────────────────────
+// The `hours` fact is freeform Ukrainian («Пн–Пт 9:00–18:00, Сб 10:00–15:00»).
+// Schema.org wants "Mo-Fr 09:00-18:00". We convert ONLY what parses with
+// confidence and silently skip the rest («за записом» → nothing) — never an
+// invented schedule (§4.4 grounding spirit).
+
+const SCHEMA_DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] as const;
+
+// Order matters: longer full names first so «пʼятниця» is not read as «пт».
+// Abbreviations need letter-boundary lookarounds (\b is ASCII-only in JS):
+// «вт» must not match inside «завтра».
+const B = "(?<![а-яіїєґ])";
+const E = "(?![а-яіїєґ])";
+const DAY_WORDS: [RegExp, number][] = [
+  [/понеділок/g, 0],
+  [/вівторок/g, 1],
+  [/серед[аиу]/g, 2],
+  [/четвер/g, 3],
+  [/п[’'ʼ]?ятниц[яюі]/g, 4],
+  [/субот[аиу]/g, 5],
+  [/неділ[яюі]/g, 6],
+  ...(["пн", "вт", "ср", "чт", "пт", "сб", "нд"].map(
+    (abbr, day) => [new RegExp(`${B}${abbr}${E}`, "g"), day] as [RegExp, number],
+  )),
+];
+
+function fmt(h: number, m: number): string {
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/** Time range in a segment: «9:00–18:00», «9-18», «з 9 до 18». Null when
+ *  absent/implausible. Day words must be stripped BEFORE calling (their
+ *  dashes would otherwise sit next to the digits). */
+function parseTimeRange(seg: string): string | null {
+  if (/цілодобово|24\s*\/\s*7/.test(seg)) return "00:00-23:59";
+  const m = seg.match(/(?:з\s*)?(\d{1,2})(?::(\d{2}))?\s*(?:-|–|—|до)\s*(\d{1,2})(?::(\d{2}))?/);
+  if (!m) return null;
+  const h1 = Number(m[1]);
+  const m1 = Number(m[2] ?? "0");
+  let h2 = Number(m[3]);
+  let m2 = Number(m[4] ?? "0");
+  if (h2 === 24 && m2 === 0) (h2 = 23), (m2 = 59);
+  if (h1 > 23 || h2 > 23 || m1 > 59 || m2 > 59) return null;
+  if (h1 * 60 + m1 >= h2 * 60 + m2) return null;
+  return `${fmt(h1, m1)}-${fmt(h2, m2)}`;
+}
+
+/**
+ * Freeform Ukrainian hours → schema.org openingHours strings
+ * ("Mo-Fr 09:00-18:00"). Comma/semicolon-separated segments parse
+ * independently; a segment yields output only when BOTH a day spec and a time
+ * range are recognized (except «цілодобово»/«24/7», which implies Mo-Su).
+ * Unparseable input → []  (the property is then omitted entirely).
+ */
+export function parseOpeningHours(hours: string): string[] {
+  const out: string[] = [];
+  for (const rawSeg of hours.toLowerCase().split(/[,;]/)) {
+    const seg = rawSeg.trim();
+    if (!seg) continue;
+
+    // Collect day mentions (position + length + index) while blanking them out
+    // so the time regex never sees the dash of «пн–пт».
+    let rest = seg;
+    const found: { pos: number; len: number; day: number }[] = [];
+    for (const [re, day] of DAY_WORDS) {
+      rest = rest.replace(re, (match, offset: number) => {
+        found.push({ pos: offset, len: match.length, day });
+        return " ".repeat(match.length);
+      });
+    }
+    found.sort((a, b) => a.pos - b.pos);
+
+    let days: string | null = null;
+    if (/щодня|кожного дня|без вихідних|24\s*\/\s*7|цілодобово/.test(seg) && found.length === 0) {
+      days = "Mo-Su";
+    } else if (/будні|робочі дні/.test(seg) && found.length === 0) {
+      days = "Mo-Fr";
+    } else if (found.length === 1) {
+      days = SCHEMA_DAYS[found[0].day];
+    } else if (found.length === 2 && found[0].day < found[1].day) {
+      // A range only when the two days are joined by a dash alone («пн–пт»);
+      // «сб і нд» is a list — handled below.
+      const between = seg.slice(found[0].pos + found[0].len, found[1].pos);
+      if (/^[\s-–—]*$/.test(between) && /[-–—]/.test(between)) {
+        days = `${SCHEMA_DAYS[found[0].day]}-${SCHEMA_DAYS[found[1].day]}`;
+      }
+    }
+
+    const time = parseTimeRange(rest);
+    if (!time) continue;
+    if (days) {
+      out.push(`${days} ${time}`);
+    } else if (found.length > 1) {
+      // Day list («сб і нд 10-15») → one entry per day, same time.
+      for (const f of found) out.push(`${SCHEMA_DAYS[f.day]} ${time}`);
+    }
+  }
+  return out;
+}
+
+/** Price range from the services' freeform prices («від 500 грн», «1 200 грн»):
+ *  min–max over every number found; nothing found → undefined (omit). */
+function priceRangeFromServices(services?: { price?: string }[]): string | undefined {
+  const nums: number[] = [];
+  let hasFrom = false;
+  for (const s of services ?? []) {
+    if (!s.price) continue;
+    if (/від/i.test(s.price)) hasFrom = true;
+    for (const m of s.price.matchAll(/\d[\d\s ]*\d|\d/g)) {
+      const n = Number(m[0].replace(/[\s ]/g, ""));
+      if (Number.isFinite(n) && n > 0) nums.push(n);
+    }
+  }
+  if (nums.length === 0) return undefined;
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  if (min === max) return hasFrom ? `від ${min} грн` : `${min} грн`;
+  return `${min}–${max} грн`;
+}
+
+/** sameAs: absolute http(s) social links from the facts, plus the instagram
+ *  fact (wave E adds it; read defensively — full URL or bare handle). */
+function sameAsLinks(facts: {
+  socials?: { href?: string }[];
+  instagram?: unknown;
+}): string[] {
+  const out: string[] = [];
+  const push = (u: string) => {
+    if (!out.includes(u)) out.push(u);
+  };
+  for (const s of facts.socials ?? []) {
+    const href = (s.href ?? "").trim();
+    if (/^https?:\/\//i.test(href)) push(href);
+  }
+  if (typeof facts.instagram === "string" && facts.instagram.trim()) {
+    const v = facts.instagram.trim();
+    if (/^https?:\/\//i.test(v)) push(v);
+    else {
+      const handle = v.replace(/^@/, "");
+      if (/^[a-z0-9._]{1,30}$/i.test(handle)) push(`https://instagram.com/${handle}`);
+    }
+  }
+  return out;
+}
+
 /** Schema.org LocalBusiness for the HOME page of a published tenant (§10.3).
- *  Emits ONLY fields present in facts/brand — no hallucinated data — and omits
- *  openingHours (freeform Ukrainian text is not schema-valid). Returns a string
- *  safe to drop into a <script> tag: `<` is escaped so no `</script>` breakout. */
+ *  Emits ONLY fields present in facts/brand — no hallucinated data. Wave D2:
+ *  openingHours (when the freeform hours parse confidently), priceRange (from
+ *  the services' prices) and sameAs (social links) join the block. Returns a
+ *  string safe to drop into a <script> tag: `<` is escaped so no `</script>`
+ *  breakout. */
 export function localBusinessJsonLd(tenant: Tenant, image?: string, seo?: PageSeo): string {
   const facts = tenant.facts as {
     businessName?: string;
@@ -101,6 +248,10 @@ export function localBusinessJsonLd(tenant: Tenant, image?: string, seo?: PageSe
     phone?: string;
     address?: string;
     about?: string;
+    hours?: string;
+    services?: { price?: string }[];
+    socials?: { href?: string }[];
+    instagram?: unknown;
   };
 
   const name = tenant.brand.businessName || facts.businessName;
@@ -124,6 +275,18 @@ export function localBusinessJsonLd(tenant: Tenant, image?: string, seo?: PageSe
     if (addressLocality) address.addressLocality = addressLocality;
     data.address = address;
   }
+
+  const hoursText = facts.hours ?? tenant.footer.hours;
+  if (hoursText) {
+    const openingHours = parseOpeningHours(hoursText);
+    if (openingHours.length) {
+      data.openingHours = openingHours.length === 1 ? openingHours[0] : openingHours;
+    }
+  }
+  const priceRange = priceRangeFromServices(facts.services);
+  if (priceRange) data.priceRange = priceRange;
+  const sameAs = sameAsLinks(facts);
+  if (sameAs.length) data.sameAs = sameAs;
 
   return JSON.stringify(data).replace(/</g, "\\u003c");
 }
