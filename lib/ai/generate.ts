@@ -339,16 +339,23 @@ function assemble(
   const hero = raw.find((b) => b.type === "hero");
   const contacts = raw.find((b) => b.type === "contacts");
 
+  // The hero consumes photos[0] as its background (see groundImages). A gallery
+  // repeating that same photo reads as a bug on the live site, so the gallery
+  // pool is photos 2..N whenever the hero took one; if fewer than 2 remain, no
+  // gallery at all.
+  const heroPhoto = hero ? photos[0] : undefined;
+  const galleryPhotos = heroPhoto ? photos.slice(1) : photos;
+
   const perType: Partial<Record<BlockType, number>> = {};
   const perSection: Record<string, number> = {};
   const middle = raw
     .filter((b) => b.type !== "hero" && b.type !== "contacts" && b.type !== "lead_form")
     // switchback has no trusted per-item image source → always dropped (§4.8).
     .filter((b) => b.type !== "switchback")
-    // gallery is kept ONLY when ≥2 real photos exist to fill it; its own images
-    // are model-invented and replaced below. Otherwise the model would show
-    // fabricated imagery (§4.8 honesty invariant).
-    .filter((b) => b.type !== "gallery" || photos.length >= 2)
+    // gallery is kept ONLY when ≥2 real photos remain to fill it (after the
+    // hero took its one); its own images are model-invented and replaced below.
+    // Otherwise the model would show fabricated imagery (§4.8 honesty invariant).
+    .filter((b) => b.type !== "gallery" || galleryPhotos.length >= 2)
     // On a template site, drop middle blocks whose type maps to no section — they
     // would otherwise render via the default registry and break the template look.
     .filter((b) => !template || resolvedSection(template, b) !== undefined)
@@ -388,11 +395,14 @@ function assemble(
   // (light) registry component inside the template's shell and break the look.
   const canHostGallery = !template || sectionForType(template, "gallery") !== undefined;
   const injectedGallery: BlockInstance[] =
-    photos.length >= 2 && !modelChoseGallery && canHostGallery
+    galleryPhotos.length >= 2 && !modelChoseGallery && canHostGallery
       ? [
           {
             type: "gallery",
-            props: { title: "Наші фото", images: photos.map((url) => ({ url, alt: businessName })) },
+            props: {
+              title: "Наші фото",
+              images: galleryPhotos.map((url) => ({ url, alt: businessName })),
+            },
           },
         ]
       : [];
@@ -414,7 +424,7 @@ function assemble(
   const seen: Partial<Record<BlockType, number>> = {};
   return ordered.map((b) =>
     groundAndPlace(
-      groundImages(b, photos, allowed, businessName, generatedHero),
+      groundImages(b, photos, galleryPhotos, allowed, businessName, generatedHero),
       facts,
       seen,
       pack,
@@ -431,6 +441,7 @@ function assemble(
 function groundImages(
   b: BlockInstance,
   photos: string[],
+  galleryPhotos: string[],
   allowed: Set<string>,
   businessName: string,
   generatedHero?: string,
@@ -452,8 +463,15 @@ function groundImages(
         },
       };
     case "gallery":
-      // Any surviving gallery (kept or injected) is filled with the real photos.
-      return { ...b, props: { ...b.props, images: photos.map((url) => ({ url, alt: businessName })) } };
+      // Any surviving gallery (kept or injected) is filled with the real photos,
+      // minus the one already backing the hero (no visible duplicate).
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          images: galleryPhotos.map((url) => ({ url, alt: businessName })),
+        },
+      };
     case "team":
       // Per-person photos are model-invented → strip any not in the uploaded set
       // (like services), so team cards fall back to initials rather than showing a
