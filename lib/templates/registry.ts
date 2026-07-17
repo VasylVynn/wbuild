@@ -175,6 +175,12 @@ export function getTemplate(id: string | undefined): SiteTemplate | undefined {
   return siteTemplates[id];
 }
 
+/** Human-facing template name for UI chips/summaries — the label without its «» quoting. */
+export function templateDisplayName(id: string | undefined): string | undefined {
+  const t = getTemplate(id);
+  return t ? t.label.replace(/[«»]/g, "") : undefined;
+}
+
 /**
  * Templates whose affinity includes this vertical. Empty is allowed: a vertical
  * with no template affinity falls back to design packs in generation.

@@ -27,6 +27,7 @@ export async function onboardAction(
   history: ChatMsg[],
   facts: Partial<BusinessFacts>,
   verticalId?: string,
+  templateId?: string,
 ): Promise<OnboardTurnResult> {
   // Both checks run BEFORE the Anthropic call — a limited turn costs no tokens.
   // Limited turns come back as a normal assistant message, so the chat UI
@@ -50,7 +51,7 @@ export async function onboardAction(
   const limit = await checkRateLimit("chat_turn", ipFromHeaders(await headers()));
   if (!limit.ok) return refuse(rateLimitMessage(limit.retryAfterSec));
 
-  return onboardTurn(history, facts, verticalId);
+  return onboardTurn(history, facts, verticalId, templateId);
 }
 
 export type FinalizeResult =

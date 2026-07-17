@@ -6,7 +6,13 @@ import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema"
 import { getVertical, VERTICAL_IDS } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
 import { validateFacts } from "@/lib/onboard/validate";
-import { siteTemplates, templatesFor } from "@/lib/templates/registry";
+import {
+  siteTemplates,
+  templatesFor,
+  getTemplate,
+  templateDisplayName,
+  TEMPLATE_IDS,
+} from "@/lib/templates/registry";
 
 /**
  * Onboarding agent (brief §4.9 + owner feedback). The chat is only the
@@ -28,6 +34,9 @@ const saveFactsSchema = z.object({
   verticalId: z.enum(VERTICAL_IDS as [string, ...string[]]),
   factsPatch: factsPatchSchema,
   status: z.enum(["collecting", "ready", "confirmed"]),
+  // Lenient on parse (validated against the registry in parseOnboardMessage):
+  // a hallucinated id must not sink the whole patch — facts matter more.
+  templateId: z.string().optional(),
   quickReplies: z.array(z.string()).max(4).optional(),
 });
 
@@ -46,6 +55,12 @@ const saveFactsTool = {
         .enum(["collecting", "ready", "confirmed"])
         .describe(
           "ready — зібрано достатньо для якісного сайту (покажи резюме і спитай підтвердження); confirmed — ЛИШЕ коли користувач явно підтвердив показане резюме.",
+        ),
+      templateId: z
+        .enum(TEMPLATE_IDS)
+        .optional()
+        .describe(
+          "Обраний дизайн сайту зі списку «ДОСТУПНІ ДИЗАЙНИ». Передавай, щойно відчув характер бізнесу; передай ІНШЕ значення, якщо передумав (діє останнє).",
         ),
       quickReplies: z
         .array(z.string())
@@ -87,6 +102,10 @@ export interface OnboardTurnResult {
   ready: boolean;
   /** A6: the user explicitly confirmed the chat summary — unlocks the create CTA. */
   confirmed: boolean;
+  /** B2: the design the agent picked mid-conversation (last-wins, may change). */
+  templateId?: string;
+  /** Human-facing name of the picked design for the UI chip (B5). */
+  templateLabel?: string;
   /** Suggested one-tap answers for the CURRENT question (design 1c). */
   quickReplies: string[];
   /** Collected-facts chips (design 1b). */
@@ -130,6 +149,11 @@ ${fieldList(vertical)}
 ДОСТУПНІ ДИЗАЙНИ (готові стилі, з яких збирається сайт — ти знаєш їх з першого повідомлення):
 ${buildDesignCatalog(vertical)}
 
+ВИБІР ДИЗАЙНУ (обираєш ТИ, як дизайнер):
+- Щойно відчув ХАРАКТЕР бізнесу — обери дизайн і передай templateId у save_facts (разом зі звичайним factsPatch). Обирай за настроєм і суттю бізнесу, не механічно за галуззю.
+- Якщо нові факти міняють картину — можеш ЗМІНИТИ вибір будь-якого ходу: просто передай інший templateId (діє останній).
+- Можеш коротко сказати власнику, який стиль обрав і чому — одним простим реченням, без термінів («підібрав вам теплий світлий стиль — пасує кондитерській»). НЕ влаштовуй із цього окреме питання і не проси дозволу: дизайн — твоя робота, власник зможе змінити його після генерації.
+
 ЯК ВІДПОВІДАТИ:
 - Пиши користувачу звичайним теплим текстом українською. Списки — звичайними переносами рядків. НЕ пиши JSON і НЕ екрануй символи.
 - Розмітка: можна виділити найважливіше **жирним**. ЖОДНОЇ іншої markdown-розмітки (без #, таблиць, нумерованих списків).
@@ -152,7 +176,7 @@ ${buildDesignCatalog(vertical)}
 - quickReplies: коли на твоє питання є очевидні варіанти (тип бізнесу, так/ні, «Пропустити») — дай 2–4 коротких чипи (1–4 слова). Коли відповідь вільна (назва, телефон, адреса) — НЕ давай.
 
 ПІДСУМОК І ПІДТВЕРДЖЕННЯ (перед генерацією):
-- Коли ставиш status "ready" — у цьому Ж повідомленні надішли структуроване РЕЗЮМЕ зібраного, кожен пункт з нового рядка з жирною міткою: **Назва:**, **Місто:**, **Телефон:**, адреса, години, послуги З ЦІНАМИ (кожна послуга з нового рядка), про бізнес, лого і фото (є / нема). Лише факти з розмови, нічого не вигадуй.
+- Коли ставиш status "ready" — у цьому Ж повідомленні надішли структуроване РЕЗЮМЕ зібраного, кожен пункт з нового рядка з жирною міткою: **Назва:**, **Місто:**, **Телефон:**, адреса, години, послуги З ЦІНАМИ (кожна послуга з нового рядка), про бізнес, лого і фото (є / нема), **Дизайн:** назва обраного стилю простими словами. Лише факти з розмови, нічого не вигадуй.
 - Після резюме додай: «Після генерації ви зможете змінити будь-який текст чи секцію — самі в редакторі або попросивши асистента.» Заверши питанням «Все вірно, чи щось замінити?» з quickReplies ["Все вірно, генеруємо", "Хочу виправити"].
 - Користувач просить правку → онови факти (last-wins), надішли КОРОТКЕ оновлене резюме і знову спитай підтвердження (status лишається "ready").
 - status "confirmed" — ЛИШЕ після явної згоди користувача з резюме («все вірно», «генеруємо», «так, все ок»). НІКОЛИ не став "confirmed", якщо користувач ще не бачив резюме. У повідомленні-підтвердженні коротко скажи: натисніть кнопку нижче — додасте фото й лого, і сайт буде готовий. Питання в кінці тут не потрібне.
@@ -186,6 +210,7 @@ export function prepareOnboardCall(
   history: ChatMsg[],
   currentFacts: Partial<BusinessFacts>,
   currentVerticalId?: string,
+  currentTemplateId?: string,
 ): OnboardCall | null {
   const vertical = getVertical(currentVerticalId);
   const issues = validateFacts(currentFacts, vertical);
@@ -195,7 +220,10 @@ export function prepareOnboardCall(
   const messages = firstUser >= 0 ? all.slice(firstUser) : all;
   if (messages.length === 0) return null;
 
-  const system = `${buildSystem(vertical, issues.map((i) => i.note))}\n\nПоточні зібрані факти (JSON): ${JSON.stringify(currentFacts)}`;
+  const templateLine = getTemplate(currentTemplateId)
+    ? `\nПоточний обраний дизайн: ${currentTemplateId} (можеш змінити, передавши інший templateId).`
+    : "";
+  const system = `${buildSystem(vertical, issues.map((i) => i.note))}\n\nПоточні зібрані факти (JSON): ${JSON.stringify(currentFacts)}${templateLine}`;
   return { system, messages, vertical };
 }
 
@@ -205,6 +233,7 @@ export interface ParsedOnboardMessage {
   verticalId: string;
   ready: boolean;
   confirmed: boolean;
+  templateId?: string;
   quickReplies: string[];
 }
 
@@ -213,6 +242,7 @@ export function parseOnboardMessage(
   res: Anthropic.Message,
   baseFacts: Partial<BusinessFacts>,
   baseVerticalId: string,
+  baseTemplateId?: string,
 ): ParsedOnboardMessage {
   const textMsg = res.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -224,6 +254,7 @@ export function parseOnboardMessage(
   let verticalId = baseVerticalId;
   let ready = false;
   let confirmed = false;
+  let templateId = getTemplate(baseTemplateId) ? baseTemplateId : undefined;
   let quickReplies: string[] = [];
 
   const toolUse = res.content.find((b) => b.type === "tool_use");
@@ -236,6 +267,9 @@ export function parseOnboardMessage(
       // ready-gated guard (no fallback question, is_complete) keeps holding.
       ready = parsed.data.status !== "collecting";
       confirmed = parsed.data.status === "confirmed";
+      // B2 last-wins: this turn's pick wins when it resolves in the registry;
+      // a missing or hallucinated id keeps the previous choice.
+      if (getTemplate(parsed.data.templateId)) templateId = parsed.data.templateId;
       quickReplies = (parsed.data.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4);
     }
   }
@@ -254,7 +288,7 @@ export function parseOnboardMessage(
   }
 
   const message = sanitize(textMsg) || "Розкажіть, будь ласка, ще трохи про ваш бізнес?";
-  return { message, facts, verticalId, ready, confirmed, quickReplies };
+  return { message, facts, verticalId, ready, confirmed, templateId, quickReplies };
 }
 
 export { saveFactsTool, computeProgress };
@@ -281,12 +315,13 @@ export async function onboardTurn(
   history: ChatMsg[],
   currentFacts: Partial<BusinessFacts>,
   currentVerticalId?: string,
+  currentTemplateId?: string,
 ): Promise<OnboardTurnResult> {
   const client = getAnthropic();
 
   // Vertical guidance comes from the MODEL's own classification, threaded from
   // the previous turn (generic until it decides).
-  const call = prepareOnboardCall(history, currentFacts, currentVerticalId);
+  const call = prepareOnboardCall(history, currentFacts, currentVerticalId, currentTemplateId);
   if (!call) {
     return {
       message: "Розкажіть трохи про ваш бізнес — що це за справа, у якому місті, і який телефон?",
@@ -312,7 +347,7 @@ export async function onboardTurn(
 
   const parse = parseOnboardMessage;
 
-  let out = parse(await ask(messages), currentFacts, vertical.id);
+  let out = parse(await ask(messages), currentFacts, vertical.id, currentTemplateId);
 
   // Guard: a collecting turn that ends without a question stalls the funnel —
   // the model occasionally narrates («зберігаю дані й питаю далі») instead of
@@ -330,9 +365,14 @@ export async function onboardTurn(
       ]),
       out.facts,
       out.verticalId,
+      out.templateId,
     );
     if (retry.message.includes("?")) out = retry;
   }
 
-  return { ...out, progress: computeProgress(out.facts) };
+  return {
+    ...out,
+    templateLabel: templateDisplayName(out.templateId),
+    progress: computeProgress(out.facts),
+  };
 }

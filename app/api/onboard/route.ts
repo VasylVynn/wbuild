@@ -10,6 +10,7 @@ import {
 } from "@/lib/ai/onboard";
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
+import { getTemplate, templateDisplayName } from "@/lib/templates/registry";
 
 /**
  * Streaming onboarding turn (P4). Same stateless contract as onboardAction —
@@ -33,7 +34,12 @@ function maxChatMessages(): number {
 const MAX_MSG_CHARS = 4000;
 const MAX_BODY_BYTES = 128 * 1024;
 
-function parseBody(body: unknown): { history: ChatMsg[]; facts: Partial<BusinessFacts>; verticalId?: string } | null {
+function parseBody(body: unknown): {
+  history: ChatMsg[];
+  facts: Partial<BusinessFacts>;
+  verticalId?: string;
+  templateId?: string;
+} | null {
   if (!body || typeof body !== "object") return null;
   const b = body as Record<string, unknown>;
   if (!Array.isArray(b.messages) || b.messages.length > maxChatMessages() + 1) return null;
@@ -50,7 +56,11 @@ function parseBody(body: unknown): { history: ChatMsg[]; facts: Partial<Business
   const factsParsed = businessFactsSchema.partial().safeParse(b.facts ?? {});
   if (!factsParsed.success) return null;
   const verticalId = typeof b.verticalId === "string" ? b.verticalId.slice(0, 40) : undefined;
-  return { history, facts: factsParsed.data, verticalId };
+  // B2: the previously chosen design threads through the stateless turn.
+  // Unknown ids collapse to undefined (free pick) instead of rejecting the turn.
+  const templateId =
+    typeof b.templateId === "string" && getTemplate(b.templateId) ? b.templateId : undefined;
+  return { history, facts: factsParsed.data, verticalId, templateId };
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -76,7 +86,7 @@ export async function POST(req: Request): Promise<Response> {
   }
   const parsed = parseBody(json);
   if (!parsed) return Response.json({ t: "refusal", message: "Некоректний запит." }, { status: 400 });
-  const { history, facts, verticalId } = parsed;
+  const { history, facts, verticalId, templateId } = parsed;
 
   if (history.length > maxChatMessages()) {
     return Response.json({
@@ -85,7 +95,7 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
-  const call = prepareOnboardCall(history, facts, verticalId);
+  const call = prepareOnboardCall(history, facts, verticalId, templateId);
   if (!call) {
     return Response.json({
       t: "refusal",
@@ -118,14 +128,19 @@ export async function POST(req: Request): Promise<Response> {
           }
         }
         const final = await stream.finalMessage();
-        let out = parseOnboardMessage(final, facts, verticalId ?? call.vertical.id);
+        let out = parseOnboardMessage(final, facts, verticalId ?? call.vertical.id, templateId);
         // Collecting-turn invariant (adversarial review): a turn without a
         // question stalls the funnel. Streaming can't retry invisibly, so we
         // append a deterministic follow-up derived from the missing facts.
         if (!out.ready && !out.message.includes("?")) {
           out = { ...out, message: `${out.message}\n\n${fallbackQuestion(out.facts)}` };
         }
-        send({ t: "final", ...out, progress: computeProgress(out.facts) });
+        send({
+          t: "final",
+          ...out,
+          templateLabel: templateDisplayName(out.templateId),
+          progress: computeProgress(out.facts),
+        });
       } catch {
         send({ t: "error", message: "Щось пішло не так. Спробуйте ще раз." });
       } finally {
