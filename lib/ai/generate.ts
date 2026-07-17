@@ -124,7 +124,7 @@ function buildSystem(vertical: VerticalConfig, forced?: SiteTemplate): string {
   // different template's sections that assemble() would then drop/remap.
   const templates = forced ? [forced] : Object.values(siteTemplates);
   const templateRule = forced
-    ? `ШАБЛОН зафіксовано (регенерація): ${forced.id} — ${forced.label}. Встанови templateId="${forced.id}" і компонуй сторінку ЛИШЕ із секцій цього шаблону. Правила:
+    ? `ШАБЛОН уже зафіксовано (обраний для цього сайту раніше — в розмові або при створенні): ${forced.id} — ${forced.label}. Встанови templateId="${forced.id}" і компонуй сторінку ЛИШЕ із секцій цього шаблону. Правила:
 - Для КОЖНОГО блоку вкажи section = id секції шаблону; тип блоку має відповідати вказаному («блок X»).
 - Якщо секція має layout-варіанти [layout: default | …] — обери variant, що найкраще пасує цьому бізнесу; якщо не впевнений, не вказуй (буде default).
 - hero-секція — перша, contacts-секція — остання; порядок — орієнтир, не догма.
@@ -181,7 +181,8 @@ export async function generateSite(
   // Force a specific design pack (e.g. regenerate keeps the site's existing
   // design). When set, it overrides the model's pick and the random fallback.
   packId?: string,
-  // Force a specific template (regenerate keeps the site's existing template).
+  // Force a specific template (regenerate keeps the site's existing template;
+  // onboarding forwards the design the chat agent picked, wave B4).
   // When it resolves, the template path wins and packs are ignored entirely.
   templateId?: string,
 ): Promise<GeneratedSite> {

@@ -11,6 +11,7 @@ import { getServiceClient } from "@/lib/supabase/server";
 import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
 import { sanitizeMedia, type SiteMedia } from "@/lib/media/media";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
+import { getTemplate } from "@/lib/templates/registry";
 
 /**
  * Hard cap on conversation length (messages, both roles). An honest onboarding
@@ -71,6 +72,7 @@ export async function finalizeAction(
   verticalId?: string,
   media?: SiteMedia,
   conversationId?: string,
+  templateId?: string,
 ): Promise<FinalizeResult> {
   // Re-validate media server-side (client input is untrusted): bad/foreign URLs
   // or an over-long list collapse to no media rather than reaching the site.
@@ -121,7 +123,10 @@ export async function finalizeAction(
           .join(" "),
       );
     const host = await uniqueSubdomain(bizFacts.businessName);
-    await generateAndPublish(bizFacts, host, vId, true, cleanMedia);
+    // B4: the chat-picked design (untrusted client input — resolve against the
+    // registry; unknown ids collapse to undefined = model picks at generation).
+    const cleanTemplateId = getTemplate(templateId) ? templateId : undefined;
+    await generateAndPublish(bizFacts, host, vId, true, cleanMedia, cleanTemplateId);
     const isProd = process.env.NODE_ENV === "production";
     const port = ROOT_DOMAIN.includes(":") ? `:${ROOT_DOMAIN.split(":")[1]}` : "";
     const url = `${isProd ? "https" : "http"}://${host}${isProd ? "" : port}`;

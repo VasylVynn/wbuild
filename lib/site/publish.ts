@@ -26,10 +26,13 @@ export async function generateAndPublish(
   verticalId?: string,
   publish = true,
   media?: SiteMedia,
+  // B4: a design chosen in the onboarding chat — forwarded into generateSite's
+  // existing force-slot (same mechanism regenerate uses to keep a template).
+  templateId?: string,
 ): Promise<PublishResult> {
   const vertical = getVertical(verticalId);
 
-  const site = await generateSite(facts, vertical.id, media);
+  const site = await generateSite(facts, vertical.id, media, undefined, templateId);
 
   // No owner photos → generate ONE atmospheric hero background (§4.8). Runs
   // AFTER site generation so the prompt gets the model's business-specific
