@@ -387,9 +387,14 @@ function assemble(
   const businessName = facts.businessName;
   // D3: deterministic alt base for owner photos — name + city (local-SEO
   // keywords that are always TRUE). The model never sees images (§4.8), so
-  // descriptive alts are never model-written; wave G's vision pass will
-  // upgrade them per photo.
+  // descriptive alts are never model-written; the vision layer's per-photo
+  // description (wave G, photoMeta.alt) wins over the base when it exists.
   const altBase = facts.city ? `${businessName}, ${facts.city}` : businessName;
+  const altByUrl = new Map<string, string>();
+  for (const m of media?.photoMeta ?? []) {
+    if (m.alt?.trim()) altByUrl.set(m.url, m.alt.trim());
+  }
+  const photoAlt = (url: string, fallback: string) => altByUrl.get(url) ?? fallback;
 
   const hero = raw.find((b) => b.type === "hero");
   const contacts = raw.find((b) => b.type === "contacts");
@@ -462,7 +467,10 @@ function assemble(
             type: "gallery",
             props: {
               title: "Наші фото",
-              images: galleryPhotos.map((url, i) => ({ url, alt: `${altBase} — фото ${i + 1}` })),
+              images: galleryPhotos.map((url, i) => ({
+                url,
+                alt: photoAlt(url, `${altBase} — фото ${i + 1}`),
+              })),
             },
           },
         ]
@@ -487,7 +495,7 @@ function assemble(
   const placed = ordered.map((b) =>
     groundAndPlace(
       groundHrefs(
-        groundImages(b, photos, galleryPhotos, allowed, altBase, generatedHero),
+        groundImages(b, photos, galleryPhotos, allowed, altBase, photoAlt, generatedHero),
         facts,
         factHrefs,
       ),
@@ -565,6 +573,7 @@ function groundImages(
   galleryPhotos: string[],
   allowed: Set<string>,
   altBase: string,
+  photoAlt: (url: string, fallback: string) => string,
   generatedHero?: string,
 ): BlockInstance {
   switch (b.type) {
@@ -572,11 +581,12 @@ function groundImages(
       // Hero background := first real photo → generated atmospheric hero → none
       // (never a model-invented URL). Real uploads always win over the generated one.
       // Alt is deterministic too (D3): the model never saw the image, so any
-      // alt it wrote is overwritten — a real photo gets the name+city base, the
+      // alt it wrote is overwritten — a real photo gets the vision layer's
+      // description when one exists (wave G), else the name+city base; the
       // generated atmospheric image says exactly what it is.
       const imageUrl = photos[0] ?? generatedHero;
       const imageAlt = photos[0]
-        ? altBase
+        ? photoAlt(photos[0], altBase)
         : imageUrl
           ? `Атмосферне зображення — ${altBase}`
           : undefined;
@@ -600,7 +610,10 @@ function groundImages(
         ...b,
         props: {
           ...b.props,
-          images: galleryPhotos.map((url, i) => ({ url, alt: `${altBase} — фото ${i + 1}` })),
+          images: galleryPhotos.map((url, i) => ({
+            url,
+            alt: photoAlt(url, `${altBase} — фото ${i + 1}`),
+          })),
         },
       };
     case "team":

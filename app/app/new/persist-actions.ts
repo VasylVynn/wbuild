@@ -136,6 +136,7 @@ export async function saveMediaAction(
   const clean: SiteMedia = {
     ...(parsed.data.logoUrl && { logoUrl: parsed.data.logoUrl }),
     photos: parsed.data.photos,
+    ...(parsed.data.photoMeta?.length && { photoMeta: parsed.data.photoMeta }),
   };
 
   const db = getServiceClient();

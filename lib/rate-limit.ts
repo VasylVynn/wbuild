@@ -28,7 +28,8 @@ export type LimitName =
   | "ai_edit" // block-level AI edit in the editor (burns Anthropic tokens)
   | "editor_chat" // agentic editor chat turn (burns Anthropic tokens, P3)
   | "event" // public analytics beacon (view / tel_click / contact_click)
-  | "custom_request"; // «Хочу кастомні зміни» request to the platform team
+  | "custom_request" // «Хочу кастомні зміни» request to the platform team
+  | "img_analyze"; // vision photo analysis (burns Anthropic tokens, wave G)
 
 type LimitConfig = { max: number; windowSec: number };
 
@@ -43,6 +44,7 @@ const DEFAULTS: Record<LimitName, LimitConfig> = {
   editor_chat: { max: 120, windowSec: 3600 }, // honest session: ~20-30 agent turns
   event: { max: 300, windowSec: 3600 }, // honest visitor: a handful of events
   custom_request: { max: 5, windowSec: 86400 }, // honest owner: 1-2 requests
+  img_analyze: { max: 60, windowSec: 3600 }, // honest session: ~10 photos
 };
 
 function envInt(name: string): number | undefined {
