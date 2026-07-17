@@ -10,7 +10,7 @@ import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limi
 import { getServiceClient } from "@/lib/supabase/server";
 import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
 import { sanitizeMedia, type SiteMedia } from "@/lib/media/media";
-import type { BusinessFacts } from "@/lib/verticals/schema";
+import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
 
 /**
  * Hard cap on conversation length (messages, both roles). An honest onboarding
@@ -74,6 +74,21 @@ export async function finalizeAction(
   // Re-validate media server-side (client input is untrusted): bad/foreign URLs
   // or an over-long list collapse to no media rather than reaching the site.
   const cleanMedia = sanitizeMedia(media);
+  // Server-side backstop (adversarial review): the chat ready-gate normally
+  // guarantees the required trio, but this is a public server action — a
+  // bypassed client must not reach generation with a hollow facts object.
+  const parsedFacts = businessFactsSchema.safeParse(facts);
+  if (
+    !parsedFacts.success ||
+    !parsedFacts.data.businessName.trim() ||
+    !parsedFacts.data.city.trim() ||
+    !parsedFacts.data.phone.trim()
+  ) {
+    return {
+      ok: false,
+      error: "Бракує обовʼязкових даних — назви, міста або телефону. Поверніться до розмови й додайте їх.",
+    };
+  }
   // Generation requires a signed-in user (§3.1 invariant, journal #43): the
   // tenant gets its owner at creation; no anonymous generation, no claim flow.
   let ownerId: string | null = null;
@@ -90,8 +105,9 @@ export async function finalizeAction(
   if (!limit.ok) return { ok: false, error: rateLimitMessage(limit.retryAfterSec) };
 
   // hasLogo/hasPhotos are onboarding-flow flags (plan A5), not business facts —
-  // strip them so they never reach generation or tenants.facts.
-  const bizFacts: BusinessFacts = { ...facts };
+  // strip them so they never reach generation or tenants.facts. Building from
+  // the zod-parsed value also drops any unknown junk keys a client could send.
+  const bizFacts: BusinessFacts = { ...parsedFacts.data };
   delete bizFacts.hasLogo;
   delete bizFacts.hasPhotos;
 

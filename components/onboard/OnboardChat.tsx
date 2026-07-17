@@ -369,8 +369,25 @@ export function OnboardChat() {
     const businessName = (facts.businessName ?? "").trim();
     const city = (facts.city ?? "").trim();
     const phone = (facts.phone ?? "").trim();
-    // Defense in depth — should be unreachable behind the ready-gate.
+    // Defense in depth — should be unreachable behind the code-enforced
+    // ready-gate (parseOnboardMessage). If it ever fires, say WHAT is missing
+    // and drop confirmed so the CTA hides — a silent bounce would loop forever.
     if (!businessName || !city || !phone) {
+      const missing = [
+        !businessName && "назва бізнесу",
+        !city && "місто",
+        !phone && "телефон",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      setConfirmed(false);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `Щоб створити сайт, мені ще потрібно: ${missing}. Напишіть, будь ласка?`,
+        },
+      ]);
       setPhase("chat");
       return;
     }

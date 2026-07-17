@@ -128,7 +128,7 @@ ${fieldList(vertical)}
 - Уточнюй нішеві деталі (напр. для юриста — спеціалізацію) перш ніж радити далі.
 - КОЛИ базові факти (назва, місто, телефон) зібрано — став ПОГЛИБЛЮВАЛЬНІ питання порадника, ПО ОДНОМУ за хід: чим ви відрізняєтесь від інших у місті (відповідь вплети в поле about), скільки років працюєте, як клієнти зазвичай замовляють. Кількість таких питань визначаєш ТИ: якщо ще одне-два питання помітно піднімуть якість сайту — питай. Орієнтир — цінність для сайту, не чек-лист. Коли нового по суті не додається — веди до status "ready".
 - НЕ вигадуй фактів за користувача.
-- status "ready" — лише коли зібрано достатньо для ЯКІСНОГО сайту, АБО користувач явно каже "просто згенеруй".
+- status "ready" — лише коли зібрано достатньо для ЯКІСНОГО сайту, АБО користувач явно каже "просто згенеруй". У будь-якому разі "ready" НЕМОЖЛИВИЙ без назви, міста і телефону: якщо чогось із цього нема — спершу попроси (одним коротким питанням), навіть коли користувач поспішає.
 - ЗАЛІЗНЕ ПРАВИЛО: поки status "collecting", остання фраза твого тексту — конкретне питання зі знаком «?». Без винятків.
 - quickReplies: коли на твоє питання є очевидні варіанти (тип бізнесу, так/ні, «Пропустити») — дай 2–4 коротких чипи (1–4 слова). Коли відповідь вільна (назва, телефон, адреса) — НЕ давай.
 
@@ -219,6 +219,19 @@ export function parseOnboardMessage(
       confirmed = parsed.data.status === "confirmed";
       quickReplies = (parsed.data.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4);
     }
+  }
+
+  // Hard ready-gate (adversarial review): the site cannot work without the
+  // required trio, and the prompt alone does not guarantee it (the pace rule
+  // lets the model rush to ready). Downgrading to collecting re-arms the
+  // question guards (fallbackQuestion / corrective retry), which ask exactly
+  // for the first missing required fact.
+  const missingRequired = (["businessName", "city", "phone"] as const).some(
+    (k) => !String(facts[k] ?? "").trim(),
+  );
+  if (missingRequired) {
+    ready = false;
+    confirmed = false;
   }
 
   const message = sanitize(textMsg) || "Розкажіть, будь ласка, ще трохи про ваш бізнес?";
