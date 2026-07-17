@@ -16,6 +16,7 @@ type NavLink = { href: string; label: string };
 export default function NextlyNav({
   brandName = "Nextly",
   brandAccent = "",
+  logoUrl,
   navLinks = [
     { href: "#services", label: "Послуги" },
     { href: "#gallery", label: "Роботи" },
@@ -26,6 +27,7 @@ export default function NextlyNav({
 }: {
   brandName?: string;
   brandAccent?: string;
+  logoUrl?: string;
   navLinks?: NavLink[];
   ctaHref?: string;
 }) {
@@ -38,9 +40,12 @@ export default function NextlyNav({
       className="sticky top-0 z-50 border-b border-gray-100 bg-white/90 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90"
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-        <a href="/" className="text-xl font-medium text-gray-800 dark:text-white">
-          {brandName}
-          {brandAccent && <span className="text-indigo-600"> {brandAccent}</span>}
+        <a href="/" className="flex items-center gap-2 text-xl font-medium text-gray-800 dark:text-white">
+          {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto" />}
+          <span>
+            {brandName}
+            {brandAccent && <span className="text-indigo-600"> {brandAccent}</span>}
+          </span>
         </a>
 
         <div className="hidden items-center gap-8 lg:flex">

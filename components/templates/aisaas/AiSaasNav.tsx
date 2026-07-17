@@ -16,6 +16,7 @@ type NavLink = { href: string; label: string };
 export default function AiSaasNav({
   brandName = "Studio",
   brandAccent = "AI",
+  logoUrl,
   navLinks = [
     { href: "#services", label: "Послуги" },
     { href: "#gallery", label: "Роботи" },
@@ -27,6 +28,7 @@ export default function AiSaasNav({
 }: {
   brandName?: string;
   brandAccent?: string;
+  logoUrl?: string;
   navLinks?: NavLink[];
   ctaLabel?: string;
   ctaHref?: string;
@@ -49,9 +51,12 @@ export default function AiSaasNav({
       }`}
     >
       <div className="mx-auto grid max-w-6xl grid-cols-2 items-center px-4 sm:px-6 md:grid-cols-3">
-        <a href="/" className="text-xl font-bold tracking-tight text-[#2F4550]">
-          {brandName}
-          <span className="text-[#E07A5F]">{brandAccent}</span>
+        <a href="/" className="flex items-center gap-2 text-xl font-bold tracking-tight text-[#2F4550]">
+          {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto" />}
+          <span>
+            {brandName}
+            <span className="text-[#E07A5F]">{brandAccent}</span>
+          </span>
         </a>
 
         <div className="hidden items-center justify-center gap-8 md:flex">

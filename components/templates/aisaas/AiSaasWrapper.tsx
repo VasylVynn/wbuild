@@ -30,6 +30,7 @@ export default function AiSaasWrapper({
       <AiSaasNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}
+        logoUrl={brand?.logoUrl}
         navLinks={brand?.navLinks}
         ctaHref={brand?.ctaHref}
       />

@@ -3,6 +3,7 @@ import { getServiceClient } from "@/lib/supabase/server";
 import { revalidateTenant } from "@/lib/cache";
 import { generateSite } from "@/lib/ai/generate";
 import { generateHeroImage } from "@/lib/media/generate-image";
+import { adaptLogoForTemplate } from "@/lib/media/logo-adapt";
 import { getVertical } from "@/lib/verticals/registry";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import type { SiteMedia } from "@/lib/media/media";
@@ -49,6 +50,17 @@ export async function generateAndPublish(
     }
   }
 
+  // H1: owner has a logo + a template site → vision-check it against the
+  // template's nav surface and adapt when it clashes. Fail-open: null keeps
+  // the original only; the adapted variant sits ALONGSIDE it, never replaces.
+  let logoAdaptedUrl: string | null = null;
+  if (media?.logoUrl && site.templateId) {
+    logoAdaptedUrl = await adaptLogoForTemplate({
+      logoUrl: media.logoUrl,
+      templateId: site.templateId,
+    });
+  }
+
   const sb = getServiceClient();
 
   const { data: tenant, error: tErr } = await sb
@@ -66,6 +78,7 @@ export async function generateAndPublish(
           ...(site.packId && { packId: site.packId }),
           ...(site.templateId && { templateId: site.templateId }),
           ...(media?.logoUrl && { logoUrl: media.logoUrl }),
+          ...(logoAdaptedUrl && { logoAdaptedUrl }),
           ...(media?.photos?.length && { photos: media.photos }),
           ...(media?.generatedHero && { generatedHero: media.generatedHero }),
         },

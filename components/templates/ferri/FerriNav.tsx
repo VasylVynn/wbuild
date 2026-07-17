@@ -16,6 +16,7 @@ type NavLink = { href: string; label: string };
 export default function FerriNav({
   brandName = "Студія",
   brandAccent = "Право",
+  logoUrl,
   navLinks = [
     { href: "#services", label: "Напрямки" },
     { href: "#about", label: "Про нас" },
@@ -27,6 +28,7 @@ export default function FerriNav({
 }: {
   brandName?: string;
   brandAccent?: string;
+  logoUrl?: string;
   navLinks?: NavLink[];
   ctaLabel?: string;
   ctaHref?: string;
@@ -47,8 +49,11 @@ export default function FerriNav({
       }`}
     >
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <a href="/" className="font-[family-name:var(--font-cormorant)] text-2xl tracking-wide text-cream-100">
-          {brandName} <span className="text-gold-500">{brandAccent}</span>
+        <a href="/" className="flex items-center gap-2 font-[family-name:var(--font-cormorant)] text-2xl tracking-wide text-cream-100">
+          {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto" />}
+          <span>
+            {brandName} <span className="text-gold-500">{brandAccent}</span>
+          </span>
         </a>
 
         {/* Desktop links */}

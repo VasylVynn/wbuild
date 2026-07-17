@@ -11,6 +11,8 @@ import { getVertical } from "@/lib/verticals/registry";
 import { generateSite } from "@/lib/ai/generate";
 import type { Theme } from "@/lib/theme/tokens";
 import type { BusinessFacts } from "@/lib/verticals/schema";
+import { displayLogoUrl } from "@/lib/tenant/types";
+import { adaptLogoForTemplate } from "@/lib/media/logo-adapt";
 
 /**
  * Editor server actions (§3 + §5.5): the editor reads/writes DRAFT only;
@@ -34,6 +36,9 @@ export interface EditorData {
   // Active site-template id (template sites): the preview renders through the
   // template's OWN section components + wrapper, matching the published site.
   templateId?: string;
+  // Logo the site currently displays (original vs adapted already resolved) —
+  // the frame preview must match the published render (H1).
+  displayLogoUrl?: string;
 }
 
 export async function getEditorData(host: string): Promise<EditorData | null> {
@@ -67,6 +72,9 @@ export async function getEditorData(host: string): Promise<EditorData | null> {
     telegramConnected: Boolean(t.telegram_chat_id),
     packId: (t.brand as { packId?: string } | null)?.packId,
     templateId: (t.brand as { templateId?: string } | null)?.templateId,
+    displayLogoUrl: displayLogoUrl(
+      (t.brand ?? {}) as Parameters<typeof displayLogoUrl>[0],
+    ),
   };
 }
 
@@ -243,6 +251,15 @@ export async function regenerateSite(
     const brandPatch: Record<string, unknown> = {};
     if (!brand.packId && site.packId) brandPatch.packId = site.packId;
     if (!brand.templateId && site.templateId) brandPatch.templateId = site.templateId;
+    // H1: a site landing on a template for the FIRST time with an existing
+    // logo gets its adapted variant now (fail-open — null keeps the original).
+    if (brandPatch.templateId && brand.logoUrl) {
+      const adapted = await adaptLogoForTemplate({
+        logoUrl: brand.logoUrl,
+        templateId: brandPatch.templateId as string,
+      });
+      if (adapted) brandPatch.logoAdaptedUrl = adapted;
+    }
     if (Object.keys(brandPatch).length > 0) {
       tenantUpdate.brand = { ...(t.brand as Record<string, unknown>), ...brandPatch };
     }

@@ -4,6 +4,8 @@ import { getTenantByHost, getPublishedPage } from "@/lib/tenant/data";
 import { getCachedPublishedPage } from "@/lib/cache";
 import { PageRenderer } from "@/components/PageRenderer";
 import { getTemplate, type TemplateBrand } from "@/lib/templates/registry";
+import { buildTemplateBrand } from "@/lib/templates/brand";
+import { displayLogoUrl } from "@/lib/tenant/types";
 import {
   canonicalUrl,
   faviconDataUri,
@@ -93,39 +95,12 @@ export default async function TenantPage({ params }: { params: Params }) {
   const template = templateId ? getTemplate(templateId) : undefined;
   let brand: TemplateBrand | undefined;
   if (template && tenant) {
-    const name = (tenant.brand.businessName ?? "").trim();
-    const words = name.split(/\s+/).filter(Boolean);
-    const NAV_SKIP = new Set(["hero", "stats", "cta", "lead_form", "contacts"]);
-    const seen = new Set<string>();
-    const navLinks: { href: string; label: string }[] = [];
-    for (const b of page.blocks) {
-      const s = b.section;
-      if (!s || b.hidden || NAV_SKIP.has(s) || seen.has(s)) continue;
-      const label = template.sections[s]?.label;
-      if (!label) continue;
-      seen.add(s);
-      navLinks.push({ href: `#${s}`, label });
-    }
-    // Real contact facts for the footer's «Контакти» column, straight off the
-    // grounded contacts block (already the owner's verbatim data).
-    const contact = page.blocks.find((b) => b.type === "contacts")?.props as
-      | {
-          phone?: string;
-          address?: string;
-          hours?: string;
-          email?: string;
-          telegram?: string;
-          viber?: string;
-        }
-      | undefined;
-
-    brand = {
-      brandName: words.length > 1 ? words.slice(0, -1).join(" ") + " " : name,
-      brandAccent: words.length > 1 ? words[words.length - 1] : "",
-      navLinks,
-      ctaHref: "#lead_form",
-      contact,
-    };
+    brand = buildTemplateBrand(
+      tenant.brand.businessName ?? "",
+      page.blocks,
+      template,
+      displayLogoUrl(tenant.brand),
+    );
   }
 
   return (

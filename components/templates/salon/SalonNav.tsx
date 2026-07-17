@@ -31,6 +31,7 @@ const XIcon = () => (
 export default function SalonNav({
   brandName = "LUXE",
   brandAccent = "Салон",
+  logoUrl,
   navLinks = [
     { href: "#services", label: "Послуги" },
     { href: "#gallery", label: "Галерея" },
@@ -42,6 +43,7 @@ export default function SalonNav({
 }: {
   brandName?: string;
   brandAccent?: string;
+  logoUrl?: string;
   navLinks?: NavLink[];
   ctaLabel?: string;
   ctaHref?: string;
@@ -68,8 +70,11 @@ export default function SalonNav({
         }`}
       >
         <div className="flex items-center justify-between px-6 py-3">
-          <a href="#" className="font-display text-xl font-bold text-foreground tracking-tight">
-            {brandName} <span className="text-gradient-gold">{brandAccent}</span>
+          <a href="#" className="flex items-center gap-2 font-display text-xl font-bold text-foreground tracking-tight">
+            {logoUrl && <img src={logoUrl} alt="" className="h-7 w-auto" />}
+            <span>
+              {brandName} <span className="text-gradient-gold">{brandAccent}</span>
+            </span>
           </a>
 
           <div className="hidden md:flex items-center gap-1">

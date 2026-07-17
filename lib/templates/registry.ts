@@ -34,6 +34,9 @@ export type { TemplateSectionDef };
 export interface TemplateBrand {
   brandName?: string;
   brandAccent?: string;
+  /** Owner's logo (storage URL; already the adapted variant when one is chosen).
+   *  Absent → the Nav keeps its text-only brand. */
+  logoUrl?: string;
   navLinks?: { href: string; label: string }[];
   ctaHref?: string;
   /** Real contact facts for the footer's «Контакти» column. */

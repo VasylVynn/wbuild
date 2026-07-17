@@ -14,6 +14,8 @@ export function buildTemplateBrand(
   businessName: string,
   blocks: StoredBlock[],
   template: SiteTemplate,
+  /** Display logo (storage URL) — the caller resolves original vs adapted. */
+  logoUrl?: string,
 ): TemplateBrand {
   const name = businessName.trim();
   const words = name.split(/\s+/).filter(Boolean);
@@ -36,6 +38,7 @@ export function buildTemplateBrand(
   return {
     brandName: words.length > 1 ? words.slice(0, -1).join(" ") + " " : name,
     brandAccent: words.length > 1 ? words[words.length - 1] : "",
+    ...(logoUrl ? { logoUrl } : {}),
     navLinks,
     ctaHref: "#lead_form",
     contact,

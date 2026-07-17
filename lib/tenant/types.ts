@@ -27,6 +27,12 @@ export interface Tenant {
     businessName: string;
     tagline?: string;
     logoUrl?: string;
+    /** Palette-adapted variant of logoUrl (H1) — generated, lives in our bucket.
+     *  The ORIGINAL upload is never touched; this sits alongside it. */
+    logoAdaptedUrl?: string;
+    /** Owner's pick in the editor «Лого» sheet. Absent = show the adapted
+     *  variant when one exists (fail-open to the original otherwise). */
+    logoDisplay?: "original" | "adapted";
     /** Owner-uploaded photos (§4.8) — the trusted source for hero/gallery imagery. */
     photos?: string[];
     /** Atmospheric hero background generated when the owner has NO photos (§4.8).
@@ -48,6 +54,16 @@ export interface Tenant {
   /** Structured questionnaire facts — the grounding source (§4.4). Typed per
    *  vertical elsewhere; kept open here so the model is vertical-agnostic. */
   facts: Record<string, unknown>;
+}
+
+/**
+ * The logo the SITE shows (H1): the adapted variant by default when present,
+ * unless the owner explicitly toggled «Оригінал». Always falls back to the
+ * original upload — adaptation failing can never lose the logo.
+ */
+export function displayLogoUrl(brand: Tenant["brand"]): string | undefined {
+  if (brand.logoDisplay === "original") return brand.logoUrl;
+  return brand.logoAdaptedUrl ?? brand.logoUrl;
 }
 
 export interface Page {

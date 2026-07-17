@@ -22,6 +22,7 @@ type NavLink = { href: string; label: string };
 export default function StudioNav({
   brandName = "Студія",
   brandAccent = "Про",
+  logoUrl,
   navLinks = [
     { href: "#features", label: "Переваги" },
     { href: "#pricing", label: "Тарифи" },
@@ -33,6 +34,7 @@ export default function StudioNav({
 }: {
   brandName?: string;
   brandAccent?: string;
+  logoUrl?: string;
   navLinks?: NavLink[];
   ctaLabel?: string;
   ctaHref?: string;
@@ -59,9 +61,12 @@ export default function StudioNav({
       >
         <div className="container mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between">
-            <a href="/" className="text-xl font-semibold text-white tracking-tight">
-              {brandName}
-              <span className="text-zinc-500 font-normal">{brandAccent}</span>
+            <a href="/" className="flex items-center gap-2 text-xl font-semibold text-white tracking-tight">
+              {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto" />}
+              <span>
+                {brandName}
+                <span className="text-zinc-500 font-normal">{brandAccent}</span>
+              </span>
             </a>
 
             <div className="hidden md:flex items-center gap-8">
