@@ -88,16 +88,22 @@ export async function finalizeAction(
   const limit = await checkRateLimit("finalize", ipFromHeaders(await headers()));
   if (!limit.ok) return { ok: false, error: rateLimitMessage(limit.retryAfterSec) };
 
+  // hasLogo/hasPhotos are onboarding-flow flags (plan A5), not business facts —
+  // strip them so they never reach generation or tenants.facts.
+  const bizFacts: BusinessFacts = { ...facts };
+  delete bizFacts.hasLogo;
+  delete bizFacts.hasPhotos;
+
   try {
     const vId =
       verticalId ??
       classifyVertical(
-        [facts.businessName, facts.about, ...(facts.services?.map((s) => s.name) ?? [])]
+        [bizFacts.businessName, bizFacts.about, ...(bizFacts.services?.map((s) => s.name) ?? [])]
           .filter(Boolean)
           .join(" "),
       );
-    const host = await uniqueSubdomain(facts.businessName);
-    await generateAndPublish(facts, host, vId, true, cleanMedia);
+    const host = await uniqueSubdomain(bizFacts.businessName);
+    await generateAndPublish(bizFacts, host, vId, true, cleanMedia);
     const isProd = process.env.NODE_ENV === "production";
     const port = ROOT_DOMAIN.includes(":") ? `:${ROOT_DOMAIN.split(":")[1]}` : "";
     const url = `${isProd ? "https" : "http"}://${host}${isProd ? "" : port}`;

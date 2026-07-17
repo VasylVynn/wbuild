@@ -37,6 +37,11 @@ export const businessFactsSchema = z.object({
   services: z.array(serviceFactSchema).optional(),
   testimonials: z.array(testimonialFactSchema).optional(),
   socials: z.array(socialFactSchema).optional(),
+  // Onboarding-flow flags (plan A5), not business facts: the agent asks «Чи
+  // маєте логотип?» / «Чи є фото?» and stores the answers here so the media
+  // step and prompts adapt. Stripped in finalizeAction before generation.
+  hasLogo: z.boolean().optional(),
+  hasPhotos: z.boolean().optional(),
 });
 
 export type BusinessFacts = z.infer<typeof businessFactsSchema>;

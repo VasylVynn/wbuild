@@ -616,6 +616,11 @@ export function OnboardChat() {
 
             <div className="flex flex-col gap-2.5">
               <span className="text-[15px] font-bold text-ink">Лого або фото вивіски</span>
+              {facts.hasLogo === false && (
+                <p className="text-[14px] leading-snug text-ink-muted">
+                  Немає лого? Нічого страшного — шапка сайту гарно виглядає і з текстовою назвою.
+                </p>
+              )}
               <PhotoField
                 value={media.logoUrl}
                 conversationId={convId}
@@ -627,6 +632,12 @@ export function OnboardChat() {
 
             <div className="flex flex-col gap-2.5">
               <span className="text-[15px] font-bold text-ink">Фото: роботи, приміщення, товари</span>
+              {facts.hasPhotos === false && (
+                <p className="text-[14px] leading-snug text-ink-muted">
+                  Без фото я створю атмосферне зображення для сайту — справжні фото можна додати
+                  будь-коли в редакторі.
+                </p>
+              )}
               <div className="flex flex-wrap items-start gap-3">
                 {media.photos.map((url, i) => (
                   <PhotoField
