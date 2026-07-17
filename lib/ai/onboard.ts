@@ -3,6 +3,7 @@ import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, CHAT_MODEL } from "./anthropic";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
+import type { SiteMedia, PhotoKind } from "@/lib/media/media";
 import { getVertical, VERTICAL_IDS } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
 import { validateFacts } from "@/lib/onboard/validate";
@@ -188,6 +189,41 @@ ${buildDesignCatalog(vertical)}
 - Це стосується лише справді неможливого. Тексти, послуги, ціни, фото, кольори, порядок секцій — наша звичайна робота, таке НЕ відхиляй.${issuesBlock}`;
 }
 
+/**
+ * G4: what the owner has ALREADY uploaded, as a prompt block — so the agent
+ * comments naturally and never re-asks what it can plainly "see". Review
+ * screenshots are routed to testimonial candidates (never the photo pool), so
+ * they don't appear here; confirmed ones are visible in the facts JSON.
+ */
+const KIND_LABELS: Partial<Record<PhotoKind, string>> = {
+  work: "фото робіт/товарів",
+  interior: "фото приміщення чи фасаду",
+  menu: "фото меню/прайсу",
+  person: "фото людей/команди",
+};
+
+function buildMediaInventory(media?: SiteMedia): string {
+  if (!media) return "";
+  const hasLogo = Boolean(media.logoUrl);
+  const photos = media.photos ?? [];
+  if (!hasLogo && photos.length === 0) return "";
+
+  const kindByUrl = new Map((media.photoMeta ?? []).map((m) => [m.url, m.kind]));
+  const counts = new Map<string, number>();
+  for (const url of photos) {
+    const label = KIND_LABELS[kindByUrl.get(url) as PhotoKind] ?? "фото";
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  const lines = [
+    ...(hasLogo ? ["- лого: є"] : []),
+    ...[...counts.entries()].map(([label, n]) => `- ${label}: ${n}`),
+  ];
+
+  return `\n\nВЖЕ ЗАВАНТАЖЕНО (користувач додав у чаті, фото проаналізовано):
+${lines.join("\n")}
+Правила: НЕ питай, чи є лого або фото, коли вони вже завантажені — за потреби постав відповідний hasLogo/hasPhotos = true у factsPatch. Можеш ОДНИМ реченням природно прокоментувати («бачу фото робіт — піде в галерею»), без окремого питання про це.`;
+}
+
 function sanitize(msg: string): string {
   // Defensive: drop broken-UTF8 replacement chars; convert any literal "\n".
   return msg.replace(/�/g, "").replace(/\\n/g, "\n").trim();
@@ -211,6 +247,7 @@ export function prepareOnboardCall(
   currentFacts: Partial<BusinessFacts>,
   currentVerticalId?: string,
   currentTemplateId?: string,
+  currentMedia?: SiteMedia,
 ): OnboardCall | null {
   const vertical = getVertical(currentVerticalId);
   const issues = validateFacts(currentFacts, vertical);
@@ -223,7 +260,7 @@ export function prepareOnboardCall(
   const templateLine = getTemplate(currentTemplateId)
     ? `\nПоточний обраний дизайн: ${currentTemplateId} (можеш змінити, передавши інший templateId).`
     : "";
-  const system = `${buildSystem(vertical, issues.map((i) => i.note))}\n\nПоточні зібрані факти (JSON): ${JSON.stringify(currentFacts)}${templateLine}`;
+  const system = `${buildSystem(vertical, issues.map((i) => i.note))}\n\nПоточні зібрані факти (JSON): ${JSON.stringify(currentFacts)}${templateLine}${buildMediaInventory(currentMedia)}`;
   return { system, messages, vertical };
 }
 
@@ -318,12 +355,19 @@ export async function onboardTurn(
   currentFacts: Partial<BusinessFacts>,
   currentVerticalId?: string,
   currentTemplateId?: string,
+  currentMedia?: SiteMedia,
 ): Promise<OnboardTurnResult> {
   const client = getAnthropic();
 
   // Vertical guidance comes from the MODEL's own classification, threaded from
   // the previous turn (generic until it decides).
-  const call = prepareOnboardCall(history, currentFacts, currentVerticalId, currentTemplateId);
+  const call = prepareOnboardCall(
+    history,
+    currentFacts,
+    currentVerticalId,
+    currentTemplateId,
+    currentMedia,
+  );
   if (!call) {
     return {
       message: "Розкажіть трохи про ваш бізнес — що це за справа, у якому місті, і який телефон?",

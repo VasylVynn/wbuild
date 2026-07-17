@@ -32,6 +32,9 @@ export async function onboardAction(
   // Client-held flags, echoed back on refusals only (codex review): a
   // rate-limited fallback turn must not wipe ready/confirmed/template state.
   current?: { ready?: boolean; confirmed?: boolean },
+  // G4: uploaded media feeds the prompt's photo inventory (untrusted client
+  // input — sanitized below; only ever informs the system prompt).
+  media?: unknown,
 ): Promise<OnboardTurnResult> {
   // Both checks run BEFORE the Anthropic call — a limited turn costs no tokens.
   // Limited turns come back as a normal assistant message, so the chat UI
@@ -58,7 +61,7 @@ export async function onboardAction(
   const limit = await checkRateLimit("chat_turn", ipFromHeaders(await headers()));
   if (!limit.ok) return refuse(rateLimitMessage(limit.retryAfterSec));
 
-  return onboardTurn(history, facts, verticalId, templateId);
+  return onboardTurn(history, facts, verticalId, templateId, media ? sanitizeMedia(media) : undefined);
 }
 
 export type FinalizeResult =

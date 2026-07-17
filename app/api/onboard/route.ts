@@ -11,6 +11,7 @@ import {
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
 import { getTemplate, templateDisplayName } from "@/lib/templates/registry";
+import { mediaSchema, type SiteMedia } from "@/lib/media/media";
 
 /**
  * Streaming onboarding turn (P4). Same stateless contract as onboardAction —
@@ -39,6 +40,7 @@ function parseBody(body: unknown): {
   facts: Partial<BusinessFacts>;
   verticalId?: string;
   templateId?: string;
+  media?: SiteMedia;
 } | null {
   if (!body || typeof body !== "object") return null;
   const b = body as Record<string, unknown>;
@@ -60,7 +62,12 @@ function parseBody(body: unknown): {
   // Unknown ids collapse to undefined (free pick) instead of rejecting the turn.
   const templateId =
     typeof b.templateId === "string" && getTemplate(b.templateId) ? b.templateId : undefined;
-  return { history, facts: factsParsed.data, verticalId, templateId };
+  // G4: uploaded media feeds the prompt's photo inventory. It only informs the
+  // system prompt, so malformed media collapses to undefined (turn proceeds)
+  // rather than rejecting the request.
+  const mediaParsed = mediaSchema.safeParse(b.media);
+  const media = b.media != null && mediaParsed.success ? (mediaParsed.data as SiteMedia) : undefined;
+  return { history, facts: factsParsed.data, verticalId, templateId, media };
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -86,7 +93,7 @@ export async function POST(req: Request): Promise<Response> {
   }
   const parsed = parseBody(json);
   if (!parsed) return Response.json({ t: "refusal", message: "Некоректний запит." }, { status: 400 });
-  const { history, facts, verticalId, templateId } = parsed;
+  const { history, facts, verticalId, templateId, media } = parsed;
 
   if (history.length > maxChatMessages()) {
     return Response.json({
@@ -95,7 +102,7 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
-  const call = prepareOnboardCall(history, facts, verticalId, templateId);
+  const call = prepareOnboardCall(history, facts, verticalId, templateId, media);
   if (!call) {
     return Response.json({
       t: "refusal",
