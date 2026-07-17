@@ -52,7 +52,7 @@ export default function PortfolioHero({ data }: { data: unknown }) {
       <div className="absolute inset-0">
         {d.imageUrl ? (
           <>
-            <img src={d.imageUrl} alt="" className="h-full w-full object-cover opacity-40" />
+            <img src={d.imageUrl} alt={d.imageAlt ?? ""} className="h-full w-full object-cover opacity-40" />
             <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/80 to-background" />
           </>
         ) : (
@@ -142,7 +142,7 @@ export default function PortfolioHero({ data }: { data: unknown }) {
             <div className="relative mx-auto max-w-md">
               <div className="absolute inset-0 animate-pulse rounded-3xl bg-gradient-to-br from-primary/30 via-transparent to-primary/10 blur-2xl" />
               <div className="glass glow-border relative rounded-3xl p-2">
-                <img src={d.imageUrl} alt={d.title} className="aspect-[4/5] w-full rounded-2xl object-cover" />
+                <img src={d.imageUrl} alt={d.imageAlt ?? d.title} className="aspect-[4/5] w-full rounded-2xl object-cover" />
               </div>
             </div>
           </div>

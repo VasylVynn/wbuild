@@ -41,6 +41,7 @@ const LABELS: Record<string, string> = {
   imageUrl: "Зображення",
   url: "Зображення",
   alt: "Опис зображення",
+  imageAlt: "Опис зображення (alt)",
   name: "Назва",
   description: "Опис",
   price: "Ціна",

@@ -35,6 +35,11 @@ export const heroSchema = z.object({
     ),
   subtitle: z.string().optional(),
   imageUrl: assetUrl.optional(),
+  // Alt text of the hero image (D3). At generation it is ALWAYS assigned
+  // deterministically from facts (the model never sees images — §4.8 — so a
+  // model-written photo description would be fabrication); the owner can edit
+  // it in the form, and wave G's vision analysis will propose better ones.
+  imageAlt: z.string().optional().describe("Alt-текст hero-зображення (заповнюється кодом, не вигадуй опис фото)"),
   ctaLabel: z.string().optional(),
   ctaHref: z.string().optional(), // usually an in-page anchor like "#contacts"
   // Optional second (outline) CTA — template-mining wave 2.

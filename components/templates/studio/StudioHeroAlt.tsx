@@ -138,7 +138,7 @@ export default function StudioHeroAlt({ data, extra }: { data: unknown; extra?: 
           transition={{ delay: 0.3, duration: 0.9, ease: [0.76, 0, 0.24, 1] }}
         >
           {d.imageUrl ? (
-            <img src={d.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={d.imageUrl} alt={d.imageAlt ?? ""} className="absolute inset-0 h-full w-full object-cover" />
           ) : (
             <>
               <div

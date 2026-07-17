@@ -385,6 +385,11 @@ function assemble(
   const allowed = new Set(photos);
   if (generatedHero) allowed.add(generatedHero);
   const businessName = facts.businessName;
+  // D3: deterministic alt base for owner photos — name + city (local-SEO
+  // keywords that are always TRUE). The model never sees images (§4.8), so
+  // descriptive alts are never model-written; wave G's vision pass will
+  // upgrade them per photo.
+  const altBase = facts.city ? `${businessName}, ${facts.city}` : businessName;
 
   const hero = raw.find((b) => b.type === "hero");
   const contacts = raw.find((b) => b.type === "contacts");
@@ -457,7 +462,7 @@ function assemble(
             type: "gallery",
             props: {
               title: "Наші фото",
-              images: galleryPhotos.map((url) => ({ url, alt: businessName })),
+              images: galleryPhotos.map((url, i) => ({ url, alt: `${altBase} — фото ${i + 1}` })),
             },
           },
         ]
@@ -482,7 +487,7 @@ function assemble(
   const placed = ordered.map((b) =>
     groundAndPlace(
       groundHrefs(
-        groundImages(b, photos, galleryPhotos, allowed, businessName, generatedHero),
+        groundImages(b, photos, galleryPhotos, allowed, altBase, generatedHero),
         facts,
         factHrefs,
       ),
@@ -559,14 +564,24 @@ function groundImages(
   photos: string[],
   galleryPhotos: string[],
   allowed: Set<string>,
-  businessName: string,
+  altBase: string,
   generatedHero?: string,
 ): BlockInstance {
   switch (b.type) {
-    case "hero":
+    case "hero": {
       // Hero background := first real photo → generated atmospheric hero → none
       // (never a model-invented URL). Real uploads always win over the generated one.
-      return { ...b, props: { ...b.props, imageUrl: photos[0] ?? generatedHero } };
+      // Alt is deterministic too (D3): the model never saw the image, so any
+      // alt it wrote is overwritten — a real photo gets the name+city base, the
+      // generated atmospheric image says exactly what it is.
+      const imageUrl = photos[0] ?? generatedHero;
+      const imageAlt = photos[0]
+        ? altBase
+        : imageUrl
+          ? `Атмосферне зображення — ${altBase}`
+          : undefined;
+      return { ...b, props: { ...b.props, imageUrl, imageAlt } };
+    }
     case "services":
       // Per-service images are model-invented → strip any not in the uploaded set.
       return {
@@ -585,7 +600,7 @@ function groundImages(
         ...b,
         props: {
           ...b.props,
-          images: galleryPhotos.map((url) => ({ url, alt: businessName })),
+          images: galleryPhotos.map((url, i) => ({ url, alt: `${altBase} — фото ${i + 1}` })),
         },
       };
     case "team":

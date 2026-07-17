@@ -61,7 +61,7 @@ export default function NextlyHero({ data }: { data: unknown }) {
           {d.imageUrl ? (
             <img
               src={d.imageUrl}
-              alt={d.title}
+              alt={d.imageAlt ?? d.title}
               className="w-full max-w-lg object-cover"
               loading="eager"
             />

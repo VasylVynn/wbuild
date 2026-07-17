@@ -18,7 +18,7 @@ export default function FerriHeroAlt2({ data }: { data: unknown }) {
     <section className="relative flex min-h-screen items-center justify-center overflow-hidden">
       <div className="absolute inset-0">
         {d.imageUrl ? (
-          <img src={d.imageUrl} alt={d.title} className="h-full w-full object-cover" />
+          <img src={d.imageUrl} alt={d.imageAlt ?? d.title} className="h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full bg-gradient-to-br from-navy-900 via-navy-950 to-navy-800" />
         )}

@@ -46,7 +46,7 @@ function ServicesCards({ data }: { data: ServicesData }) {
             {item.imageUrl && (
               <img
                 src={item.imageUrl}
-                alt=""
+                alt={item.name}
                 loading="lazy"
                 className="h-48 w-full object-cover"
               />
@@ -241,7 +241,7 @@ function ServicesShowcase({ data }: { data: ServicesData }) {
               {item.imageUrl ? (
                 <img
                   src={item.imageUrl}
-                  alt=""
+                  alt={item.name}
                   loading="lazy"
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />

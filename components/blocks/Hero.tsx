@@ -158,7 +158,7 @@ function HeroDefault({ data }: { data: HeroData }) {
             <div className="flex-1">
               <img
                 src={imageUrl}
-                alt=""
+                alt={data.imageAlt ?? ""}
                 loading="lazy"
                 className="w-full rounded-[var(--radius)] object-cover"
                 style={{ maxHeight: "480px" }}
@@ -210,7 +210,7 @@ function HeroSplit({ data }: { data: HeroData }) {
           {imageUrl ? (
             <img
               src={imageUrl}
-              alt=""
+              alt={data.imageAlt ?? ""}
               loading="lazy"
               className="w-full rounded-[var(--radius)] object-cover"
               style={{ maxHeight: "480px" }}
@@ -324,7 +324,7 @@ function HeroPhoto({ data }: { data: HeroData }) {
     >
       <img
         src={imageUrl}
-        alt=""
+        alt={data.imageAlt ?? ""}
         aria-hidden
         loading="lazy"
         className="absolute inset-0 h-full w-full object-cover"

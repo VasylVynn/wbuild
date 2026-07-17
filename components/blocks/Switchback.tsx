@@ -78,7 +78,7 @@ function SwitchbackDefault({ data }: { data: SwitchbackData }) {
               <div className="flex-1">
                 <img
                   src={item.imageUrl}
-                  alt=""
+                  alt={item.heading}
                   loading="lazy"
                   className="w-full object-cover"
                   style={{
@@ -125,7 +125,7 @@ function SwitchbackFramed({ data }: { data: SwitchbackData }) {
               <div className="flex-1">
                 <img
                   src={item.imageUrl}
-                  alt=""
+                  alt={item.heading}
                   loading="lazy"
                   className="w-full rounded-lg object-cover"
                   style={{ maxHeight: "420px" }}

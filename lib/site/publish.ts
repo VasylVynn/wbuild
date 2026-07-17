@@ -46,10 +46,17 @@ export async function generateAndPublish(
     });
     if (gen) {
       media = { ...(media ?? { photos: [] }), generatedHero: gen };
-      // generateSite already ran → patch the hero block directly (same value
-      // groundImages would have assigned had the URL existed earlier).
+      // generateSite already ran → patch the hero block directly (same values
+      // groundImages would have assigned had the URL existed earlier, alt
+      // included — D3 keeps the two paths in lockstep).
       const hero = site.blocks.find((b) => b.type === "hero");
-      if (hero) (hero.props as { imageUrl?: string }).imageUrl = gen;
+      if (hero) {
+        const props = hero.props as { imageUrl?: string; imageAlt?: string };
+        props.imageUrl = gen;
+        props.imageAlt = `Атмосферне зображення — ${
+          facts.city ? `${facts.businessName}, ${facts.city}` : facts.businessName
+        }`;
+      }
     }
   }
 

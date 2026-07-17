@@ -120,7 +120,7 @@ export default function FerriHero({ data }: { data: unknown }) {
               <div className="relative overflow-hidden" style={{ maxHeight: "420px" }}>
                 <img
                   src={d.imageUrl}
-                  alt={d.title}
+                  alt={d.imageAlt ?? d.title}
                   className="h-auto w-full object-cover object-top grayscale-[20%] transition-all duration-700 hover:grayscale-0"
                 />
                 <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-navy-950/80 to-transparent" />

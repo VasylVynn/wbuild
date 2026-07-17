@@ -28,7 +28,7 @@ export default function SalonHeroAlt2({ data }: { data: unknown }) {
             className="lg:col-span-7 relative rounded-[2.5rem] overflow-hidden h-[60vh] lg:h-[78vh] shadow-elegant"
           >
             {d.imageUrl ? (
-              <img src={d.imageUrl} alt={d.title} className="h-full w-full object-cover" />
+              <img src={d.imageUrl} alt={d.imageAlt ?? d.title} className="h-full w-full object-cover" />
             ) : (
               <div className="h-full w-full bg-gradient-to-tr from-accent via-beauty-pink to-gold-light" />
             )}

@@ -50,7 +50,7 @@ export default function RestaurantHero({ data }: { data: unknown }) {
 
         {d.imageUrl ? (
           <div className="overflow-hidden rounded-3xl shadow-xl shadow-[#2A2018]/10">
-            <img src={d.imageUrl} alt={d.title} className="h-auto w-full object-cover" />
+            <img src={d.imageUrl} alt={d.imageAlt ?? d.title} className="h-auto w-full object-cover" />
           </div>
         ) : (
           <div className="relative aspect-4/3 overflow-hidden rounded-3xl bg-gradient-to-br from-[#FBF6EF] to-[#F3EADD] shadow-xl shadow-[#2A2018]/10">

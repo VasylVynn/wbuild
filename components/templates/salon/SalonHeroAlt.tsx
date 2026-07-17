@@ -116,7 +116,7 @@ export default function SalonHeroAlt({ data }: { data: unknown }) {
           {d.imageUrl ? (
             <img
               src={d.imageUrl}
-              alt={d.title}
+              alt={d.imageAlt ?? d.title}
               className="relative z-10 w-full h-full object-cover rounded-[3rem] shape-blob shadow-gold border border-white/10"
             />
           ) : (
