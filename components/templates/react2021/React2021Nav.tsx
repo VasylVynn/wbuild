@@ -41,7 +41,7 @@ export default function React2021Nav({
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
         <a href="/" className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-[#1a2e35]">
-          {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto" />}
+          {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto max-w-[160px] shrink-0 object-contain" />}
           <span>
             {brandName}
             <span className="text-[#ec4755]">{brandAccent}</span>

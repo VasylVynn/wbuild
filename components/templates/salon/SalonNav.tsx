@@ -71,7 +71,7 @@ export default function SalonNav({
       >
         <div className="flex items-center justify-between px-6 py-3">
           <a href="#" className="flex items-center gap-2 font-display text-xl font-bold text-foreground tracking-tight">
-            {logoUrl && <img src={logoUrl} alt="" className="h-7 w-auto" />}
+            {logoUrl && <img src={logoUrl} alt="" className="h-7 w-auto max-w-[150px] shrink-0 object-contain" />}
             <span>
               {brandName} <span className="text-gradient-gold">{brandAccent}</span>
             </span>

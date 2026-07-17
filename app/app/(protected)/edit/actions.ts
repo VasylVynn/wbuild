@@ -264,6 +264,10 @@ export async function regenerateSite(
       tenantUpdate.brand = { ...(t.brand as Record<string, unknown>), ...brandPatch };
     }
     await sb.from("tenants").update(tenantUpdate).eq("id", t.id);
+    // Draft-only saves must NOT purge — but brand is UNVERSIONED, so when the
+    // patch touched it (first-time template/pack pin, adapted logo) the LIVE
+    // site reads new values and the cache must go.
+    if (tenantUpdate.brand) await revalidateTenant(host);
 
     return { ok: true, blocks: site.blocks, theme: site.theme };
   } catch (e) {

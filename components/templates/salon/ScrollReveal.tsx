@@ -1,7 +1,7 @@
 "use client";
 
-import { motion, useInView, type Variants } from "framer-motion";
-import { type ReactNode } from "react";
+import { motion, type Variants } from "framer-motion";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRevealGate } from "../shared/reveal";
 
 /*
@@ -24,7 +24,26 @@ export function ScrollReveal({
   className?: string;
 }) {
   const [ref, armed] = useRevealGate<HTMLDivElement>();
-  const isInView = useInView(ref, { once: true, margin: "-50px" });
+  // NOT framer's useInView: its observer binds once to the pre-arm plain div,
+  // which the armed render replaces — it would watch a detached node and never
+  // fire. This effect re-binds on `armed`, so it observes the LIVE node.
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: "-50px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [armed, ref]);
 
   const variants: Variants = {
     hidden: {
@@ -53,7 +72,7 @@ export function ScrollReveal({
     <motion.div
       ref={ref}
       initial="hidden"
-      animate={isInView ? "visible" : "hidden"}
+      animate={inView ? "visible" : "hidden"}
       variants={variants}
       className={className}
     >

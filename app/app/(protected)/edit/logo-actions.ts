@@ -57,8 +57,24 @@ export async function setLogoAction(host: string, url: string | null): Promise<L
   const { data: t } = await sb.from("tenants").select("id, brand").eq("host", host).maybeSingle();
   if (!t) return { ok: false, error: "tenant not found" };
 
-  // Read-modify-write brand so we don't clobber businessName / photos.
-  const brand = { ...((t.brand ?? {}) as BrandRow) };
+  // The adaptation call below can take tens of seconds — run it BEFORE the
+  // brand write and re-read the row afterwards, so a concurrent edit (another
+  // upload, template pin, photo change) is not clobbered by a stale snapshot.
+  let adaptedUrl: string | undefined;
+  if (url !== null) {
+    const templateId = ((t.brand ?? {}) as BrandRow).templateId;
+    if (templateId) {
+      // Fail-open: null → the original simply shows as-is.
+      adaptedUrl = (await adaptLogoForTemplate({ logoUrl: url, templateId })) ?? undefined;
+    }
+  }
+
+  const { data: fresh } = await sb
+    .from("tenants")
+    .select("brand")
+    .eq("id", t.id)
+    .maybeSingle();
+  const brand = { ...(((fresh ?? t).brand ?? {}) as BrandRow) };
   // A new (or removed) file invalidates the previous adaptation and the toggle.
   delete brand.logoAdaptedUrl;
   delete brand.logoDisplay;
@@ -66,11 +82,7 @@ export async function setLogoAction(host: string, url: string | null): Promise<L
     delete brand.logoUrl;
   } else {
     brand.logoUrl = url;
-    if (brand.templateId) {
-      // Fail-open: null → the original simply shows as-is.
-      const adapted = await adaptLogoForTemplate({ logoUrl: url, templateId: brand.templateId });
-      if (adapted) brand.logoAdaptedUrl = adapted;
-    }
+    if (adaptedUrl) brand.logoAdaptedUrl = adaptedUrl;
   }
 
   const { error } = await sb.from("tenants").update({ brand }).eq("id", t.id);
@@ -96,6 +108,9 @@ export async function setLogoDisplayAction(
   }
 
   const sb = getServiceClient();
+  // Read-modify-write with no awaits in between — unlike setLogoAction there is
+  // no slow AI call here, so the lost-update window is milliseconds and the UI
+  // disables the toggle while busy.
   const { data: t } = await sb.from("tenants").select("id, brand").eq("host", host).maybeSingle();
   if (!t) return { ok: false, error: "tenant not found" };
 

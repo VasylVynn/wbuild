@@ -61,6 +61,9 @@ async function fetchLogoBytes(
     if (!res.ok) return null;
     const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim();
     if (!SUPPORTED_MIMES.includes(mime as SupportedMime)) return null;
+    // Reject oversized bodies BEFORE buffering when the server declares length.
+    const declared = Number(res.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_LOGO_BYTES) return null;
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.byteLength === 0 || buf.byteLength > MAX_LOGO_BYTES) return null;
     return { b64: buf.toString("base64"), mime: mime as SupportedMime };
@@ -175,14 +178,23 @@ async function generateAdaptedLogo(
     const imgPart = parts.find((p) => p.inlineData?.data ?? p.inline_data?.data);
     const data = imgPart?.inlineData?.data ?? imgPart?.inline_data?.data;
     if (!data) return null;
+    // The model's output is untrusted like any input: only raster mimes we'd
+    // accept on the way IN may be stored (an SVG under a .png path would smuggle
+    // active content into the bucket), and the decoded size is bounded.
     const outMime = imgPart?.inlineData?.mimeType ?? imgPart?.inline_data?.mime_type ?? "image/png";
+    if (!SUPPORTED_MIMES.includes(outMime as SupportedMime)) {
+      console.warn(`[logo-adapt] unsupported gemini output mime: ${outMime}`);
+      return null;
+    }
+    const outBuf = Buffer.from(data, "base64");
+    if (outBuf.byteLength === 0 || outBuf.byteLength > MAX_LOGO_BYTES) return null;
     const ext = outMime.includes("webp") ? "webp" : outMime.includes("jpeg") ? "jpg" : "png";
 
     const sb = getServiceClient();
     const path = `generated/logo/${crypto.randomUUID()}.${ext}`;
     const { error } = await sb.storage
       .from(BUCKET)
-      .upload(path, Buffer.from(data, "base64"), { contentType: outMime, upsert: false });
+      .upload(path, outBuf, { contentType: outMime, upsert: false });
     if (error) {
       console.warn(`[logo-adapt] upload failed: ${error.message}`);
       return null;

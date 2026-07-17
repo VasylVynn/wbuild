@@ -42,7 +42,7 @@ export default function RestaurantNav({
     >
       <div className="mx-auto grid max-w-6xl grid-cols-2 items-center px-4 py-4 sm:px-6 md:grid-cols-3">
         <a href="/" className="flex items-center gap-2 font-display text-xl font-bold tracking-tight text-[#2A2018]">
-          {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto" />}
+          {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto max-w-[160px] shrink-0 object-contain" />}
           <span>
             {brandName}
             <span className="text-[#C0562F]">{brandAccent}</span>

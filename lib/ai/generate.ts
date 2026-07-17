@@ -430,7 +430,7 @@ function assemble(
 
   const seen: Partial<Record<BlockType, number>> = {};
   const factHrefs = allowedFactHrefs(facts);
-  return ordered.map((b) =>
+  const placed = ordered.map((b) =>
     groundAndPlace(
       groundHrefs(
         groundImages(b, photos, galleryPhotos, allowed, businessName, generatedHero),
@@ -441,6 +441,27 @@ function assemble(
       seen,
       pack,
       template,
+    ),
+  );
+
+  // Second href pass, AFTER placement: only now are the real in-page targets
+  // known. Template sites use section ids as DOM ids, classic sites use the
+  // block anchors — and the lead form's id differs between them ("lead_form"
+  // vs "lead"). Any #anchor that resolves to nothing (model-invented #booking,
+  // bare "#", or the groundHrefs placeholder on a classic site) is rewritten
+  // to the lead anchor that actually exists on THIS page.
+  const validAnchors = new Set<string>();
+  for (const sb of placed) {
+    if (template) {
+      if (sb.section) validAnchors.add(`#${sb.section}`);
+    } else if (sb.anchor) {
+      validAnchors.add(sb.anchor);
+    }
+  }
+  const leadAnchor = template ? "#lead_form" : "#lead";
+  return placed.map((sb) =>
+    mapHrefFields(sb, (href) =>
+      href?.startsWith("#") && !validAnchors.has(href) ? leadAnchor : href,
     ),
   );
 }
@@ -522,13 +543,52 @@ function allowedFactHrefs(facts: BusinessFacts): Set<string> {
   return set;
 }
 
+/** The one place that knows which block fields carry links (§4.1 registry
+ *  spirit): both grounding passes walk hrefs through this. */
+function mapHrefFields<T extends BlockInstance>(
+  b: T,
+  fn: (href: string | undefined, label: string | undefined) => string | undefined,
+): T {
+  switch (b.type) {
+    case "hero":
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          ctaHref: fn(b.props.ctaHref, b.props.ctaLabel),
+          secondaryCtaHref: fn(b.props.secondaryCtaHref, b.props.secondaryCtaLabel),
+        },
+      };
+    case "cta":
+      return {
+        ...b,
+        props: { ...b.props, buttonHref: fn(b.props.buttonHref, b.props.buttonLabel) },
+      };
+    case "switchback":
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          items: b.props.items.map((it) => ({
+            ...it,
+            buttonHref: fn(it.buttonHref, it.buttonLabel),
+          })),
+        },
+      };
+    default:
+      return b;
+  }
+}
+
 function groundHrefs(
   b: BlockInstance,
   facts: BusinessFacts,
   factHrefs: Set<string>,
 ): BlockInstance {
   // A label without a target would render as a dead "#" link → send it to the
-  // funnel; an empty pair stays empty (no button rendered at all).
+  // funnel; an empty pair stays empty (no button rendered at all). "#lead_form"
+  // here is a placeholder — the post-placement pass in assemble() rewrites any
+  // anchor to one that actually exists on the page.
   const ground = (href: string | undefined, label: string | undefined): string | undefined => {
     if (!href?.trim()) return label?.trim() ? "#lead_form" : href;
     const value = href.trim();
@@ -543,35 +603,7 @@ function groundHrefs(
     return "#lead_form";
   };
 
-  switch (b.type) {
-    case "hero":
-      return {
-        ...b,
-        props: {
-          ...b.props,
-          ctaHref: ground(b.props.ctaHref, b.props.ctaLabel),
-          secondaryCtaHref: ground(b.props.secondaryCtaHref, b.props.secondaryCtaLabel),
-        },
-      };
-    case "cta":
-      return {
-        ...b,
-        props: { ...b.props, buttonHref: ground(b.props.buttonHref, b.props.buttonLabel) },
-      };
-    case "switchback":
-      return {
-        ...b,
-        props: {
-          ...b.props,
-          items: b.props.items.map((it) => ({
-            ...it,
-            buttonHref: ground(it.buttonHref, it.buttonLabel),
-          })),
-        },
-      };
-    default:
-      return b;
-  }
+  return mapHrefFields(b, ground);
 }
 
 function computePlacement(
