@@ -332,7 +332,7 @@ export async function POST(req: Request): Promise<Response> {
             .then(() => undefined, () => undefined);
         }
 
-        send({ t: "final", message, actions, blocksChanged, blocks, theme });
+        send({ t: "final", message, actions, blocksChanged, blocks, theme, seo });
       } catch {
         send({ t: "error", message: "Щось пішло не так. Спробуйте ще раз." });
       } finally {

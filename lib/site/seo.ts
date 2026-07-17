@@ -142,10 +142,15 @@ function parseTimeRange(seg: string): string | null {
  * ("Mo-Fr 09:00-18:00"). Comma/semicolon-separated segments parse
  * independently; a segment yields output only when BOTH a day spec and a time
  * range are recognized (except «цілодобово»/«24/7», which implies Mo-Su).
- * Unparseable input → []  (the property is then omitted entirely).
+ * A comma-separated day list («Пн, Ср, Пт 9-18») splits into day-only
+ * segments — those PEND until a time-carrying segment closes the list; only
+ * PURE day segments pend, so «Нд — вихідний» can never inherit a later time.
+ * Unparseable input → []  (the property is then omitted entirely) — an
+ * incomplete or wrong schedule is worse than none (codex review, wave D).
  */
 export function parseOpeningHours(hours: string): string[] {
   const out: string[] = [];
+  let pending: number[] = [];
   for (const rawSeg of hours.toLowerCase().split(/[,;]/)) {
     const seg = rawSeg.trim();
     if (!seg) continue;
@@ -167,40 +172,83 @@ export function parseOpeningHours(hours: string): string[] {
       days = "Mo-Su";
     } else if (/будні|робочі дні/.test(seg) && found.length === 0) {
       days = "Mo-Fr";
-    } else if (found.length === 1) {
-      days = SCHEMA_DAYS[found[0].day];
-    } else if (found.length === 2 && found[0].day < found[1].day) {
-      // A range only when the two days are joined by a dash alone («пн–пт»);
-      // «сб і нд» is a list — handled below.
+    } else if (found.length === 2) {
+      // Dash between the two days = a RANGE («пн–пт»); «сб і нд» is a list.
       const between = seg.slice(found[0].pos + found[0].len, found[1].pos);
       if (/^[\s-–—]*$/.test(between) && /[-–—]/.test(between)) {
-        days = `${SCHEMA_DAYS[found[0].day]}-${SCHEMA_DAYS[found[1].day]}`;
+        if (found[0].day < found[1].day) {
+          days = `${SCHEMA_DAYS[found[0].day]}-${SCHEMA_DAYS[found[1].day]}`;
+        } else {
+          // Wrap-around range («Пт–Пн») — emitting only its endpoints would be
+          // WRONG (weekend silently dropped). Unparseable → skip the segment.
+          pending = [];
+          continue;
+        }
       }
     }
 
     const time = parseTimeRange(rest);
-    if (!time) continue;
-    if (days) {
-      out.push(`${days} ${time}`);
-    } else if (found.length > 1) {
-      // Day list («сб і нд 10-15») → one entry per day, same time.
-      for (const f of found) out.push(`${SCHEMA_DAYS[f.day]} ${time}`);
+    if (!time) {
+      // No time in this segment. A PURE day segment (nothing but day names and
+      // connectors after blanking) is a list item awaiting its time («Пн,»);
+      // anything else («Нд — вихідний», «за записом») hard-resets the list.
+      const leftovers = rest.replace(/\b(і|та)\b/g, " ");
+      if (found.length > 0 && !days && /^[\s-–—]*$/.test(leftovers)) {
+        pending.push(...found.map((f) => f.day));
+      } else {
+        pending = [];
+      }
+      continue;
     }
+
+    if (days) {
+      // Range/щодня/будні: pending pure days ride along («Пн, Ср–Пт 9-18»).
+      for (const d of pending) out.push(`${SCHEMA_DAYS[d]} ${time}`);
+      out.push(`${days} ${time}`);
+    } else {
+      // Day list — the segment's own days plus any pending («Пн, Ср, Пт 9-18»).
+      const list = [...pending, ...found.map((f) => f.day)];
+      for (const d of list) out.push(`${SCHEMA_DAYS[d]} ${time}`);
+    }
+    pending = [];
   }
   return out;
 }
 
 /** Price range from the services' freeform prices («від 500 грн», «1 200 грн»):
- *  min–max over every number found; nothing found → undefined (omit). */
+ *  min–max over the CURRENCY-anchored numbers. Prices routinely embed other
+ *  digits («15 троянд — 1200 грн», «2 год — 800 грн»), so when a currency
+ *  token is present only number(-range)s adjacent to it count; a string with
+ *  no currency at all («400») is taken as a bare price. Nothing found →
+ *  undefined (omit). (Codex review, wave D.) */
 function priceRangeFromServices(services?: { price?: string }[]): string | undefined {
   const nums: number[] = [];
   let hasFrom = false;
+  const collect = (chunk: string) => {
+    for (const m of chunk.matchAll(/\d[\d\s\u00a0]*\d|\d/g)) {
+      const n = Number(m[0].replace(/[\s\u00a0]/g, ""));
+      if (Number.isFinite(n) && n > 0) nums.push(n);
+    }
+  };
   for (const s of services ?? []) {
     if (!s.price) continue;
     if (/від/i.test(s.price)) hasFrom = true;
-    for (const m of s.price.matchAll(/\d[\d\s ]*\d|\d/g)) {
-      const n = Number(m[0].replace(/[\s ]/g, ""));
-      if (Number.isFinite(n) && n > 0) nums.push(n);
+    if (/грн|₴|uah/i.test(s.price)) {
+      // Only the number (or number-range) adjacent to a currency token counts
+      // — quantities and durations in the same string never do. Both orders:
+      // «450 грн» and «₴450». («₴500 грн» double-counts — harmless for min/max.)
+      for (const m of s.price.matchAll(
+        /(\d[\d\s\u00a0]*(?:[-–—]\s*\d[\d\s\u00a0]*)?)(?:грн|₴|uah)/gi,
+      )) {
+        collect(m[1]);
+      }
+      for (const m of s.price.matchAll(
+        /(?:грн|₴|uah)\s*(\d[\d\s\u00a0]*(?:[-–—]\s*\d[\d\s\u00a0]*)?)/gi,
+      )) {
+        collect(m[1]);
+      }
+    } else {
+      collect(s.price);
     }
   }
   if (nums.length === 0) return undefined;
