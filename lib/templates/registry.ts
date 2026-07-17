@@ -10,6 +10,7 @@ import { portfolioMeta, portfolioSections } from "@/components/templates/portfol
 import { aisaasMeta, aisaasSections } from "@/components/templates/aisaas";
 import { nextlyMeta, nextlySections } from "@/components/templates/nextly";
 import { react2021Meta, react2021Sections } from "@/components/templates/react2021";
+import { restaurantMeta, restaurantSections } from "@/components/templates/restaurant";
 
 /**
  * Site templates — the owner mandate (2026-07): a generated site must BE a
@@ -144,6 +145,17 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: react2021Meta.order,
     sections: react2021Sections,
     wrapper: react2021Meta.wrapper,
+    themes: ["light"],
+    defaultTheme: "light",
+  },
+  restaurant: {
+    id: restaurantMeta.id,
+    label: restaurantMeta.label,
+    description: restaurantMeta.description,
+    verticalIds: restaurantMeta.verticalIds,
+    order: restaurantMeta.order,
+    sections: restaurantSections,
+    wrapper: restaurantMeta.wrapper,
     themes: ["light"],
     defaultTheme: "light",
   },

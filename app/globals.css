@@ -437,3 +437,26 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .tpl-react2021 .animate-wave-drift { animation: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Restaurant template ("restaurant") — warm hospitality look (Lora display serif
+ * + Inter body, cream canvas, terracotta accent, gold prices) ported from
+ * template_sources/restaurant-1.0.0 (FlyonUI, MIT). Colours are INLINE HEX in the
+ * sections; the scope only sets the base surface, the body typeface, and makes
+ * every heading render in the Lora display serif. Single light theme.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.tpl-restaurant {
+  position: relative;
+  min-height: 100vh;
+  background: #fbf6ef;
+  color: #2a2018;
+  font-family: var(--font-restaurant-body), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.tpl-restaurant :is(h1, h2, h3) {
+  font-family: var(--font-restaurant-display), Georgia, "Times New Roman", serif;
+}
+.tpl-restaurant .font-display {
+  font-family: var(--font-restaurant-display), Georgia, serif;
+}
