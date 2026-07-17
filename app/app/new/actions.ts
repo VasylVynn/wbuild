@@ -36,6 +36,7 @@ export async function onboardAction(
     facts,
     verticalId: verticalId ?? "generic",
     ready: false,
+    confirmed: false,
     quickReplies: [],
     progress: [],
   });

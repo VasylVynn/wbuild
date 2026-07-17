@@ -26,7 +26,7 @@ const factsPatchSchema = businessFactsSchema.partial();
 const saveFactsSchema = z.object({
   verticalId: z.enum(VERTICAL_IDS as [string, ...string[]]),
   factsPatch: factsPatchSchema,
-  status: z.enum(["collecting", "ready"]),
+  status: z.enum(["collecting", "ready", "confirmed"]),
   quickReplies: z.array(z.string()).max(4).optional(),
 });
 
@@ -42,8 +42,10 @@ const saveFactsTool = {
         "Лише НОВІ або змінені поля з останнього повідомлення користувача; масиви цілком.",
       ),
       status: z
-        .enum(["collecting", "ready"])
-        .describe("ready — коли зібрано достатньо для якісного сайту або користувач попросив 'просто згенеруй'."),
+        .enum(["collecting", "ready", "confirmed"])
+        .describe(
+          "ready — зібрано достатньо для якісного сайту (покажи резюме і спитай підтвердження); confirmed — ЛИШЕ коли користувач явно підтвердив показане резюме.",
+        ),
       quickReplies: z
         .array(z.string())
         .max(4)
@@ -82,6 +84,8 @@ export interface OnboardTurnResult {
   facts: Partial<BusinessFacts>;
   verticalId: string;
   ready: boolean;
+  /** A6: the user explicitly confirmed the chat summary — unlocks the create CTA. */
+  confirmed: boolean;
   /** Suggested one-tap answers for the CURRENT question (design 1c). */
   quickReplies: string[];
   /** Collected-facts chips (design 1b). */
@@ -127,6 +131,12 @@ ${fieldList(vertical)}
 - status "ready" — лише коли зібрано достатньо для ЯКІСНОГО сайту, АБО користувач явно каже "просто згенеруй".
 - ЗАЛІЗНЕ ПРАВИЛО: поки status "collecting", остання фраза твого тексту — конкретне питання зі знаком «?». Без винятків.
 - quickReplies: коли на твоє питання є очевидні варіанти (тип бізнесу, так/ні, «Пропустити») — дай 2–4 коротких чипи (1–4 слова). Коли відповідь вільна (назва, телефон, адреса) — НЕ давай.
+
+ПІДСУМОК І ПІДТВЕРДЖЕННЯ (перед генерацією):
+- Коли ставиш status "ready" — у цьому Ж повідомленні надішли структуроване РЕЗЮМЕ зібраного, кожен пункт з нового рядка з жирною міткою: **Назва:**, **Місто:**, **Телефон:**, адреса, години, послуги З ЦІНАМИ (кожна послуга з нового рядка), про бізнес, лого і фото (є / нема). Лише факти з розмови, нічого не вигадуй.
+- Після резюме додай: «Після генерації ви зможете змінити будь-який текст чи секцію — самі в редакторі або попросивши асистента.» Заверши питанням «Все вірно, чи щось замінити?» з quickReplies ["Все вірно, генеруємо", "Хочу виправити"].
+- Користувач просить правку → онови факти (last-wins), надішли КОРОТКЕ оновлене резюме і знову спитай підтвердження (status лишається "ready").
+- status "confirmed" — ЛИШЕ після явної згоди користувача з резюме («все вірно», «генеруємо», «так, все ок»). НІКОЛИ не став "confirmed", якщо користувач ще не бачив резюме. У повідомленні-підтвердженні коротко скажи: натисніть кнопку нижче — додасте фото й лого, і сайт буде готовий. Питання в кінці тут не потрібне.
 
 МЕЖІ ПЛАТФОРМИ (чесність понад усе):
 - Ми вміємо: односторінковий сайт із готових блоків (шапка, послуги з цінами, фото-галерея, відгуки, FAQ, контакти, форма заявки, що приходить власнику в Telegram), зміна кольорової теми, просте редагування текстів (у т.ч. з ШІ).
@@ -175,6 +185,7 @@ export interface ParsedOnboardMessage {
   facts: Partial<BusinessFacts>;
   verticalId: string;
   ready: boolean;
+  confirmed: boolean;
   quickReplies: string[];
 }
 
@@ -193,6 +204,7 @@ export function parseOnboardMessage(
   let facts: Partial<BusinessFacts> = baseFacts;
   let verticalId = baseVerticalId;
   let ready = false;
+  let confirmed = false;
   let quickReplies: string[] = [];
 
   const toolUse = res.content.find((b) => b.type === "tool_use");
@@ -201,13 +213,16 @@ export function parseOnboardMessage(
     if (parsed.success) {
       facts = { ...baseFacts, ...parsed.data.factsPatch };
       verticalId = VERTICAL_IDS.includes(parsed.data.verticalId) ? parsed.data.verticalId : baseVerticalId;
-      ready = parsed.data.status === "ready";
+      // "confirmed" implies collection is over — ready stays true so every
+      // ready-gated guard (no fallback question, is_complete) keeps holding.
+      ready = parsed.data.status !== "collecting";
+      confirmed = parsed.data.status === "confirmed";
       quickReplies = (parsed.data.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4);
     }
   }
 
   const message = sanitize(textMsg) || "Розкажіть, будь ласка, ще трохи про ваш бізнес?";
-  return { message, facts, verticalId, ready, quickReplies };
+  return { message, facts, verticalId, ready, confirmed, quickReplies };
 }
 
 export { saveFactsTool, computeProgress };
@@ -227,7 +242,7 @@ export function fallbackQuestion(facts: Partial<BusinessFacts>): string {
   if (missing("phone")) return "Який телефон для звʼязку з клієнтами?";
   if (missing("address")) return "За якою адресою вас знайти?";
   if (missing("hours")) return "Які у вас години роботи?";
-  return "Додати щось іще — чи натиснемо «Переглянути й створити сайт»?";
+  return "Додати щось іще — чи показати підсумок для підтвердження?";
 }
 
 export async function onboardTurn(
@@ -246,6 +261,7 @@ export async function onboardTurn(
       facts: currentFacts,
       verticalId: getVertical(currentVerticalId).id,
       ready: false,
+      confirmed: false,
       quickReplies: [],
       progress: computeProgress(currentFacts),
     };

@@ -11,6 +11,9 @@ type FactsState = {
   facts: unknown;
   verticalId: string | undefined;
   ready: boolean;
+  // A6: the user explicitly confirmed the chat summary. Optional so pre-A6
+  // rows stay valid (absent = not confirmed).
+  confirmed?: boolean;
   // Owner-uploaded logo/photos (§4.8). Optional so pre-media rows stay valid.
   media?: SiteMedia;
 };
@@ -20,6 +23,7 @@ export type ConversationData = {
   facts: unknown;
   verticalId: string | undefined;
   ready: boolean;
+  confirmed: boolean;
   media: SiteMedia;
 };
 
@@ -68,6 +72,7 @@ export async function saveTurn(
   facts: unknown,
   verticalId: string | undefined,
   ready: boolean,
+  confirmed = false,
 ): Promise<{ ok: boolean }> {
   if (!isSupabaseConfigured()) return { ok: false };
 
@@ -83,7 +88,7 @@ export async function saveTurn(
     .maybeSingle();
   const media = (prev?.facts_state as FactsState | null)?.media;
 
-  const factsState: FactsState = { facts, verticalId, ready, ...(media && { media }) };
+  const factsState: FactsState = { facts, verticalId, ready, confirmed, ...(media && { media }) };
 
   const { error } = await db
     .from("conversations")
@@ -162,6 +167,7 @@ export async function loadConversation(
     facts: fs?.facts ?? {},
     verticalId: fs?.verticalId,
     ready: fs?.ready ?? false,
+    confirmed: fs?.confirmed ?? false,
     media: fs?.media ?? { photos: [] },
   };
 }

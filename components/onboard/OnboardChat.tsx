@@ -5,7 +5,6 @@ import {
   useRef,
   useEffect,
   type KeyboardEvent as ReactKeyboardEvent,
-  type FormEvent,
   type ReactNode,
 } from "react";
 import Link from "next/link";
@@ -24,7 +23,7 @@ import {
 } from "@/app/app/new/persist-actions";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import type { SiteMedia } from "@/lib/media/media";
-import { Button, Field, Input, Textarea, Chip, Card } from "@/components/ui";
+import { Button, Chip, Card } from "@/components/ui";
 import PhotoField from "@/components/editor/PhotoField";
 import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 
@@ -32,9 +31,7 @@ import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 // Types
 // ---------------------------------------------------------------------------
 
-type Phase = "chat" | "media" | "confirm" | "gate" | "generating" | "done" | "error";
-
-type ServiceRow = { name: string; price: string };
+type Phase = "chat" | "media" | "gate" | "generating" | "done" | "error";
 
 const GREETING: ChatMsg = {
   role: "assistant",
@@ -100,6 +97,8 @@ export function OnboardChat() {
   const [messages, setMessages] = useState<ChatMsg[]>([GREETING]);
   const [facts, setFacts] = useState<Partial<BusinessFacts>>({});
   const [ready, setReady] = useState(false);
+  // A6: the user explicitly confirmed the chat summary — unlocks the create CTA.
+  const [confirmed, setConfirmed] = useState(false);
   const [verticalId, setVerticalId] = useState<string | undefined>(undefined);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
@@ -115,18 +114,8 @@ export function OnboardChat() {
   // --- Phase ---
   const [phase, setPhase] = useState<Phase>("chat");
 
-  // --- Media (logo + photos) — optional step before confirm ---
+  // --- Media (logo + photos) — optional step before generation ---
   const [media, setMedia] = useState<SiteMedia>({ photos: [] });
-
-  // --- Confirm form state ---
-  const [businessName, setBusinessName] = useState("");
-  const [city, setCity] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [hours, setHours] = useState("");
-  const [about, setAbout] = useState("");
-  const [services, setServices] = useState<ServiceRow[]>([]);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // --- Done / error state ---
   const [siteUrl, setSiteUrl] = useState("");
@@ -159,6 +148,7 @@ export function OnboardChat() {
       setFacts(data.facts as Partial<BusinessFacts>);
       setVerticalId(data.verticalId);
       setReady(data.ready);
+      setConfirmed(data.confirmed);
       // Media survives the login-gate redirect (saved fire-and-forget) — restore
       // it so the media step shows what was already uploaded.
       setMedia(data.media ?? { photos: [] });
@@ -177,6 +167,7 @@ export function OnboardChat() {
     facts: Partial<BusinessFacts>;
     verticalId: string;
     ready: boolean;
+    confirmed: boolean;
     quickReplies: string[];
   };
 
@@ -190,7 +181,9 @@ export function OnboardChat() {
     if (ct.includes("application/json")) {
       const j = (await res.json()) as { message?: string };
       if (typeof j.message === "string") {
-        return { message: j.message, facts, verticalId: verticalId ?? "generic", ready: false, quickReplies: [] };
+        // Refusal (rate limit etc.) is message-only — carry the current state
+        // through so a limited turn can't silently drop ready/confirmed.
+        return { message: j.message, facts, verticalId: verticalId ?? "generic", ready, confirmed, quickReplies: [] };
       }
       throw new Error("bad refusal payload");
     }
@@ -269,6 +262,7 @@ export function OnboardChat() {
       setMessages(finalMessages);
       setFacts(result.facts);
       setReady(result.ready);
+      setConfirmed(result.confirmed ?? false);
       setVerticalId(result.verticalId);
       setQuickReplies(result.quickReplies ?? []);
 
@@ -281,7 +275,14 @@ export function OnboardChat() {
 
       // Persist turn fire-and-forget — never blocks the UI
       if (convIdRef.current) {
-        void saveTurn(convIdRef.current, finalMessages, result.facts, result.verticalId, result.ready);
+        void saveTurn(
+          convIdRef.current,
+          finalMessages,
+          result.facts,
+          result.verticalId,
+          result.ready,
+          result.confirmed ?? false,
+        );
       }
     };
 
@@ -312,25 +313,7 @@ export function OnboardChat() {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Login gate (journal #43) — runs before showing the confirm form.
-  // ---------------------------------------------------------------------------
-
-  const enterConfirm = () => {
-    setBusinessName(facts.businessName ?? "");
-    setCity(facts.city ?? "");
-    setPhone(facts.phone ?? "");
-    setAddress(facts.address ?? "");
-    setHours(facts.hours ?? "");
-    setAbout(facts.about ?? "");
-    setServices(
-      (facts.services ?? []).map((s) => ({ name: s.name, price: s.price ?? "" })),
-    );
-    setFormErrors({});
-    setPhase("confirm");
-  };
-
-  // Ready CTA → the optional media step (login gate comes AFTER it, on «Далі»).
+  // Confirmed CTA → the optional media step (login gate comes AFTER it).
   const handleReviewAndCreate = () => {
     if (loading) return;
     setPhase("media");
@@ -365,48 +348,40 @@ export function OnboardChat() {
     setLoading(true);
     try {
       const s = await sessionStateAction();
-      // Auth on + not signed in → warm gate (save the site), not the form.
+      // Auth on + not signed in → warm gate (save the site), not generation.
       if (s.authOn && !s.loggedIn) {
         setPhase("gate");
         return;
       }
-      enterConfirm();
     } finally {
       setLoading(false);
     }
+    await handleFinalize();
   };
 
   // ---------------------------------------------------------------------------
-  // Confirm form handlers
+  // Finalize (A6) — the chat summary IS the confirmation; facts go to
+  // generation as-is. Required-field validation lives in the ready-gate
+  // (prompt + validators): the agent never sets ready without name/city/phone.
   // ---------------------------------------------------------------------------
 
-  const validateForm = (): boolean => {
-    const errs: Record<string, string> = {};
-    if (!businessName.trim()) errs.businessName = "Введіть назву бізнесу";
-    if (!city.trim()) errs.city = "Введіть місто";
-    if (!phone.trim()) errs.phone = "Введіть номер телефону";
-    setFormErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleSubmitForm = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) return;
+  const handleFinalize = async () => {
+    const businessName = (facts.businessName ?? "").trim();
+    const city = (facts.city ?? "").trim();
+    const phone = (facts.phone ?? "").trim();
+    // Defense in depth — should be unreachable behind the ready-gate.
+    if (!businessName || !city || !phone) {
+      setPhase("chat");
+      return;
+    }
 
     const fullFacts: BusinessFacts = {
-      businessName: businessName.trim(),
-      city: city.trim(),
-      phone: phone.trim(),
-      ...(address.trim() && { address: address.trim() }),
-      ...(hours.trim() && { hours: hours.trim() }),
-      ...(about.trim() && { about: about.trim() }),
-      ...(services.filter((s) => s.name.trim()).length > 0 && {
-        services: services
-          .filter((s) => s.name.trim())
-          .map((s) => ({
-            name: s.name.trim(),
-            ...(s.price.trim() && { price: s.price.trim() }),
-          })),
+      ...facts,
+      businessName,
+      city,
+      phone,
+      ...(facts.services && {
+        services: facts.services.filter((s) => s.name.trim()),
       }),
     };
 
@@ -434,13 +409,6 @@ export function OnboardChat() {
       setLoading(false);
     }
   };
-
-  // --- Service list helpers ---
-  const addService = () => setServices((prev) => [...prev, { name: "", price: "" }]);
-  const removeService = (idx: number) =>
-    setServices((prev) => prev.filter((_, i) => i !== idx));
-  const updateService = (idx: number, field: "name" | "price", val: string) =>
-    setServices((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: val } : s)));
 
   const copyUrl = async () => {
     try {
@@ -520,15 +488,16 @@ export function OnboardChat() {
           </div>
         </div>
 
-        {/* Footer: ready CTA + quick replies + input */}
+        {/* Footer: confirmed CTA + quick replies + input. The big CTA appears
+            only AFTER the user explicitly confirmed the chat summary (A6). */}
         <footer className="mx-auto w-full max-w-2xl px-4 pb-5">
-          {ready && (
+          {confirmed && (
             <button
               onClick={handleReviewAndCreate}
               disabled={loading}
               className="mb-3 flex min-h-[60px] w-full items-center justify-center rounded-[18px] bg-brand text-[18px] font-bold text-white shadow-[0_8px_24px_rgba(27,91,191,0.35)] transition-colors hover:bg-brand-hover disabled:opacity-50"
             >
-              Переглянути й створити сайт →
+              Додати фото й створити сайт →
             </button>
           )}
 
@@ -554,7 +523,7 @@ export function OnboardChat() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={loading}
-              placeholder={ready ? "Або допишіть щось…" : "Написати…"}
+              placeholder={confirmed ? "Або допишіть щось…" : "Написати…"}
               autoComplete="off"
               className="h-14 min-w-0 flex-1 rounded-full border-[1.5px] border-line-strong bg-surface px-5 text-[17px] text-ink placeholder:text-ink-faint transition-shadow focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft disabled:opacity-50"
             />
@@ -667,7 +636,7 @@ export function OnboardChat() {
               onClick={() => void handleMediaNext()}
               className="min-h-[60px] w-full text-[19px] shadow-[0_8px_24px_rgba(27,91,191,0.3)]"
             >
-              Далі →
+              Створити сайт →
             </Button>
             <Button
               variant="quiet"
@@ -676,189 +645,9 @@ export function OnboardChat() {
               onClick={() => void handleMediaNext()}
               className="w-full"
             >
-              Пропустити
+              Створити без фото
             </Button>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Render — confirm form (design C)
-  // ---------------------------------------------------------------------------
-
-  if (phase === "confirm") {
-    const hasErrors = Object.keys(formErrors).length > 0;
-    return (
-      <div className={`min-h-[100dvh] ${rootBase}`}>
-        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
-        <header className="border-b border-line bg-surface">
-          <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-3.5">
-            <button
-              onClick={() => setPhase("chat")}
-              aria-label="Назад до розмови"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[20px] font-bold text-ink-muted hover:bg-sunken"
-            >
-              ←
-            </button>
-            <span className="text-[18px] font-extrabold text-ink">Перевірте дані</span>
-          </div>
-        </header>
-
-        <div className="mx-auto w-full max-w-2xl px-4 py-6">
-          {(media.logoUrl || media.photos.length > 0) && (
-            <div className="mb-5 flex flex-wrap items-center gap-2.5">
-              {media.logoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={media.logoUrl}
-                  alt="Лого"
-                  className="h-14 w-14 shrink-0 rounded-[12px] border border-line bg-surface object-contain"
-                />
-              )}
-              {media.photos.map((url) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={url}
-                  src={url}
-                  alt=""
-                  className="h-14 w-14 shrink-0 rounded-[12px] border border-line object-cover"
-                />
-              ))}
-            </div>
-          )}
-          <p className="mb-5 text-[16px] leading-relaxed text-ink-muted">
-            Я заповнив усе з нашої розмови. Відредагуйте будь-що і натисніть «Створити сайт».
-          </p>
-
-          <form onSubmit={handleSubmitForm} noValidate className="flex flex-col gap-5">
-            {hasErrors && (
-              <div className="flex items-start gap-2.5 rounded-[14px] bg-danger-soft px-4 py-3.5">
-                <CircleAlert size={18} className="mt-0.5 shrink-0 text-danger" />
-                <span className="text-[15px] font-bold leading-snug text-danger">
-                  Заповніть, будь ласка, обовʼязкові поля нижче — без них клієнти не зможуть звʼязатися.
-                </span>
-              </div>
-            )}
-
-            <Card className="flex flex-col gap-5 p-5 sm:p-8">
-              <Field label="Назва бізнесу *" error={formErrors.businessName}>
-                <Input
-                  type="text"
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="Назва вашого бізнесу"
-                  error={!!formErrors.businessName}
-                />
-              </Field>
-
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <Field label="Місто *" error={formErrors.city}>
-                  <Input
-                    type="text"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="Київ"
-                    error={!!formErrors.city}
-                  />
-                </Field>
-                <Field label="Телефон *" error={formErrors.phone}>
-                  <Input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+380 50 123 45 67"
-                    error={!!formErrors.phone}
-                  />
-                </Field>
-              </div>
-
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <Field label="Адреса">
-                  <Input
-                    type="text"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="вул. Хрещатик, 1"
-                  />
-                </Field>
-                <Field label="Години роботи">
-                  <Input
-                    type="text"
-                    value={hours}
-                    onChange={(e) => setHours(e.target.value)}
-                    placeholder="Пн–Пт 9:00–19:00, Сб–Нд 10:00–17:00"
-                  />
-                </Field>
-              </div>
-
-              <Field label="Про бізнес">
-                <Textarea
-                  value={about}
-                  onChange={(e) => setAbout(e.target.value)}
-                  rows={4}
-                  placeholder="Кілька слів про ваш бізнес…"
-                />
-              </Field>
-
-              {/* Editable services list — width pattern is load-bearing:
-                  name = min-w-0 flex-1, price = w-28 shrink-0 (a stray w-full
-                  would win in compiled CSS and collapse the sibling). */}
-              <div className="flex flex-col gap-2.5">
-                <span className="text-[15px] font-bold text-ink">Послуги та ціни</span>
-                {services.length > 0 && (
-                  <div className="flex items-center gap-2 px-0.5">
-                    <span className="min-w-0 flex-1 text-[13px] font-bold text-ink-faint">Назва послуги</span>
-                    <span className="w-28 shrink-0 text-[13px] font-bold text-ink-faint">Ціна</span>
-                    <span className="w-12 shrink-0" />
-                  </div>
-                )}
-                {services.map((svc, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={svc.name}
-                      onChange={(e) => updateService(idx, "name", e.target.value)}
-                      placeholder="Назва послуги"
-                      className={`${svcInput} min-w-0 flex-1`}
-                    />
-                    <input
-                      type="text"
-                      value={svc.price}
-                      onChange={(e) => updateService(idx, "price", e.target.value)}
-                      placeholder="Ціна"
-                      className={`${svcInput} w-28 shrink-0`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeService(idx)}
-                      aria-label="Видалити рядок"
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] text-[22px] text-ink-faint transition-colors hover:bg-danger-soft hover:text-danger"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addService}
-                  className="flex min-h-[52px] items-center justify-center rounded-[14px] border-2 border-dashed border-line-strong text-[16px] font-bold text-brand transition-colors hover:border-brand hover:bg-brand-soft"
-                >
-                  + Додати послугу
-                </button>
-              </div>
-            </Card>
-
-            <Button
-              type="submit"
-              size="lg"
-              disabled={loading}
-              className="min-h-[60px] w-full text-[19px] shadow-[0_8px_24px_rgba(27,91,191,0.3)]"
-            >
-              Створити сайт
-            </Button>
-          </form>
         </div>
       </div>
     );
@@ -1037,7 +826,7 @@ export function OnboardChat() {
         <p className="mt-4 rounded-[14px] bg-danger-soft px-5 py-4 text-[15px] font-semibold leading-relaxed text-danger">
           {errorMsg}
         </p>
-        <Button size="lg" className="mt-6" onClick={() => setPhase("confirm")}>
+        <Button size="lg" className="mt-6" onClick={() => void handleFinalize()}>
           Спробувати ще раз
         </Button>
       </div>
@@ -1048,11 +837,6 @@ export function OnboardChat() {
 // ---------------------------------------------------------------------------
 // Small local sub-components + shared class strings
 // ---------------------------------------------------------------------------
-
-// Service-row input: mirrors the ui/Input look WITHOUT `w-full`, so the flex
-// widths (min-w-0 flex-1 / w-28 shrink-0) survive in the compiled CSS.
-const svcInput =
-  "min-h-12 rounded-[14px] border border-line-strong bg-surface px-4 text-[16px] text-ink placeholder:text-ink-faint transition-shadow focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft";
 
 // Markdown-lite for agent replies: only **bold** is supported (the prompt
 // forbids everything else). Built as React nodes — no HTML injection surface.
