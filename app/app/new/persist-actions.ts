@@ -5,6 +5,7 @@ import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
 import type { ChatMsg } from "@/lib/ai/onboard";
 import { mediaSchema, type SiteMedia } from "@/lib/media/media";
+import { getTemplate, templateDisplayName } from "@/lib/templates/registry";
 
 // Shape stored inside conversations.facts_state
 type FactsState = {
@@ -14,6 +15,8 @@ type FactsState = {
   // A6: the user explicitly confirmed the chat summary. Optional so pre-A6
   // rows stay valid (absent = not confirmed).
   confirmed?: boolean;
+  // B3: the design the agent picked in the chat. Optional so pre-B rows stay valid.
+  templateId?: string;
   // Owner-uploaded logo/photos (§4.8). Optional so pre-media rows stay valid.
   media?: SiteMedia;
 };
@@ -24,6 +27,9 @@ export type ConversationData = {
   verticalId: string | undefined;
   ready: boolean;
   confirmed: boolean;
+  templateId?: string;
+  /** Resolved server-side so the client never bundles the template registry. */
+  templateLabel?: string;
   media: SiteMedia;
 };
 
@@ -73,6 +79,7 @@ export async function saveTurn(
   verticalId: string | undefined,
   ready: boolean,
   confirmed = false,
+  templateId?: string,
 ): Promise<{ ok: boolean }> {
   if (!isSupabaseConfigured()) return { ok: false };
 
@@ -88,7 +95,20 @@ export async function saveTurn(
     .maybeSingle();
   const media = (prev?.facts_state as FactsState | null)?.media;
 
-  const factsState: FactsState = { facts, verticalId, ready, confirmed, ...(media && { media }) };
+  // Unknown/absent template ids are dropped (registry is the authority); the
+  // stored pick only changes when this turn carries a valid one — a refusal
+  // turn that lost the client-side pick must not wipe the persisted choice.
+  const prevTemplateId = (prev?.facts_state as FactsState | null)?.templateId;
+  const cleanTemplateId = getTemplate(templateId) ? templateId : prevTemplateId;
+
+  const factsState: FactsState = {
+    facts,
+    verticalId,
+    ready,
+    confirmed,
+    ...(cleanTemplateId && { templateId: cleanTemplateId }),
+    ...(media && { media }),
+  };
 
   const { error } = await db
     .from("conversations")
@@ -162,12 +182,15 @@ export async function loadConversation(
 
   const fs = data.facts_state as FactsState | null;
 
+  const templateId = getTemplate(fs?.templateId) ? fs?.templateId : undefined;
+
   return {
     messages: (data.messages as ChatMsg[]) ?? [],
     facts: fs?.facts ?? {},
     verticalId: fs?.verticalId,
     ready: fs?.ready ?? false,
     confirmed: fs?.confirmed ?? false,
+    ...(templateId && { templateId, templateLabel: templateDisplayName(templateId) }),
     media: fs?.media ?? { photos: [] },
   };
 }
