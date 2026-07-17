@@ -39,6 +39,8 @@ export interface EditorData {
   // Logo the site currently displays (original vs adapted already resolved) —
   // the frame preview must match the published render (H1).
   displayLogoUrl?: string;
+  // Draft page SEO meta (wave D) — shown to the editor agent; goes live on publish.
+  seo?: PageSeo;
 }
 
 export async function getEditorData(host: string): Promise<EditorData | null> {
@@ -75,7 +77,72 @@ export async function getEditorData(host: string): Promise<EditorData | null> {
     displayLogoUrl: displayLogoUrl(
       (t.brand ?? {}) as Parameters<typeof displayLogoUrl>[0],
     ),
+    seo: (p?.draft_content as { seo?: PageSeo } | null)?.seo,
   };
+}
+
+// Same ceilings as generation (lib/ai/generate.ts clampSeo) — search engines
+// truncate around 60/150; these are the hard persistence caps.
+const SEO_TITLE_MAX = 70;
+const SEO_DESCRIPTION_MAX = 170;
+
+/**
+ * Save the page SEO meta into the DRAFT (wave D5). Merge semantics: an absent
+ * field keeps the current value, an empty string clears it. Draft-only — NO
+ * cache purge; «Опублікувати» promotes draft_content.seo with everything else.
+ */
+export async function saveDraftSeo(
+  host: string,
+  patch: { title?: string; description?: string },
+): Promise<{ ok: boolean; seo?: PageSeo; error?: string }> {
+  try {
+    const gate = await requireMember({ host }); // §3.1
+    if (!gate.ok) return { ok: false, error: gate.error };
+    const sb = getServiceClient();
+    const { data: t } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
+    if (!t) return { ok: false, error: "tenant not found" };
+    const { data: p } = await sb
+      .from("pages")
+      .select("id, draft_content")
+      .eq("tenant_id", t.id)
+      .eq("slug", "")
+      .maybeSingle();
+    if (!p) return { ok: false, error: "page not found" };
+
+    const draft = (p.draft_content ?? {}) as {
+      blocks?: StoredBlock[];
+      pocket?: StoredBlock[];
+      seo?: PageSeo;
+    };
+    const current = draft.seo ?? {};
+    const next: PageSeo = { ...current };
+    if (patch.title !== undefined) {
+      const title = patch.title.trim().slice(0, SEO_TITLE_MAX).trim();
+      if (title) next.title = title;
+      else delete next.title;
+    }
+    if (patch.description !== undefined) {
+      const description = patch.description.trim().slice(0, SEO_DESCRIPTION_MAX).trim();
+      if (description) next.description = description;
+      else delete next.description;
+    }
+
+    const hasSeo = Boolean(next.title || next.description);
+    const { error } = await sb
+      .from("pages")
+      .update({
+        draft_content: {
+          blocks: draft.blocks ?? [],
+          pocket: draft.pocket ?? [],
+          ...(hasSeo && { seo: next }),
+        },
+      })
+      .eq("id", p.id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, seo: hasSeo ? next : undefined };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /**
