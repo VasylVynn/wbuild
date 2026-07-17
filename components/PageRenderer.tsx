@@ -33,6 +33,12 @@ export function PageRenderer({
 }) {
   const template = getTemplate(templateId);
 
+  // C2: a repeated template section would repeat its DOM id (invalid HTML,
+  // broken anchors) — number later instances (#services → #services-2), the
+  // same convention computePlacement already uses for classic-path anchors.
+  // Nav links keep pointing at the base id, i.e. the FIRST instance.
+  const idCounts: Record<string, number> = {};
+
   const sections = blocks
     .filter((block) => !block.hidden)
     .map((block, i) => {
@@ -43,7 +49,12 @@ export function PageRenderer({
       // On a template site the section id IS the template section id (so the
       // template's nav anchors like #features/#pricing resolve); pack/legacy
       // sites key on the block's own anchor.
-      const id = template && block.section ? block.section : block.anchor?.replace(/^#/, "");
+      const baseId = template && block.section ? block.section : block.anchor?.replace(/^#/, "");
+      let id = baseId;
+      if (baseId) {
+        const n = (idCounts[baseId] = (idCounts[baseId] ?? 0) + 1);
+        if (n > 1) id = `${baseId}-${n}`;
+      }
 
       // Template path: render via the template's section component when one
       // exists for this block; otherwise fall through to the default registry.
