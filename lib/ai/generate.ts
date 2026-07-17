@@ -29,6 +29,12 @@ import { getVertical } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import type { SiteMedia } from "@/lib/media/media";
+import { isStorageUrl } from "@/lib/media/media";
+import {
+  normalizeUaPhoneDigits,
+  telegramHref,
+  viberHref,
+} from "@/lib/blocks/contact-links";
 
 /**
  * Phase 2 — AI composition (brief §4.1–4.4), vertical-aware. The model composes
@@ -422,9 +428,14 @@ function assemble(
   ];
 
   const seen: Partial<Record<BlockType, number>> = {};
+  const factHrefs = allowedFactHrefs(facts);
   return ordered.map((b) =>
     groundAndPlace(
-      groundImages(b, photos, galleryPhotos, allowed, businessName, generatedHero),
+      groundHrefs(
+        groundImages(b, photos, galleryPhotos, allowed, businessName, generatedHero),
+        facts,
+        factHrefs,
+      ),
       facts,
       seen,
       pack,
@@ -483,6 +494,78 @@ function groundImages(
           items: b.props.items.map((it) =>
             it.photo && !allowed.has(it.photo) ? { ...it, photo: undefined } : it,
           ),
+        },
+      };
+    default:
+      return b;
+  }
+}
+
+/**
+ * Deterministic link grounding (§4.4/§4.8, mirror of groundImages): the model
+ * writes marketing labels, but every href must point somewhere REAL — an
+ * in-page anchor, the owner's confirmed phone, our own Storage, or a social
+ * link present in the facts. Anything invented (bare instagram.com, /booking…)
+ * is rewritten to "#lead_form": the funnel is always a truthful destination.
+ */
+function allowedFactHrefs(facts: BusinessFacts): Set<string> {
+  const set = new Set<string>();
+  for (const s of facts.socials ?? []) {
+    const href = s.href.trim();
+    if (href) set.add(href);
+  }
+  const tg = telegramHref(facts.telegram);
+  if (tg) set.add(tg);
+  const vb = viberHref(facts.viber);
+  if (vb) set.add(vb);
+  return set;
+}
+
+function groundHrefs(
+  b: BlockInstance,
+  facts: BusinessFacts,
+  factHrefs: Set<string>,
+): BlockInstance {
+  // A label without a target would render as a dead "#" link → send it to the
+  // funnel; an empty pair stays empty (no button rendered at all).
+  const ground = (href: string | undefined, label: string | undefined): string | undefined => {
+    if (!href?.trim()) return label?.trim() ? "#lead_form" : href;
+    const value = href.trim();
+    if (value.startsWith("#")) return value;
+    if (/^tel:/i.test(value)) {
+      // Requisites are copied 1:1 from facts (§4.4): a model-typed number is
+      // never trusted — a tel: link always dials the owner's confirmed phone.
+      const digits = normalizeUaPhoneDigits(facts.phone);
+      return digits ? `tel:+${digits}` : "#lead_form";
+    }
+    if (isStorageUrl(value) || factHrefs.has(value)) return value;
+    return "#lead_form";
+  };
+
+  switch (b.type) {
+    case "hero":
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          ctaHref: ground(b.props.ctaHref, b.props.ctaLabel),
+          secondaryCtaHref: ground(b.props.secondaryCtaHref, b.props.secondaryCtaLabel),
+        },
+      };
+    case "cta":
+      return {
+        ...b,
+        props: { ...b.props, buttonHref: ground(b.props.buttonHref, b.props.buttonLabel) },
+      };
+    case "switchback":
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          items: b.props.items.map((it) => ({
+            ...it,
+            buttonHref: ground(it.buttonHref, it.buttonLabel),
+          })),
         },
       };
     default:

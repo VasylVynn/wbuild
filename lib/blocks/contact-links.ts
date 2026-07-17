@@ -16,7 +16,7 @@ function digitsOnly(raw: string): string {
  * country code, e.g. "0671234567" / "+380671234567" / "80671234567" ->
  * "380671234567". Returns "" if there aren't enough digits to be a phone.
  */
-function normalizeUaPhoneDigits(raw: string): string {
+export function normalizeUaPhoneDigits(raw: string): string {
   const digits = digitsOnly(raw);
   if (!digits) return "";
   if (digits.startsWith("0")) return `380${digits.slice(1)}`; // local "0XX..." form
