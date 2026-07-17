@@ -680,6 +680,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
         <PhotoField
           value={logoUrl}
           host={host}
+          kind="logo"
           onChange={(url) => void saveLogo(url)}
           onClear={() => void saveLogo(null)}
         />

@@ -66,6 +66,10 @@ export async function POST(req: NextRequest) {
   const file = form.get("file");
   const host = String(form.get("host") ?? "").trim();
   const conversationId = String(form.get("conversationId") ?? "").trim();
+  // "logo" opts out of the PHOTO quality pass: brightness/sharpness heuristics
+  // are meaningless for graphics (a dark flat logo is not «темнувате фото»),
+  // and auto-correction (normalize/saturate) must never repaint brand colors.
+  const kind = String(form.get("kind") ?? "photo");
   if (!(file instanceof File) || (!host && !conversationId)) {
     return NextResponse.json({ error: "file and host|conversationId required" }, { status: 400 });
   }
@@ -102,7 +106,8 @@ export async function POST(req: NextRequest) {
   const id = crypto.randomUUID();
   const buf = Buffer.from(await file.arrayBuffer());
 
-  const { warnings, corrected } = await qualityPass(buf);
+  const { warnings, corrected } =
+    kind === "logo" ? { warnings: [] as string[], corrected: null } : await qualityPass(buf);
 
   // With a correction: corrected WebP is what the site serves, the untouched
   // original keeps its own extension alongside (§4.8, never destroyed).

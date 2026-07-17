@@ -619,6 +619,7 @@ export function OnboardChat() {
               <PhotoField
                 value={media.logoUrl}
                 conversationId={convId}
+                kind="logo"
                 onChange={setLogo}
                 onClear={clearLogo}
               />
