@@ -11,7 +11,7 @@ import { getVertical } from "@/lib/verticals/registry";
 import { generateSite } from "@/lib/ai/generate";
 import type { Theme } from "@/lib/theme/tokens";
 import type { BusinessFacts } from "@/lib/verticals/schema";
-import { displayLogoUrl } from "@/lib/tenant/types";
+import { displayLogoUrl, type PageSeo } from "@/lib/tenant/types";
 import { adaptLogoForTemplate } from "@/lib/media/logo-adapt";
 
 /**
@@ -159,10 +159,13 @@ export async function saveDraftBlocks(
       .eq("slug", "")
       .maybeSingle();
     if (!p) return { ok: false, error: "page not found" };
-    const pocket = (p.draft_content as { pocket?: StoredBlock[] } | null)?.pocket ?? [];
+    const draft = p.draft_content as { pocket?: StoredBlock[]; seo?: PageSeo } | null;
+    const pocket = draft?.pocket ?? [];
     const { error } = await sb
       .from("pages")
-      .update({ draft_content: { blocks: valid, pocket } })
+      // `seo` (wave D1) must round-trip a block save, like pocket — dropping it
+      // here would silently erase the page meta on the first manual edit.
+      .update({ draft_content: { blocks: valid, pocket, ...(draft?.seo && { seo: draft.seo }) } })
       .eq("id", p.id);
     if (error) return { ok: false, error: error.message };
     return { ok: true }; // draft save NEVER purges the cache (§5.5)
@@ -236,12 +239,24 @@ export async function regenerateSite(
       .eq("slug", "")
       .maybeSingle();
     if (!p) return { ok: false, error: "page not found" };
-    const oldBlocks = (p.draft_content as { blocks?: StoredBlock[] } | null)?.blocks ?? [];
-    const oldPocket = (p.draft_content as { pocket?: StoredBlock[] } | null)?.pocket ?? [];
+    const oldDraft = p.draft_content as
+      | { blocks?: StoredBlock[]; pocket?: StoredBlock[]; seo?: PageSeo }
+      | null;
+    const oldBlocks = oldDraft?.blocks ?? [];
+    const oldPocket = oldDraft?.pocket ?? [];
 
+    // Regeneration produces fresh SEO meta with the fresh content; keep the
+    // previous meta only when the model returned none.
+    const seo = site.seo ?? oldDraft?.seo;
     await sb
       .from("pages")
-      .update({ draft_content: { blocks: site.blocks, pocket: [...oldPocket, ...oldBlocks].slice(-40) } })
+      .update({
+        draft_content: {
+          blocks: site.blocks,
+          pocket: [...oldPocket, ...oldBlocks].slice(-40),
+          ...(seo && { seo }),
+        },
+      })
       .eq("id", p.id);
     // Pin the design source the first time (older sites have neither id yet) so
     // future regenerations keep this look; merge into brand without clobbering it.
@@ -294,10 +309,16 @@ export async function publishSite(host: string): Promise<{ ok: boolean; error?: 
     .maybeSingle();
   if (!p) return { ok: false, error: "page not found" };
 
-  const blocks = (p.draft_content as { blocks?: StoredBlock[] } | null)?.blocks ?? [];
+  const draft = p.draft_content as { blocks?: StoredBlock[]; seo?: PageSeo } | null;
+  const blocks = draft?.blocks ?? [];
   const { error: pe } = await sb
     .from("pages")
-    .update({ published_content: { blocks }, is_published: true })
+    // Publish promotes the WHOLE page meta, not just blocks: draft seo (D1)
+    // goes live here and only here (invariant 6 — AI writes draft only).
+    .update({
+      published_content: { blocks, ...(draft?.seo && { seo: draft.seo }) },
+      is_published: true,
+    })
     .eq("id", p.id);
   if (pe) return { ok: false, error: pe.message };
   const { error: te } = await sb

@@ -62,7 +62,35 @@ const generationSchema = z.object({
   // consumed by generateHeroImage (§4.8 suffix + palette are appended in code,
   // so the honesty bounds never depend on the model remembering them).
   imageSubject: z.string().max(140).optional(),
+  // D1: model-written SEO meta for the home page. Target lengths (≤60/≤150)
+  // live in the prompt, NOT as zod caps — a few chars of overshoot must not
+  // fail the whole generation; clampSeo() truncates deterministically instead.
+  seo: z
+    .object({
+      title: z
+        .string()
+        .describe("SEO-title сторінки: «{головна послуга} у {місто} — {назва}», до 60 символів."),
+      description: z
+        .string()
+        .describe("SEO-опис: продаюча суть бізнесу з містом і нішею, до 150 символів, без лапок."),
+    })
+    .optional(),
 });
+
+// Hard ceilings for the persisted SEO meta (search engines truncate anyway);
+// generous vs the prompt's 60/150 so a slight model overshoot survives intact.
+const SEO_TITLE_MAX = 70;
+const SEO_DESCRIPTION_MAX = 170;
+
+function clampSeo(
+  seo: { title: string; description: string } | undefined,
+): { title?: string; description?: string } | undefined {
+  if (!seo) return undefined;
+  const title = seo.title.trim().slice(0, SEO_TITLE_MAX).trim();
+  const description = seo.description.trim().slice(0, SEO_DESCRIPTION_MAX).trim();
+  if (!title && !description) return undefined;
+  return { ...(title && { title }), ...(description && { description }) };
+}
 
 export interface GeneratedSite {
   blocks: StoredBlock[];
@@ -73,6 +101,9 @@ export interface GeneratedSite {
   packId?: string;
   templateId?: string;
   imageSubject?: string;
+  // Model-written page meta (D1) — persisted with the page content (draft →
+  // published), consumed by generateMetadata/OG/JSON-LD on the public render.
+  seo?: { title?: string; description?: string };
 }
 
 function buildLibraryDoc(): string {
@@ -161,7 +192,11 @@ GROUNDING (критично для довіри):
 - Не вигадуй посилань на зображення.
 - ЦІНИ: якщо у послуг НЕМАЄ цін у фактах — не залишай порожніх прайс-колонок і не пиши плейсхолдери («грн», «від …», «—»): подай послуги описово, без цінової сітки. Ціни, які Є у фактах, копіюй 1:1.
 
-${templateRule}ТЕМА: обери themePresetId ЛИШЕ зі списку доступних, що найкраще пасує бренду (використовується для favicon/прев'ю — вигляд самої сторінки повністю задає обраний шаблон).
+${templateRule}SEO-МЕТА (обов'язково заповни seo):
+- seo.title — за формулою «{головна послуга} у {місто} — {назва}», до 60 символів. Головну послугу бери з фактів, місто — з фактів.
+- seo.description — 1–2 продаючі речення до 150 символів: що робить бізнес, для кого, у якому місті. Природною мовою, без лапок і переліку через кому всіх послуг.
+
+ТЕМА: обери themePresetId ЛИШЕ зі списку доступних, що найкраще пасує бренду (використовується для favicon/прев'ю — вигляд самої сторінки повністю задає обраний шаблон).
 
 HERO-ЗОБРАЖЕННЯ: заповни imageSubject — короткий опис АНГЛІЙСЬКОЮ (до 15 слів) атмосферного ФОНОВОГО зображення, що асоціюється саме з цим бізнесом: текстури, матеріали, гра світла, природа. ЗАБОРОНЕНО: приміщення/фасади/вітрини, впізнавані товари як «наші», люди, будь-який текст. Приклад для хімчистки: "soft folded fresh linen textures in airy light".`;
 }
@@ -259,6 +294,7 @@ ${JSON.stringify(facts, null, 2)}
           templateId: template.id,
           blocks: assemble(parsed.data.blocks, facts, undefined, media, template),
           imageSubject: parsed.data.imageSubject,
+          seo: clampSeo(parsed.data.seo),
         };
       }
 
@@ -278,6 +314,7 @@ ${JSON.stringify(facts, null, 2)}
         packId: pack.id,
         blocks: assemble(parsed.data.blocks, facts, pack, media, undefined),
         imageSubject: parsed.data.imageSubject,
+        seo: clampSeo(parsed.data.seo),
       };
     }
     lastError = parsed.error.issues

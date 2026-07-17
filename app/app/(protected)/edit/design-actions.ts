@@ -6,6 +6,7 @@ import { resolveTheme } from "@/lib/theme/presets";
 import { getPack } from "@/lib/design/packs";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import type { Theme } from "@/lib/theme/tokens";
+import type { PageSeo } from "@/lib/tenant/types";
 
 /**
  * Design-pack switcher (§4.5 + §4.7): one draft write flips the WHOLE look —
@@ -42,7 +43,11 @@ export async function switchDesignPack(
       .maybeSingle();
     if (!p) return { ok: false, error: "page not found" };
 
-    const draft = (p.draft_content ?? {}) as { blocks?: StoredBlock[]; pocket?: StoredBlock[] };
+    const draft = (p.draft_content ?? {}) as {
+      blocks?: StoredBlock[];
+      pocket?: StoredBlock[];
+      seo?: PageSeo;
+    };
     const oldBlocks = draft.blocks ?? [];
     const pocket = draft.pocket ?? [];
 
@@ -59,7 +64,7 @@ export async function switchDesignPack(
 
     const { error: pe } = await sb
       .from("pages")
-      .update({ draft_content: { blocks, pocket } })
+      .update({ draft_content: { blocks, pocket, ...(draft.seo && { seo: draft.seo }) } })
       .eq("id", p.id);
     if (pe) return { ok: false, error: pe.message };
 

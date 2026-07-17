@@ -66,6 +66,15 @@ export function displayLogoUrl(brand: Tenant["brand"]): string | undefined {
   return brand.logoAdaptedUrl ?? brand.logoUrl;
 }
 
+/** Page-level SEO meta (wave D1): written by generation, editable by the
+ *  editor agent. Versioned WITH the content — lives in draft_content.seo and
+ *  is promoted to published_content.seo on publish, so AI edits stay in the
+ *  draft until the owner publishes (§5.5 / invariant 6). */
+export interface PageSeo {
+  title?: string;
+  description?: string;
+}
+
 export interface Page {
   id: string;
   tenantId: string;
@@ -78,6 +87,8 @@ export interface Page {
   navOrder: number;
   /** Public render reads the PUBLISHED blocks only (§5.5). */
   blocks: StoredBlock[];
+  /** Published SEO meta (public render); undefined for pre-wave-D sites. */
+  seo?: PageSeo;
 }
 
 /** A nav item projected from data (§5.3) — never edited by hand. */

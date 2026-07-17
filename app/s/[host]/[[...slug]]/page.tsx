@@ -32,8 +32,10 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const page = await getPublishedPage(host, slugPath);
 
   const businessName = tenant.brand.businessName;
-  const title = page ? `${page.title} · ${businessName}` : businessName;
-  const description = siteDescription(tenant);
+  // D1: the model-written SEO title wins («{послуга} у {місто} — {назва}»);
+  // pre-wave-D pages keep the old «Головна · Назва» composition.
+  const title = page?.seo?.title?.trim() || (page ? `${page.title} · ${businessName}` : businessName);
+  const description = siteDescription(tenant, page?.seo);
   const image = page ? firstImageFromBlocks(page.blocks) : undefined;
 
   return {
@@ -84,7 +86,7 @@ export default async function TenantPage({ params }: { params: Params }) {
   // The status guard keeps demo/draft out of structured data too.
   let jsonLd: string | null = null;
   if (slugPath === "" && tenant?.status === "published") {
-    jsonLd = localBusinessJsonLd(tenant, firstImageFromBlocks(page.blocks));
+    jsonLd = localBusinessJsonLd(tenant, firstImageFromBlocks(page.blocks), page.seo);
   }
 
   // Feed the template chrome (Nav/Footer) the REAL business identity: the name

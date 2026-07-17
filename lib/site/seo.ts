@@ -1,4 +1,4 @@
-import type { Tenant } from "@/lib/tenant/types";
+import type { Tenant, PageSeo } from "@/lib/tenant/types";
 import type { StoredBlock } from "@/lib/blocks/schema";
 
 /**
@@ -77,9 +77,12 @@ export function faviconDataUri(
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-/** Meta description: the tenant tagline, else the first ~150 chars of the
- *  freeform "about" fact. Undefined when neither exists (no invented copy). */
-export function siteDescription(tenant: Tenant): string | undefined {
+/** Meta description: the page's model-written SEO description (wave D1) when
+ *  present, else the tenant tagline, else the first ~150 chars of the freeform
+ *  "about" fact. Undefined when none exists (no invented copy). */
+export function siteDescription(tenant: Tenant, seo?: PageSeo): string | undefined {
+  const fromSeo = seo?.description?.trim();
+  if (fromSeo) return fromSeo;
   if (tenant.brand.tagline) return tenant.brand.tagline;
   const about = (tenant.facts as { about?: unknown }).about;
   if (typeof about !== "string" || !about.trim()) return undefined;
@@ -91,7 +94,7 @@ export function siteDescription(tenant: Tenant): string | undefined {
  *  Emits ONLY fields present in facts/brand — no hallucinated data — and omits
  *  openingHours (freeform Ukrainian text is not schema-valid). Returns a string
  *  safe to drop into a <script> tag: `<` is escaped so no `</script>` breakout. */
-export function localBusinessJsonLd(tenant: Tenant, image?: string): string {
+export function localBusinessJsonLd(tenant: Tenant, image?: string, seo?: PageSeo): string {
   const facts = tenant.facts as {
     businessName?: string;
     city?: string;
@@ -104,7 +107,7 @@ export function localBusinessJsonLd(tenant: Tenant, image?: string): string {
   const telephone = facts.phone ?? tenant.footer.phone;
   const streetAddress = facts.address ?? tenant.footer.address;
   const addressLocality = facts.city;
-  const description = siteDescription(tenant);
+  const description = siteDescription(tenant, seo);
 
   const data: Record<string, unknown> = {
     "@context": "https://schema.org",

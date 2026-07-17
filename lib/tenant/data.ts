@@ -1,4 +1,4 @@
-import type { Tenant, Page, NavItem } from "./types";
+import type { Tenant, Page, NavItem, PageSeo } from "./types";
 import type { Theme } from "@/lib/theme/tokens";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { seedTenants, seedPages } from "./seed";
@@ -33,8 +33,8 @@ interface PageRow {
   title: string;
   show_in_nav: boolean;
   nav_order: number;
-  draft_content: { blocks: StoredBlock[]; pocket?: StoredBlock[] };
-  published_content: { blocks: StoredBlock[] } | null;
+  draft_content: { blocks: StoredBlock[]; pocket?: StoredBlock[]; seo?: PageSeo };
+  published_content: { blocks: StoredBlock[]; seo?: PageSeo } | null;
   is_published: boolean;
 }
 
@@ -63,6 +63,7 @@ function mapPage(row: PageRow): Page {
     showInNav: row.show_in_nav,
     navOrder: row.nav_order,
     blocks: (row.published_content ?? { blocks: [] }).blocks ?? [],
+    seo: row.published_content?.seo,
   };
 }
 
