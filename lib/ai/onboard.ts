@@ -6,6 +6,7 @@ import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema"
 import { getVertical, VERTICAL_IDS } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
 import { validateFacts } from "@/lib/onboard/validate";
+import { siteTemplates, templatesFor } from "@/lib/templates/registry";
 
 /**
  * Onboarding agent (brief §4.9 + owner feedback). The chat is only the
@@ -98,6 +99,21 @@ function fieldList(v: VerticalConfig): string {
     .join("\n");
 }
 
+/**
+ * B1: the design catalog the agent knows from the FIRST message. Labels and
+ * descriptions come straight from the template registry (one-registry rule) —
+ * vertical affinity is a hint, not a gate (generation resolves any pick).
+ */
+function buildDesignCatalog(vertical: VerticalConfig): string {
+  const affine = new Set(templatesFor(vertical.id).map((t) => t.id));
+  return Object.values(siteTemplates)
+    .map(
+      (t) =>
+        `- ${t.id} — ${t.label}: ${t.description}${affine.has(t.id) ? " (типовий вибір для цієї ніші)" : ""}`,
+    )
+    .join("\n");
+}
+
 function buildSystem(vertical: VerticalConfig, issueNotes: string[]): string {
   const issuesBlock = issueNotes.length
     ? `\n\nПЕРЕВІР непевні дані (постав МАКСИМУМ ОДНЕ м'яке підтверджувальне питання за хід, природним відлунням, без жаргону):\n${issueNotes.map((n) => `- ${n}`).join("\n")}`
@@ -110,6 +126,9 @@ function buildSystem(vertical: VerticalConfig, issueNotes: string[]): string {
 
 Факти, без яких сайт не вийде (це проста розмова, НЕ анкета). Список — МІНІМУМ, не стеля: все, що підніме якість сайту, вартує питання:
 ${fieldList(vertical)}
+
+ДОСТУПНІ ДИЗАЙНИ (готові стилі, з яких збирається сайт — ти знаєш їх з першого повідомлення):
+${buildDesignCatalog(vertical)}
 
 ЯК ВІДПОВІДАТИ:
 - Пиши користувачу звичайним теплим текстом українською. Списки — звичайними переносами рядків. НЕ пиши JSON і НЕ екрануй символи.
