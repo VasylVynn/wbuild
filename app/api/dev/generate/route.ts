@@ -27,13 +27,21 @@ export async function POST(req: Request) {
     host?: string;
     publish?: boolean;
     verticalId?: string;
+    templateId?: string;
   };
   const facts = (body.facts ?? (seedTenants[0].facts as unknown as FloristFacts)) as FloristFacts;
   const host = body.host ?? "test.lvh.me";
   const publish = body.publish ?? true;
 
   try {
-    const r = await generateAndPublish(facts, host, body.verticalId ?? "florist", publish);
+    const r = await generateAndPublish(
+      facts,
+      host,
+      body.verticalId ?? "florist",
+      publish,
+      undefined,
+      body.templateId,
+    );
     return NextResponse.json({
       ok: true,
       url: `http://${host}:3000`,
