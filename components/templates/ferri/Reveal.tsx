@@ -1,12 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
+import { useRevealGate } from "../shared/reveal";
 
 /*
- * Reveal — verbatim port of the source ferri Reveal helpers. Scroll-triggered
- * fade+lift (once), a staggered container, and its items. Used across the ferri
- * sections to reproduce the template's on-scroll motion.
+ * Reveal — ferri's scroll-triggered fade+lift (once), staggered container and
+ * items. Motion values are the verbatim ferri port; the reveal itself is gated
+ * behind useRevealGate (H5): SSR markup is fully visible, only below-the-fold
+ * elements arm the animation after hydration.
  */
 
 interface RevealProps {
@@ -17,6 +19,14 @@ interface RevealProps {
 }
 
 export function Reveal({ children, className, delay = 0, y = 32 }: RevealProps) {
+  const [ref, armed] = useRevealGate<HTMLDivElement>();
+  if (!armed) {
+    return (
+      <div ref={ref} className={className}>
+        {children}
+      </div>
+    );
+  }
   return (
     <motion.div
       initial={{ opacity: 0, y }}
@@ -30,6 +40,10 @@ export function Reveal({ children, className, delay = 0, y = 32 }: RevealProps) 
   );
 }
 
+// RevealItem must render plain (visible) markup whenever its parent stagger
+// container is not armed — the pair coordinates through this context.
+const StaggerArmedContext = createContext(false);
+
 export function RevealStagger({
   children,
   className,
@@ -37,16 +51,26 @@ export function RevealStagger({
   children: ReactNode;
   className?: string;
 }) {
+  const [ref, armed] = useRevealGate<HTMLDivElement>();
+  if (!armed) {
+    return (
+      <div ref={ref} className={className}>
+        {children}
+      </div>
+    );
+  }
   return (
-    <motion.div
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: true, margin: "-40px" }}
-      variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <StaggerArmedContext.Provider value={true}>
+      <motion.div
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-40px" }}
+        variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
+        className={className}
+      >
+        {children}
+      </motion.div>
+    </StaggerArmedContext.Provider>
   );
 }
 
@@ -57,6 +81,10 @@ export function RevealItem({
   children: ReactNode;
   className?: string;
 }) {
+  const armed = useContext(StaggerArmedContext);
+  if (!armed) {
+    return <div className={className}>{children}</div>;
+  }
   return (
     <motion.div
       variants={{

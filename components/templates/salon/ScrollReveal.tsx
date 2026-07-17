@@ -1,12 +1,14 @@
 "use client";
 
 import { motion, useInView, type Variants } from "framer-motion";
-import { useRef, type ReactNode } from "react";
+import { type ReactNode } from "react";
+import { useRevealGate } from "../shared/reveal";
 
 /*
- * ScrollReveal — verbatim port of the source salon scroll-reveal: a framer-motion
- * useInView fade + directional slide + blur-in (once). Used across salon sections
- * for the on-scroll motion.
+ * ScrollReveal — salon's fade + directional slide + blur-in (once). Motion
+ * values are the verbatim salon port; the reveal is gated behind useRevealGate
+ * (H5): SSR markup is fully visible, only below-the-fold elements arm the
+ * animation after hydration.
  */
 export function ScrollReveal({
   children,
@@ -21,7 +23,7 @@ export function ScrollReveal({
   duration?: number;
   className?: string;
 }) {
-  const ref = useRef(null);
+  const [ref, armed] = useRevealGate<HTMLDivElement>();
   const isInView = useInView(ref, { once: true, margin: "-50px" });
 
   const variants: Variants = {
@@ -40,6 +42,13 @@ export function ScrollReveal({
     },
   };
 
+  if (!armed) {
+    return (
+      <div ref={ref} className={className}>
+        {children}
+      </div>
+    );
+  }
   return (
     <motion.div
       ref={ref}

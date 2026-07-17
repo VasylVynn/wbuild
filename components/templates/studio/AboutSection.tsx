@@ -1,7 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { Reveal } from "../shared/reveal";
 
 /*
  * About — port of the source AboutSection's story-card + principles layout: a
@@ -41,27 +41,20 @@ export default function AboutSection({ data }: { data: unknown }) {
       <div className="container mx-auto px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
           {d.title && (
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.6 }}
-              className="mb-12"
-            >
+            <Reveal margin="-80px" className="mb-12">
               {/* FIDELITY-TODO: needs schema field richText.eyebrow — fallback used */}
               <span className="inline-block text-xs font-medium tracking-widest uppercase text-[var(--color-accent)] mb-4">
                 Про нас
               </span>
               <h2 id="about-title" className="section-title">{d.title}</h2>
-            </motion.div>
+            </Reveal>
           )}
 
           <div className="grid md:grid-cols-2 gap-6">
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ delay: 0.1, duration: 0.5 }}
+            <Reveal
+              delay={0.1}
+              duration={0.5}
+              margin="-80px"
               className={`card ${hasPrinciples ? "" : "md:col-span-2"}`}
             >
               {/* FIDELITY-TODO: needs schema field richText.storyHeading — fallback used */}
@@ -74,16 +67,10 @@ export default function AboutSection({ data }: { data: unknown }) {
                   {p}
                 </p>
               ))}
-            </motion.div>
+            </Reveal>
 
             {hasPrinciples && (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-80px" }}
-                transition={{ delay: 0.2, duration: 0.5 }}
-                className="card"
-              >
+              <Reveal delay={0.2} duration={0.5} margin="-80px" className="card">
                 {/* FIDELITY-TODO: needs schema field richText.principlesHeading — fallback used */}
                 <h3 className="text-lg font-semibold text-white mb-3">Наші принципи</h3>
                 <ul className="space-y-2.5">
@@ -94,7 +81,7 @@ export default function AboutSection({ data }: { data: unknown }) {
                     </li>
                   ))}
                 </ul>
-              </motion.div>
+              </Reveal>
             )}
 
             {/* FIDELITY-TODO: needs schema field richText.techStack (chip list) — source's

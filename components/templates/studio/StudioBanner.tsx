@@ -1,7 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { Reveal } from "../shared/reveal";
 
 /*
  * Banner — a full-width statement band, not a CTA: a dark panel with a
@@ -16,11 +16,8 @@ export default function StudioBanner({ data }: { data: unknown }) {
   return (
     <section className="py-12 md:py-16" aria-labelledby="banner-title">
       <div className="container mx-auto px-4 sm:px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.6 }}
+        <Reveal
+          margin="-80px"
           className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] px-6 py-16 md:py-24 text-center"
         >
           <div
@@ -43,7 +40,7 @@ export default function StudioBanner({ data }: { data: unknown }) {
               </p>
             )}
           </div>
-        </motion.div>
+        </Reveal>
       </div>
     </section>
   );

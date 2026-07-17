@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { Reveal, useRevealGate } from "../shared/reveal";
 
 /*
  * Pricing — verbatim port of the source PricingSection: a grid of bordered
@@ -19,23 +20,25 @@ import type { BlockProps } from "@/lib/blocks/schema";
  */
 export default function PricingSection({ data }: { data: unknown }) {
   const d = data as BlockProps["services"];
+  // Cards are semantic <article>s, so the shared <Reveal> div can't wrap them —
+  // gate the reveal in place instead (H5): plain <article> until armed.
+  const [listRef, armed] = useRevealGate<HTMLDivElement>();
 
   return (
     <section className="py-12 md:py-16" aria-labelledby="pricing-title">
       <div className="container mx-auto px-4 sm:px-6">
         {d.title && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
+          <Reveal margin="-80px" className="text-center mb-16">
             <h2 id="pricing-title" className="section-title">{d.title}</h2>
-          </motion.div>
+          </Reveal>
         )}
 
-        <div className="flex flex-wrap justify-center gap-4 max-w-6xl mx-auto" role="list" aria-label="Тарифи">
+        <div
+          ref={listRef}
+          className="flex flex-wrap justify-center gap-4 max-w-6xl mx-auto"
+          role="list"
+          aria-label="Тарифи"
+        >
           {d.items.map((item, i) => {
             const promoted = Boolean(item.badge);
             const features = (item.description ?? "")
@@ -43,21 +46,14 @@ export default function PricingSection({ data }: { data: unknown }) {
               .map((line) => line.trim())
               .filter(Boolean);
 
-            return (
-              <motion.article
-                key={i}
-                role="listitem"
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-80px" }}
-                transition={{ delay: i * 0.1, duration: 0.6 }}
-                className={`relative rounded-lg p-6 w-full sm:w-[264px] ${
-                  promoted
-                    ? "bg-[var(--color-surface)] border-2 border-[var(--color-accent)]"
-                    : "bg-[var(--color-surface)] border border-[var(--color-border)]"
-                }`}
-                aria-label={item.name}
-              >
+            const cardClass = `relative rounded-lg p-6 w-full sm:w-[264px] ${
+              promoted
+                ? "bg-[var(--color-surface)] border-2 border-[var(--color-accent)]"
+                : "bg-[var(--color-surface)] border border-[var(--color-border)]"
+            }`;
+
+            const cardContent = (
+              <>
                 {promoted && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <span className="px-3 py-1 bg-[var(--color-accent)] text-white text-xs font-medium rounded-md">
@@ -98,6 +94,29 @@ export default function PricingSection({ data }: { data: unknown }) {
                 >
                   Замовити
                 </a>
+              </>
+            );
+
+            if (!armed) {
+              return (
+                <article key={i} role="listitem" className={cardClass} aria-label={item.name}>
+                  {cardContent}
+                </article>
+              );
+            }
+
+            return (
+              <motion.article
+                key={i}
+                role="listitem"
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ delay: i * 0.1, duration: 0.6 }}
+                className={cardClass}
+                aria-label={item.name}
+              >
+                {cardContent}
               </motion.article>
             );
           })}

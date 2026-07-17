@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { Reveal } from "../shared/reveal";
 
 /*
  * FAQ — verbatim port of the source FAQSection: a single-open accordion of
@@ -20,16 +21,10 @@ export default function FAQSection({ data }: { data: unknown }) {
     <section className="py-12 md:py-16" aria-labelledby="faq-title">
       <div className="container mx-auto px-4 sm:px-6">
         {d.title && (
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
+          <Reveal y={30} margin="-80px" className="text-center mb-16">
             <h2 id="faq-title" className="section-title">{d.title}</h2>
             {/* FIDELITY-TODO: needs schema field faq.subtitle — source renders a section-subtitle <p> here */}
-          </motion.div>
+          </Reveal>
         )}
 
         <div className="max-w-3xl mx-auto space-y-3">
@@ -37,12 +32,12 @@ export default function FAQSection({ data }: { data: unknown }) {
             const isOpen = openIndex === i;
 
             return (
-              <motion.div
+              <Reveal
                 key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-80px" }}
-                transition={{ delay: i * 0.06, duration: 0.5 }}
+                y={20}
+                delay={i * 0.06}
+                duration={0.5}
+                margin="-80px"
                 className="rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] overflow-hidden"
               >
                 <button
@@ -80,7 +75,7 @@ export default function FAQSection({ data }: { data: unknown }) {
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </motion.div>
+              </Reveal>
             );
           })}
         </div>

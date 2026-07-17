@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { Reveal, useRevealGate } from "../shared/reveal";
 
 /*
  * About (alt layout) — centred single-column statement instead of the
@@ -11,6 +12,9 @@ import type { BlockProps } from "@/lib/blocks/schema";
  */
 export default function StudioAboutAlt({ data }: { data: unknown }) {
   const d = data as BlockProps["richText"];
+  // The title is a semantic <h2>, so the shared <Reveal> div can't wrap it —
+  // gate its reveal in place instead (H5): plain <h2> until armed.
+  const [titleRef, titleArmed] = useRevealGate<HTMLHeadingElement>();
 
   const lines = d.body.split("\n");
   const principles = lines
@@ -30,26 +34,25 @@ export default function StudioAboutAlt({ data }: { data: unknown }) {
     <section className="py-12 md:py-16 border-t border-white/[0.04]" aria-labelledby="about-alt-title">
       <div className="container mx-auto px-4 sm:px-6">
         <div className="max-w-2xl mx-auto text-center">
-          {d.title && (
-            <motion.h2
-              id="about-alt-title"
-              className="section-title"
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.6 }}
-            >
-              {d.title}
-            </motion.h2>
-          )}
+          {d.title &&
+            (titleArmed ? (
+              <motion.h2
+                id="about-alt-title"
+                className="section-title"
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ duration: 0.6 }}
+              >
+                {d.title}
+              </motion.h2>
+            ) : (
+              <h2 ref={titleRef} id="about-alt-title" className="section-title">
+                {d.title}
+              </h2>
+            ))}
 
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ delay: 0.1, duration: 0.5 }}
-            className="mt-6"
-          >
+          <Reveal delay={0.1} duration={0.5} margin="-80px" className="mt-6">
             {firstLine && (
               <p className="text-xl leading-relaxed">
                 <span className="gradient-text font-medium">{firstLine}.</span>
@@ -60,14 +63,13 @@ export default function StudioAboutAlt({ data }: { data: unknown }) {
                 {p}
               </p>
             ))}
-          </motion.div>
+          </Reveal>
 
           {principles.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ delay: 0.2, duration: 0.5 }}
+            <Reveal
+              delay={0.2}
+              duration={0.5}
+              margin="-80px"
               className="flex flex-wrap justify-center gap-2.5 mt-8"
             >
               {principles.map((principle, i) => (
@@ -79,7 +81,7 @@ export default function StudioAboutAlt({ data }: { data: unknown }) {
                   {principle}
                 </span>
               ))}
-            </motion.div>
+            </Reveal>
           )}
         </div>
       </div>
