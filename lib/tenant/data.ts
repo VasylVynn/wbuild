@@ -125,9 +125,18 @@ export async function getNav(host: string): Promise<NavItem[]> {
   if (tenant.navMode === "onepage") {
     const home = await getPublishedPage(host, "");
     if (!home) return [];
+    // C3: a repeated block type (services ×2) must contribute ONE nav label —
+    // the first instance's anchor wins (template path dedups the same way in
+    // buildTemplateBrand).
+    const seenLabels = new Set<string>();
     return home.blocks
       .filter((b) => !b.hidden && b.showInNav && b.anchor)
-      .map((b) => ({ label: b.navLabel ?? b.anchor!.replace(/^#/, ""), href: b.anchor! }));
+      .map((b) => ({ label: b.navLabel ?? b.anchor!.replace(/^#/, ""), href: b.anchor! }))
+      .filter((item) => {
+        if (seenLabels.has(item.label)) return false;
+        seenLabels.add(item.label);
+        return true;
+      });
   }
 
   const pages = await getPublishedPages(host);
