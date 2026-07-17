@@ -257,21 +257,23 @@ export function parseOnboardMessage(
   let templateId = getTemplate(baseTemplateId) ? baseTemplateId : undefined;
   let quickReplies: string[] = [];
 
-  const toolUse = res.content.find((b) => b.type === "tool_use");
-  if (toolUse && toolUse.type === "tool_use") {
-    const parsed = saveFactsSchema.safeParse(toolUse.input);
-    if (parsed.success) {
-      facts = { ...baseFacts, ...parsed.data.factsPatch };
-      verticalId = VERTICAL_IDS.includes(parsed.data.verticalId) ? parsed.data.verticalId : baseVerticalId;
-      // "confirmed" implies collection is over — ready stays true so every
-      // ready-gated guard (no fallback question, is_complete) keeps holding.
-      ready = parsed.data.status !== "collecting";
-      confirmed = parsed.data.status === "confirmed";
-      // B2 last-wins: this turn's pick wins when it resolves in the registry;
-      // a missing or hallucinated id keeps the previous choice.
-      if (getTemplate(parsed.data.templateId)) templateId = parsed.data.templateId;
-      quickReplies = (parsed.data.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4);
-    }
+  // Fold over EVERY valid save_facts block in order (codex review): the model
+  // occasionally emits more than one tool call in a message — taking only the
+  // first would silently drop later facts patches and template re-picks.
+  for (const block of res.content) {
+    if (block.type !== "tool_use") continue;
+    const parsed = saveFactsSchema.safeParse(block.input);
+    if (!parsed.success) continue;
+    facts = { ...facts, ...parsed.data.factsPatch };
+    verticalId = VERTICAL_IDS.includes(parsed.data.verticalId) ? parsed.data.verticalId : verticalId;
+    // "confirmed" implies collection is over — ready stays true so every
+    // ready-gated guard (no fallback question, is_complete) keeps holding.
+    ready = parsed.data.status !== "collecting";
+    confirmed = parsed.data.status === "confirmed";
+    // B2 last-wins: this turn's pick wins when it resolves in the registry;
+    // a missing or hallucinated id keeps the previous choice.
+    if (getTemplate(parsed.data.templateId)) templateId = parsed.data.templateId;
+    quickReplies = (parsed.data.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4);
   }
 
   // Hard ready-gate (adversarial review): the site cannot work without the

@@ -11,7 +11,7 @@ import { getServiceClient } from "@/lib/supabase/server";
 import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
 import { sanitizeMedia, type SiteMedia } from "@/lib/media/media";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
-import { getTemplate } from "@/lib/templates/registry";
+import { getTemplate, templateDisplayName } from "@/lib/templates/registry";
 
 /**
  * Hard cap on conversation length (messages, both roles). An honest onboarding
@@ -29,16 +29,22 @@ export async function onboardAction(
   facts: Partial<BusinessFacts>,
   verticalId?: string,
   templateId?: string,
+  // Client-held flags, echoed back on refusals only (codex review): a
+  // rate-limited fallback turn must not wipe ready/confirmed/template state.
+  current?: { ready?: boolean; confirmed?: boolean },
 ): Promise<OnboardTurnResult> {
   // Both checks run BEFORE the Anthropic call — a limited turn costs no tokens.
   // Limited turns come back as a normal assistant message, so the chat UI
   // degrades gracefully instead of crashing.
+  const cleanTemplateId = getTemplate(templateId) ? templateId : undefined;
   const refuse = (message: string): OnboardTurnResult => ({
     message,
     facts,
     verticalId: verticalId ?? "generic",
-    ready: false,
-    confirmed: false,
+    ready: current?.ready ?? false,
+    confirmed: current?.confirmed ?? false,
+    templateId: cleanTemplateId,
+    templateLabel: templateDisplayName(cleanTemplateId),
     quickReplies: [],
     progress: [],
   });

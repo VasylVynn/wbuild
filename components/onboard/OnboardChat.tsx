@@ -318,7 +318,9 @@ export function OnboardChat() {
         // Streaming path failed (network, SSE parse, server) → the proven
         // non-stream server action still answers the turn.
         setTyping(true);
-        applyResult(await onboardAction(nextMessages, facts, verticalId, template?.id));
+        applyResult(
+          await onboardAction(nextMessages, facts, verticalId, template?.id, { ready, confirmed }),
+        );
       }
     } finally {
       setLoading(false);
