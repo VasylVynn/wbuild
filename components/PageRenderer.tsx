@@ -34,8 +34,10 @@ export function PageRenderer({
   const template = getTemplate(templateId);
 
   // C2: a repeated template section would repeat its DOM id (invalid HTML,
-  // broken anchors) — number later instances (#services → #services-2), the
-  // same convention computePlacement already uses for classic-path anchors.
+  // broken anchors) — number later instances (#services → #services-2). Only
+  // the "-N" suffix format is shared with computePlacement (which counts block
+  // TYPES for classic anchors; here we count the ids actually rendered). The
+  // assemble() validAnchors pass mirrors THIS counting — keep them in sync.
   // Nav links keep pointing at the base id, i.e. the FIRST instance.
   const idCounts: Record<string, number> = {};
 

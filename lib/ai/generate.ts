@@ -461,7 +461,10 @@ function assemble(
     const usedLayouts = new Map<string, Set<string>>();
     for (let i = 0; i < placed.length; i++) {
       const sb = placed[i];
-      if (!sb.section) continue;
+      // Hidden blocks don't render/number — skip them so the pass keeps
+      // matching PageRenderer semantics if it's ever reused on stored content
+      // (generation itself always emits hidden:false).
+      if (!sb.section || sb.hidden) continue;
       const used = usedLayouts.get(sb.section) ?? new Set<string>();
       usedLayouts.set(sb.section, used);
       if (used.has(sb.variant ?? "")) {
@@ -481,10 +484,18 @@ function assemble(
   // vs "lead"). Any #anchor that resolves to nothing (model-invented #booking,
   // bare "#", or the groundHrefs placeholder on a classic site) is rewritten
   // to the lead anchor that actually exists on THIS page.
+  // Template ids must be counted the way PageRenderer RENDERS them (visible
+  // blocks, per-section numbering, "-N" suffix from the second instance) —
+  // otherwise a link to the second instance (#services-2) would be a "missing"
+  // anchor and get rewritten to the funnel (codex review, wave C).
   const validAnchors = new Set<string>();
+  const sectionSeen: Record<string, number> = {};
   for (const sb of placed) {
     if (template) {
-      if (sb.section) validAnchors.add(`#${sb.section}`);
+      if (sb.section && !sb.hidden) {
+        const n = (sectionSeen[sb.section] = (sectionSeen[sb.section] ?? 0) + 1);
+        validAnchors.add(n === 1 ? `#${sb.section}` : `#${sb.section}-${n}`);
+      }
     } else if (sb.anchor) {
       validAnchors.add(sb.anchor);
     }
