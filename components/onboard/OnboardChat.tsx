@@ -100,6 +100,8 @@ export function OnboardChat() {
   // A6: the user explicitly confirmed the chat summary — unlocks the create CTA.
   const [confirmed, setConfirmed] = useState(false);
   const [verticalId, setVerticalId] = useState<string | undefined>(undefined);
+  // Chat-picked site design (wave B5) — { id, label } once the agent proposes one.
+  const [template, setTemplate] = useState<{ id: string; label: string } | null>(null);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   // Extended-thinking phase of the streaming turn — «Думаю…» label.
@@ -149,6 +151,9 @@ export function OnboardChat() {
       setVerticalId(data.verticalId);
       setReady(data.ready);
       setConfirmed(data.confirmed);
+      if (data.templateId && data.templateLabel) {
+        setTemplate({ id: data.templateId, label: data.templateLabel });
+      }
       // Media survives the login-gate redirect (saved fire-and-forget) — restore
       // it so the media step shows what was already uploaded.
       setMedia(data.media ?? { photos: [] });
@@ -169,21 +174,32 @@ export function OnboardChat() {
     ready: boolean;
     confirmed: boolean;
     quickReplies: string[];
+    templateId?: string;
+    templateLabel?: string;
   };
 
   const streamTurn = async (nextMessages: ChatMsg[]): Promise<TurnPayload> => {
     const res = await fetch("/api/onboard", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: nextMessages, facts, verticalId }),
+      body: JSON.stringify({ messages: nextMessages, facts, verticalId, templateId: template?.id }),
     });
     const ct = res.headers.get("content-type") ?? "";
     if (ct.includes("application/json")) {
       const j = (await res.json()) as { message?: string };
       if (typeof j.message === "string") {
         // Refusal (rate limit etc.) is message-only — carry the current state
-        // through so a limited turn can't silently drop ready/confirmed.
-        return { message: j.message, facts, verticalId: verticalId ?? "generic", ready, confirmed, quickReplies: [] };
+        // through so a limited turn can't silently drop ready/confirmed/template.
+        return {
+          message: j.message,
+          facts,
+          verticalId: verticalId ?? "generic",
+          ready,
+          confirmed,
+          quickReplies: [],
+          templateId: template?.id,
+          templateLabel: template?.label,
+        };
       }
       throw new Error("bad refusal payload");
     }
@@ -266,6 +282,14 @@ export function OnboardChat() {
       setVerticalId(result.verticalId);
       setQuickReplies(result.quickReplies ?? []);
 
+      // Last-wins: an existing pick must never be cleared by a result without
+      // one (e.g. a later turn that doesn't touch the design).
+      const nextTemplate =
+        result.templateId && result.templateLabel
+          ? { id: result.templateId, label: result.templateLabel }
+          : template;
+      setTemplate(nextTemplate);
+
       // Agentic feedback: which facts the agent just recorded — a real diff of
       // the same progress model as the header chips, not decoration.
       const newly = deriveProgress(result.facts)
@@ -282,6 +306,7 @@ export function OnboardChat() {
           result.verticalId,
           result.ready,
           result.confirmed ?? false,
+          nextTemplate?.id,
         );
       }
     };
@@ -293,7 +318,7 @@ export function OnboardChat() {
         // Streaming path failed (network, SSE parse, server) → the proven
         // non-stream server action still answers the turn.
         setTyping(true);
-        applyResult(await onboardAction(nextMessages, facts, verticalId));
+        applyResult(await onboardAction(nextMessages, facts, verticalId, template?.id));
       }
     } finally {
       setLoading(false);
@@ -406,7 +431,13 @@ export function OnboardChat() {
     setPhase("generating");
 
     try {
-      const result = await finalizeAction(fullFacts, verticalId, media, convIdRef.current ?? undefined);
+      const result = await finalizeAction(
+        fullFacts,
+        verticalId,
+        media,
+        convIdRef.current ?? undefined,
+        template?.id,
+      );
       if (result.ok) {
         setSiteUrl(result.url);
         setPhase("done");
@@ -559,6 +590,7 @@ export function OnboardChat() {
         <SitePreviewPanel
           facts={facts}
           verticalId={verticalId}
+          templateLabel={template?.label}
           photosCount={media.photos.length}
           hasLogo={!!media.logoUrl}
           className="hidden lg:flex"
