@@ -375,7 +375,13 @@ function assemble(
         const section = resolvedSection(template, b)!;
         const used = (perSection[section] ?? 0) + 1;
         perSection[section] = used;
-        return used <= 1;
+        // C1: a section may repeat ONCE (rich content, e.g. services: main +
+        // additional) — but only when it ships alternate layouts, so the two
+        // instances can look different. A single-layout section repeated reads
+        // as a rendering bug, never as design (plan risk #1).
+        const hasAltLayouts =
+          Object.keys(template.sections[section]?.variants ?? {}).length > 0;
+        return used <= (hasAltLayouts ? 2 : 1);
       }
       const used = (perType[b.type] ?? 0) + 1;
       perType[b.type] = used;
@@ -444,6 +450,29 @@ function assemble(
       template,
     ),
   );
+
+  // C1/C4 safety net: a repeated section must never repeat the SAME layout —
+  // the prompt asks for different variants, but a model slip would render two
+  // identical-looking sections (reads as a bug). Deterministic reassignment:
+  // the later instance gets the first layout the section hasn't used yet
+  // (guaranteed to exist — repeats are only allowed on sections WITH variants).
+  if (template) {
+    const usedLayouts = new Map<string, Set<string>>();
+    for (let i = 0; i < placed.length; i++) {
+      const sb = placed[i];
+      if (!sb.section) continue;
+      const used = usedLayouts.get(sb.section) ?? new Set<string>();
+      usedLayouts.set(sb.section, used);
+      if (used.has(sb.variant ?? "")) {
+        const options: (string | undefined)[] = [
+          undefined,
+          ...Object.keys(template.sections[sb.section]?.variants ?? {}),
+        ];
+        placed[i] = { ...sb, variant: options.find((v) => !used.has(v ?? "")) };
+      }
+      used.add(placed[i].variant ?? "");
+    }
+  }
 
   // Second href pass, AFTER placement: only now are the real in-page targets
   // known. Template sites use section ids as DOM ids, classic sites use the
