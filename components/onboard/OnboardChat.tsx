@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
-import { CircleAlert, PartyPopper } from "lucide-react";
+import { CircleAlert, PartyPopper, Paperclip } from "lucide-react";
 import type { ChatMsg, ProgressItem } from "@/lib/ai/onboard";
 import {
   onboardAction,
@@ -16,13 +16,18 @@ import {
   sessionStateAction,
 } from "@/app/app/new/actions";
 import {
+  analyzePhotoAction,
+  type AnalyzePhotoResult,
+} from "@/app/app/new/photo-actions";
+import {
   startConversation,
   saveTurn,
   saveMediaAction,
   loadConversation,
 } from "@/app/app/new/persist-actions";
 import type { BusinessFacts } from "@/lib/verticals/schema";
-import type { SiteMedia } from "@/lib/media/media";
+import { MAX_PHOTOS, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
+import { processImage } from "@/lib/media/client-image";
 import { Button, Chip, Card } from "@/components/ui";
 import PhotoField from "@/components/editor/PhotoField";
 import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
@@ -55,6 +60,32 @@ function deriveProgress(facts: Partial<BusinessFacts>): ProgressItem[] {
     const v = facts[key];
     return { key, label, done: v != null && String(v).trim().length > 0 };
   });
+}
+
+// Lowercase the first character so a vision `reason` reads naturally after a
+// colon («…не ставив: занадто темне фото»).
+function lowerFirst(s: string): string {
+  return s ? s.charAt(0).toLowerCase() + s.slice(1) : s;
+}
+
+// Photo metadata (kind + alt from the vision layer) is keyed by storage URL.
+// Replace an entry with the same url, else append.
+function upsertMeta(list: PhotoMeta[] | undefined, entry: PhotoMeta): PhotoMeta[] {
+  const existing = list ?? [];
+  const i = existing.findIndex((m) => m.url === entry.url);
+  return i === -1
+    ? [...existing, entry]
+    : existing.map((m, idx) => (idx === i ? entry : m));
+}
+
+// Keep only meta whose url is still live (a photo or the logo); undefined when
+// nothing remains, so the field is simply omitted from the media.
+function pruneMeta(media: SiteMedia): PhotoMeta[] | undefined {
+  if (!media.photoMeta?.length) return undefined;
+  const live = new Set(media.photos);
+  if (media.logoUrl) live.add(media.logoUrl);
+  const kept = media.photoMeta.filter((m) => live.has(m.url));
+  return kept.length ? kept : undefined;
 }
 
 // Design animations (design/D). Kept in-file so this component owns everything;
@@ -119,6 +150,16 @@ export function OnboardChat() {
   // --- Media (logo + photos) — optional step before generation ---
   const [media, setMedia] = useState<SiteMedia>({ photos: [] });
 
+  // --- Chat photo upload (wave G) ---
+  // Transient card at the end of the message list while a paperclip upload is in
+  // flight — NOT part of `messages`, so it never persists.
+  const [uploadCard, setUploadCard] = useState<{ thumbUrl: string; label: string } | null>(null);
+  // Inline, transient error under the chat input for a failed upload.
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  // A review OCR'd from a screenshot, awaiting the owner's explicit confirmation
+  // before it becomes a testimonial fact (invariant №5 — no invented facts).
+  const [pendingReview, setPendingReview] = useState<{ quote: string; author: string } | null>(null);
+
   // --- Done / error state ---
   const [siteUrl, setSiteUrl] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -126,6 +167,8 @@ export function OnboardChat() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Hidden file input behind the paperclip button (chat photo upload, wave G).
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Holds the persisted conversation id after first user send; null = not yet created
   const convIdRef = useRef<string | null>(null);
 
@@ -182,7 +225,7 @@ export function OnboardChat() {
     const res = await fetch("/api/onboard", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: nextMessages, facts, verticalId, templateId: template?.id }),
+      body: JSON.stringify({ messages: nextMessages, facts, verticalId, templateId: template?.id, media }),
     });
     const ct = res.headers.get("content-type") ?? "";
     if (ct.includes("application/json")) {
@@ -319,7 +362,7 @@ export function OnboardChat() {
         // non-stream server action still answers the turn.
         setTyping(true);
         applyResult(
-          await onboardAction(nextMessages, facts, verticalId, template?.id, { ready, confirmed }),
+          await onboardAction(nextMessages, facts, verticalId, template?.id, { ready, confirmed }, media),
         );
       }
     } finally {
@@ -355,8 +398,11 @@ export function OnboardChat() {
   // uploads scope by conversationId; if there's no row yet (Supabase off) the
   // save is simply skipped.
   const persistMedia = (next: SiteMedia) => {
-    setMedia(next);
-    if (convIdRef.current) void saveMediaAction(convIdRef.current, next);
+    // Drop meta entries whose url is neither a photo nor the logo (a removed or
+    // swapped url leaves its class/alt behind otherwise).
+    const clean: SiteMedia = { ...next, photoMeta: pruneMeta(next) };
+    setMedia(clean);
+    if (convIdRef.current) void saveMediaAction(convIdRef.current, clean);
   };
 
   const setLogo = (url: string) => persistMedia({ ...media, logoUrl: url });
@@ -366,9 +412,159 @@ export function OnboardChat() {
   const removePhoto = (i: number) =>
     persistMedia({ ...media, photos: media.photos.filter((_, idx) => idx !== i) });
   const addPhoto = (url: string) => {
-    if (media.photos.length >= 3) return;
+    if (media.photos.length >= MAX_PHOTOS) return;
     persistMedia({ ...media, photos: [...media.photos, url] });
   };
+
+  // ---------------------------------------------------------------------------
+  // Chat photo upload (wave G) — paperclip → upload → vision analysis → route by
+  // class. Reuses the shared `loading` flag so chat send and photo upload are
+  // mutually exclusive.
+  // ---------------------------------------------------------------------------
+
+  // Append an assistant message from the upload flow and persist it
+  // fire-and-forget. `factsOverride` is passed only by the review-save case,
+  // where facts changed this turn and setFacts hasn't flushed into the closure.
+  const appendAssistant = (content: string, factsOverride?: Partial<BusinessFacts>) => {
+    setMessages((prev) => {
+      const next: ChatMsg[] = [...prev, { role: "assistant", content }];
+      if (convIdRef.current) {
+        void saveTurn(
+          convIdRef.current,
+          next,
+          factsOverride ?? facts,
+          verticalId,
+          ready,
+          confirmed,
+          template?.id,
+        );
+      }
+      return next;
+    });
+  };
+
+  // Route ONE analyzed photo by its class. The upload is already stored; this
+  // only decides where the url lands and what the assistant says.
+  const routePhoto = (url: string, result: AnalyzePhotoResult, warnings: string[]) => {
+    const poolFull = media.photos.length >= MAX_PHOTOS;
+    const poolFullMsg = "У нас вже максимум фото (8). Зайві можна буде замінити в редакторі.";
+
+    // Fail-open (G5): no verdict → keep it as a plain gallery photo, no meta.
+    if (!result.ok) {
+      if (poolFull) return appendAssistant(poolFullMsg);
+      persistMedia({ ...media, photos: [...media.photos, url] });
+      return appendAssistant("Додав фото — побачите його в галереї сайту.");
+    }
+
+    const a = result.analysis;
+
+    // Soft refusal — unsuitable or off-topic. Nothing is saved.
+    if (a.suitable === false || a.kind === "irrelevant") {
+      return appendAssistant(`Це фото я б на сайт не ставив: ${lowerFirst(a.reason)} Спробуєте інше?`);
+    }
+
+    if (a.kind === "logo") {
+      const hadLogo = Boolean(media.logoUrl);
+      persistMedia({
+        ...media,
+        logoUrl: url,
+        photoMeta: upsertMeta(media.photoMeta, { url, kind: "logo", ...(a.alt && { alt: a.alt }) }),
+      });
+      return appendAssistant(
+        hadLogo
+          ? "Бачу лого — поставив його в шапку сайту. 👌 Попереднє замінив."
+          : "Бачу лого — поставив його в шапку сайту. 👌",
+      );
+    }
+
+    if (a.kind === "review") {
+      if (!a.reviewQuote) {
+        return appendAssistant(
+          "Схоже, це скріншот відгуку, але текст не вдалося прочитати. Можете просто написати відгук текстом — я збережу.",
+        );
+      }
+      // OCR'd text is a CANDIDATE — the owner must confirm before it's a fact.
+      setPendingReview({ quote: a.reviewQuote, author: a.reviewAuthor ?? "" });
+      return;
+    }
+
+    // work / interior / menu / person → gallery photo with class + honest alt.
+    if (poolFull) return appendAssistant(poolFullMsg);
+    const count = media.photos.length + 1;
+    persistMedia({
+      ...media,
+      photos: [...media.photos, url],
+      photoMeta: upsertMeta(media.photoMeta, { url, kind: a.kind, ...(a.alt && { alt: a.alt }) }),
+    });
+    let msg = `Гарне фото — додав у галерею (${count} з ${MAX_PHOTOS}).`;
+    if (warnings.length) msg += ` ${warnings[0]}`;
+    return appendAssistant(msg);
+  };
+
+  const handlePhotoPick = async (file: File) => {
+    if (loading) return;
+    setUploadError(null);
+    setLoading(true);
+
+    // Lazily create the DB row, exactly like send() (avoids empty rows).
+    if (convIdRef.current === null) {
+      const started = await startConversation();
+      if (started) {
+        convIdRef.current = started.conversationId;
+        localStorage.setItem("vitryna_conv_id", started.conversationId);
+      }
+    }
+    if (!convIdRef.current) {
+      setUploadError("Не вдалося завантажити фото — спробуйте трохи пізніше.");
+      setLoading(false);
+      return;
+    }
+
+    const thumbUrl = URL.createObjectURL(file);
+    setUploadCard({ thumbUrl, label: "Завантажую фото…" });
+
+    try {
+      const blob = await processImage(file);
+      const ext = blob.type === "image/webp" ? "webp" : "jpg";
+      const fd = new FormData();
+      fd.append("file", blob, `photo.${ext}`);
+      fd.append("conversationId", convIdRef.current);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const json = (await res.json().catch(() => null)) as
+        | { ok?: boolean; url?: string; warnings?: string[] }
+        | null;
+      if (!res.ok || !json?.url) {
+        setUploadError("Не вдалося завантажити фото — спробуйте трохи пізніше.");
+        return;
+      }
+
+      setUploadCard({ thumbUrl, label: "Роздивляюсь фото…" });
+      const result = await analyzePhotoAction(json.url);
+      routePhoto(json.url, result, json.warnings ?? []);
+    } catch {
+      setUploadError("Не вдалося завантажити фото — спробуйте трохи пізніше.");
+    } finally {
+      URL.revokeObjectURL(thumbUrl);
+      setUploadCard(null);
+      setLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  };
+
+  const saveReview = () => {
+    if (!pendingReview) return;
+    const author = pendingReview.author.trim() || "Клієнт";
+    const newFacts: Partial<BusinessFacts> = {
+      ...facts,
+      testimonials: [...(facts.testimonials ?? []), { quote: pendingReview.quote, author }],
+    };
+    setFacts(newFacts);
+    setSavedNote("Відгук");
+    setPendingReview(null);
+    appendAssistant("Зберіг відгук — він зʼявиться на сайті. Дякую!", newFacts);
+  };
+
+  const declineReview = () => setPendingReview(null);
 
   const handleMediaNext = async () => {
     if (loading) return;
@@ -532,6 +728,24 @@ export function OnboardChat() {
               <div className="pl-1 text-[13px] font-bold text-ok">✓ Записав: {savedNote}</div>
             )}
 
+            {uploadCard && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-3 rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface px-4 py-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={uploadCard.thumbUrl}
+                    alt=""
+                    className="h-12 w-12 shrink-0 rounded-[10px] object-cover"
+                  />
+                  <span
+                    className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent"
+                    aria-hidden
+                  />
+                  <span className="text-[14px] font-semibold text-ink-muted">{uploadCard.label}</span>
+                </div>
+              </div>
+            )}
+
             {typing && <AgentTyping thinking={thinking} />}
 
             <div ref={messagesEndRef} />
@@ -565,7 +779,57 @@ export function OnboardChat() {
             </div>
           )}
 
+          {/* Review OCR'd from a screenshot — the owner confirms before it
+              becomes a fact (invariant №5). */}
+          {pendingReview && (
+            <div className="mb-3 flex flex-col gap-3 rounded-[18px] border-[1.5px] border-line bg-surface p-4">
+              <span className="text-[15px] font-bold text-ink">Знайшов відгук на скріншоті:</span>
+              <p className="whitespace-pre-wrap rounded-[12px] bg-sunken px-3.5 py-3 text-[15px] leading-relaxed text-ink">
+                {pendingReview.quote}
+              </p>
+              <input
+                type="text"
+                value={pendingReview.author}
+                onChange={(e) =>
+                  setPendingReview((prev) => (prev ? { ...prev, author: e.target.value } : prev))
+                }
+                placeholder="Імʼя клієнта (необовʼязково)"
+                autoComplete="off"
+                className="h-12 w-full rounded-full border-[1.5px] border-line-strong bg-surface px-4 text-[15px] text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft"
+              />
+              <div className="flex gap-2.5">
+                {/* Gated by `loading`: saving while a chat turn streams would let
+                    applyResult overwrite facts without this testimonial. */}
+                <Button size="md" disabled={loading} onClick={saveReview} className="flex-1">
+                  Зберегти відгук
+                </Button>
+                <Button variant="quiet" size="md" disabled={loading} onClick={declineReview} className="flex-1">
+                  Не зберігати
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-2.5">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handlePhotoPick(f);
+                e.target.value = ""; // allow re-picking the same file
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              aria-label="Додати фото"
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-[1.5px] border-line-strong bg-surface text-ink-muted transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <Paperclip size={22} />
+            </button>
             <input
               ref={inputRef}
               type="text"
@@ -586,6 +850,10 @@ export function OnboardChat() {
               <SendArrow />
             </button>
           </div>
+
+          {uploadError && (
+            <p className="mt-2 pl-1 text-[14px] font-semibold text-danger">{uploadError}</p>
+          )}
         </footer>
         </div>
 
@@ -668,7 +936,7 @@ export function OnboardChat() {
                     onClear={() => removePhoto(i)}
                   />
                 ))}
-                {media.photos.length < 3 && (
+                {media.photos.length < MAX_PHOTOS && (
                   <PhotoField
                     key={`add-${media.photos.length}`}
                     conversationId={convId}
