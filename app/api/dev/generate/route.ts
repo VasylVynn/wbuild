@@ -3,6 +3,7 @@ import { isAnthropicConfigured } from "@/lib/ai/anthropic";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { generateAndPublish } from "@/lib/site/publish";
 import { seedTenants } from "@/lib/tenant/seed";
+import { sanitizeMedia } from "@/lib/media/media";
 import type { FloristFacts } from "@/lib/verticals/florist";
 
 /**
@@ -28,6 +29,8 @@ export async function POST(req: Request) {
     publish?: boolean;
     verticalId?: string;
     templateId?: string;
+    // Wave G smokes: owner media incl. photoMeta (validated like the real path).
+    media?: unknown;
   };
   const facts = (body.facts ?? (seedTenants[0].facts as unknown as FloristFacts)) as FloristFacts;
   const host = body.host ?? "test.lvh.me";
@@ -39,7 +42,7 @@ export async function POST(req: Request) {
       host,
       body.verticalId ?? "florist",
       publish,
-      undefined,
+      body.media !== undefined ? sanitizeMedia(body.media) : undefined,
       body.templateId,
     );
     return NextResponse.json({
