@@ -340,7 +340,9 @@ export function OnboardChat() {
         .map((p) => p.label);
       setSavedNote(newly.length ? newly.join(", ") : null);
 
-      // Persist turn fire-and-forget — never blocks the UI
+      // Persist turn fire-and-forget — never blocks the UI. Media rides along
+      // explicitly (loading gate = it can't be mid-change), so this write never
+      // depends on racing the stored value back in.
       if (convIdRef.current) {
         void saveTurn(
           convIdRef.current,
@@ -350,6 +352,7 @@ export function OnboardChat() {
           result.ready,
           result.confirmed ?? false,
           nextTemplate?.id,
+          media,
         );
       }
     };
@@ -424,12 +427,19 @@ export function OnboardChat() {
 
   // Append an assistant message from the upload flow and persist it
   // fire-and-forget. `factsOverride` is passed only by the review-save case,
-  // where facts changed this turn and setFacts hasn't flushed into the closure.
+  // where facts changed this turn and setFacts hasn't flushed into the closure;
+  // `mediaOverride` by the routing paths that just changed media — the ONE
+  // saveTurn write carries messages AND media together (codex must-fix: a
+  // separate saveMediaAction racing this saveTurn could lose the upload).
   // Closure state is safe here for the same reason applyResult's is: the
   // `loading` gate makes upload/send mutually exclusive, so nothing else
   // appends between the pick and this call. (A saveTurn INSIDE a setMessages
   // updater would be a side effect during render — React flags it.)
-  const appendAssistant = (content: string, factsOverride?: Partial<BusinessFacts>) => {
+  const appendAssistant = (
+    content: string,
+    factsOverride?: Partial<BusinessFacts>,
+    mediaOverride?: SiteMedia,
+  ) => {
     const next: ChatMsg[] = [...messages, { role: "assistant", content }];
     setMessages(next);
     if (convIdRef.current) {
@@ -441,8 +451,18 @@ export function OnboardChat() {
         ready,
         confirmed,
         template?.id,
+        mediaOverride ?? media,
       );
     }
+  };
+
+  // Apply a media change locally WITHOUT the media-step's saveMediaAction —
+  // in the chat-upload flow persistence rides the same saveTurn write as the
+  // assistant message (see appendAssistant above).
+  const applyMediaLocal = (next: SiteMedia): SiteMedia => {
+    const clean: SiteMedia = { ...next, photoMeta: pruneMeta(next) };
+    setMedia(clean);
+    return clean;
   };
 
   // Route ONE analyzed photo by its class. The upload is already stored; this
@@ -454,8 +474,8 @@ export function OnboardChat() {
     // Fail-open (G5): no verdict → keep it as a plain gallery photo, no meta.
     if (!result.ok) {
       if (poolFull) return appendAssistant(poolFullMsg);
-      persistMedia({ ...media, photos: [...media.photos, url] });
-      return appendAssistant("Додав фото — побачите його в галереї сайту.");
+      const clean = applyMediaLocal({ ...media, photos: [...media.photos, url] });
+      return appendAssistant("Додав фото — побачите його в галереї сайту.", undefined, clean);
     }
 
     const a = result.analysis;
@@ -467,7 +487,7 @@ export function OnboardChat() {
 
     if (a.kind === "logo") {
       const hadLogo = Boolean(media.logoUrl);
-      persistMedia({
+      const clean = applyMediaLocal({
         ...media,
         logoUrl: url,
         photoMeta: upsertMeta(media.photoMeta, { url, kind: "logo", ...(a.alt && { alt: a.alt }) }),
@@ -476,6 +496,8 @@ export function OnboardChat() {
         hadLogo
           ? "Бачу лого — поставив його в шапку сайту. 👌 Попереднє замінив."
           : "Бачу лого — поставив його в шапку сайту. 👌",
+        undefined,
+        clean,
       );
     }
 
@@ -486,21 +508,24 @@ export function OnboardChat() {
         );
       }
       // OCR'd text is a CANDIDATE — the owner must confirm before it's a fact.
-      setPendingReview({ quote: a.reviewQuote, author: a.reviewAuthor ?? "" });
+      // No visible author on the screenshot → prefill the generic «Клієнт» so
+      // the owner SEES exactly what will be saved (codex must-fix: a silent
+      // fallback after an empty field is an unconfirmed invented attribution).
+      setPendingReview({ quote: a.reviewQuote, author: a.reviewAuthor ?? "Клієнт" });
       return;
     }
 
     // work / interior / menu / person → gallery photo with class + honest alt.
     if (poolFull) return appendAssistant(poolFullMsg);
     const count = media.photos.length + 1;
-    persistMedia({
+    const clean = applyMediaLocal({
       ...media,
       photos: [...media.photos, url],
       photoMeta: upsertMeta(media.photoMeta, { url, kind: a.kind, ...(a.alt && { alt: a.alt }) }),
     });
     let msg = `Гарне фото — додав у галерею (${count} з ${MAX_PHOTOS}).`;
     if (warnings.length) msg += ` ${warnings[0]}`;
-    return appendAssistant(msg);
+    return appendAssistant(msg, undefined, clean);
   };
 
   const handlePhotoPick = async (file: File) => {

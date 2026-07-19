@@ -80,20 +80,36 @@ export async function saveTurn(
   ready: boolean,
   confirmed = false,
   templateId?: string,
+  // Wave G (codex review): the chat-upload flow persists messages AND media in
+  // this ONE write — two racing read-modify-writes (saveTurn + saveMediaAction)
+  // could lose the just-uploaded photo. Untrusted client input, validated
+  // below; invalid/absent → fall back to preserving what's stored.
+  media?: unknown,
 ): Promise<{ ok: boolean }> {
   if (!isSupabaseConfigured()) return { ok: false };
 
   const db = getServiceClient();
 
+  const mediaParsed = media !== undefined ? mediaSchema.safeParse(media) : null;
+  const cleanMedia: SiteMedia | undefined = mediaParsed?.success
+    ? {
+        ...(mediaParsed.data.logoUrl && { logoUrl: mediaParsed.data.logoUrl }),
+        photos: mediaParsed.data.photos,
+        ...(mediaParsed.data.photoMeta?.length && { photoMeta: mediaParsed.data.photoMeta }),
+      }
+    : undefined;
+
   // Preserve any media saved out-of-band by saveMediaAction: a plain overwrite
   // of facts_state would wipe uploads if the owner keeps chatting after the
-  // media step (e.g. after the login-gate resume).
+  // media step (e.g. after the login-gate resume). The caller-provided media
+  // (validated above) wins over the stored value.
   const { data: prev } = await db
     .from("conversations")
     .select("facts_state")
     .eq("id", conversationId)
     .maybeSingle();
-  const media = (prev?.facts_state as FactsState | null)?.media;
+  const storedMedia = (prev?.facts_state as FactsState | null)?.media;
+  const mediaFinal = cleanMedia ?? storedMedia;
 
   // Unknown/absent template ids are dropped (registry is the authority); the
   // stored pick only changes when this turn carries a valid one — a refusal
@@ -107,7 +123,7 @@ export async function saveTurn(
     ready,
     confirmed,
     ...(cleanTemplateId && { templateId: cleanTemplateId }),
-    ...(media && { media }),
+    ...(mediaFinal && { media: mediaFinal }),
   };
 
   const { error } = await db
