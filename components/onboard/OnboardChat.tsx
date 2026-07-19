@@ -425,22 +425,24 @@ export function OnboardChat() {
   // Append an assistant message from the upload flow and persist it
   // fire-and-forget. `factsOverride` is passed only by the review-save case,
   // where facts changed this turn and setFacts hasn't flushed into the closure.
+  // Closure state is safe here for the same reason applyResult's is: the
+  // `loading` gate makes upload/send mutually exclusive, so nothing else
+  // appends between the pick and this call. (A saveTurn INSIDE a setMessages
+  // updater would be a side effect during render — React flags it.)
   const appendAssistant = (content: string, factsOverride?: Partial<BusinessFacts>) => {
-    setMessages((prev) => {
-      const next: ChatMsg[] = [...prev, { role: "assistant", content }];
-      if (convIdRef.current) {
-        void saveTurn(
-          convIdRef.current,
-          next,
-          factsOverride ?? facts,
-          verticalId,
-          ready,
-          confirmed,
-          template?.id,
-        );
-      }
-      return next;
-    });
+    const next: ChatMsg[] = [...messages, { role: "assistant", content }];
+    setMessages(next);
+    if (convIdRef.current) {
+      void saveTurn(
+        convIdRef.current,
+        next,
+        factsOverride ?? facts,
+        verticalId,
+        ready,
+        confirmed,
+        template?.id,
+      );
+    }
   };
 
   // Route ONE analyzed photo by its class. The upload is already stored; this
