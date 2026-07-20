@@ -6,8 +6,11 @@ import React2021Wrapper from "./React2021Wrapper";
 import React2021Hero from "./React2021Hero";
 import React2021Process from "./React2021Process";
 import React2021Services from "./React2021Services";
+import React2021Switchback from "./React2021Switchback";
 import React2021Marquee from "./React2021Marquee";
 import React2021Stats from "./React2021Stats";
+import React2021Team from "./React2021Team";
+import React2021Publications from "./React2021Publications";
 import React2021CTA from "./React2021CTA";
 import React2021LeadForm from "./React2021LeadForm";
 import React2021Contacts from "./React2021Contacts";
@@ -41,6 +44,13 @@ export const react2021Sections: Record<string, TemplateSectionDef> = {
       "Сітка послуг у стилі «features»: квадратні іконки з кораловою рамкою, назва, опис, ціна.",
     component: React2021Services,
   },
+  story: {
+    block: "switchback",
+    label: "Історія",
+    description:
+      "Чергування великого фото й тексту (зиг-заг, рядки дзеркаляться): розповідь про майстерню, підхід чи процес — коралова рамка навколо фото, заголовок extrabold, коралова кнопка. Фото беруться лише з props; без фото рядок стає центрованим текстовим блоком.",
+    component: React2021Switchback,
+  },
   marquee: {
     block: "marquee",
     label: "Стрічка",
@@ -53,6 +63,20 @@ export const react2021Sections: Record<string, TemplateSectionDef> = {
     label: "Показники",
     description: "Сітка показників великими кораловими цифрами (лише реальні дані).",
     component: React2021Stats,
+  },
+  team: {
+    block: "team",
+    label: "Команда",
+    description:
+      "Сітка карток команди: кругла аватарка в кораловому кільці (або ініціали без фото), імʼя, роль коралом, короткий опис. Лише реальні люди; фото беруться лише з props.",
+    component: React2021Team,
+  },
+  press: {
+    block: "publications",
+    label: "Публікації",
+    description:
+      "Перелік праць / статей / згадок у пресі: квадратний коралово-облямований бокс із роком, назва, підзаголовок і джерело коралом — по рядку. Спокійний реєстр для довіри, лише реальні факти.",
+    component: React2021Publications,
   },
   cta: {
     block: "cta",
@@ -91,8 +115,11 @@ export const react2021Meta: {
     "hero",
     "process",
     "services",
+    "story",
     "marquee",
     "stats",
+    "team",
+    "press",
     "cta",
     "lead_form",
     "contacts",

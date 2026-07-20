@@ -240,3 +240,12 @@
 > строго рідного шаблону, частина з layout-варіантами (додатковий матеріал для
 > жонглювання DNA-2c). Адмін-превʼю /admin/templates/[id] підхоплює автоматично
 > (fixture ітерує sections map). tsc/build/eslint зелені. Дифи ревʼюнуті інтегратором.
+
+> **Нотатка: +12 секцій у 4 шаблони, що лишались (2026-07-20, 4 агенти, наказ власника):**
+> aisaas (switchback-showcase+cards, publications+list, team), nextly (switchback,
+> timeline, marquee), react2021 (switchback, publications, team), ferri (+switchback
+> «story», stats — оживлений мертвий FerriStats, richText «principles»). Switchback тепер
+> є в УСІХ 8 шаблонах. Копіювання з MIT-кітів було дозволене, але всі 4 агенти зібрали
+> секції нативно з ідіом власних шаблонів — THIRD_PARTY_NOTICES без змін. tsc/eslint/build
+> зелені; дифи ревʼюнуті інтегратором. Всі 8 сторінок /admin/templates/[id] тепер
+> показують розширені меню.

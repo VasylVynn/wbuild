@@ -19,12 +19,16 @@ import FerriTimeline from "./FerriTimeline";
 import FerriTeam from "./FerriTeam";
 import FerriTeamAlt from "./FerriTeamAlt";
 import FerriMarquee from "./FerriMarquee";
+import FerriPrinciples from "./FerriPrinciples";
+import FerriStats from "./FerriStats";
+import FerriSwitchback from "./FerriSwitchback";
 
 /**
  * Ferri — an elegant dark-navy + gold, serif (Cormorant) editorial look ported
  * from template_sources/ferri-schoedl-main. Ships BOTH a dark (default) and a
- * light theme; the wrapper owns the toggle. A restrained, minimal composition:
- * a mission BANNER instead of stats/testimonials/faq/cta — status over noise.
+ * light theme; the wrapper owns the toggle. A restrained composition: a mission
+ * BANNER and a spare stats band carry proof — testimonials/faq/cta noise stays
+ * out, status over volume.
  */
 export const ferriSections: Record<string, TemplateSectionDef> = {
   hero: {
@@ -43,12 +47,26 @@ export const ferriSections: Record<string, TemplateSectionDef> = {
     component: FerriAbout,
     variants: { statement: FerriAboutAlt },
   },
+  principles: {
+    block: "richText",
+    label: "Підхід",
+    description:
+      "Двоколонковий блок принципів/цінностей: ліворуч золотий мікрозаголовок, серифний заголовок і золота лінія (липнуть при прокрутці), праворуч абзаци або список принципів (рядки з «- »). Про те, ЯК ми працюємо — відмінний від «Про нас» (розповідь).",
+    component: FerriPrinciples,
+  },
   timeline: {
     block: "timeline",
     label: "Шлях",
     description:
       "Вертикальна хронологія досвіду/розвитку: рік або період, назва етапу, підзаголовок і опис — з’єднані золотою лінією з вузлами. Лише реальні дати й події, без вигаданих.",
     component: FerriTimeline,
+  },
+  stats: {
+    block: "stats",
+    label: "Цифри",
+    description:
+      "Смуга ключових чисел: велике золоте значення з табличними цифрами над стриманим підписом (роки на ринку, кількість клієнтів, середня оцінка). Лише реальні цифри — нічого не вигадувати.",
+    component: FerriStats,
   },
   banner: {
     block: "cta",
@@ -63,6 +81,13 @@ export const ferriSections: Record<string, TemplateSectionDef> = {
     description: "Сітка карток напрямків/послуг з іконками — назва, опис, опційна ціна.",
     component: FerriServices,
     variants: { numbered: FerriServicesAlt },
+  },
+  story: {
+    block: "switchback",
+    label: "Історія",
+    description:
+      "Чергування фото + текст (зигзаг): великий кадр у золотій рамці й колонка прози міняються боками щорядка — про майстерню, процес чи кейси. §4.8: рядок без фото стає центрованою текстовою карткою. Опційна кнопка-посилання під текстом.",
+    component: FerriSwitchback,
   },
   team: {
     block: "team",
@@ -122,9 +147,12 @@ export const ferriMeta: {
   order: [
     "hero",
     "about",
+    "principles",
     "timeline",
+    "stats",
     "banner",
     "services",
+    "story",
     "team",
     "publications",
     "marquee",

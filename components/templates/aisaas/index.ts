@@ -4,10 +4,13 @@ import type { TemplateSectionDef } from "@/lib/templates/registry";
 import AiSaasWrapper from "./AiSaasWrapper";
 import AiSaasHero from "./AiSaasHero";
 import AiSaasHighlights from "./AiSaasHighlights";
+import AiSaasShowcase, { AiSaasShowcaseCards } from "./AiSaasShowcase";
 import AiSaasMarquee from "./AiSaasMarquee";
 import AiSaasProcess from "./AiSaasProcess";
 import AiSaasStats from "./AiSaasStats";
+import AiSaasPublications, { AiSaasPublicationsList } from "./AiSaasPublications";
 import AiSaasTestimonials from "./AiSaasTestimonials";
+import AiSaasTeam from "./AiSaasTeam";
 import AiSaasFAQ from "./AiSaasFAQ";
 import AiSaasCTA from "./AiSaasCTA";
 import AiSaasLeadForm from "./AiSaasLeadForm";
@@ -34,6 +37,14 @@ export const aisaasSections: Record<string, TemplateSectionDef> = {
       "Bento-сітка ціннісних пропозицій «чому ми» — асиметричні плитки з іконками, назва й опис; ціни ігноруються.",
     component: AiSaasHighlights,
   },
+  showcase: {
+    block: "switchback",
+    label: "Можливості великим планом",
+    description:
+      "Почергові рядки «фото + текст» (зиґзаґ) для детального показу ключових можливостей, переваг чи процесу: заголовок, розповідь і опційне посилання-стрілка. Фото беруться лише з props; без фото рядок стає м'якою пастельною панеллю. Варіант cards — компактні картки з фото зверху.",
+    component: AiSaasShowcase,
+    variants: { cards: AiSaasShowcaseCards },
+  },
   marquee: {
     block: "marquee",
     label: "Стрічка",
@@ -54,11 +65,26 @@ export const aisaasSections: Record<string, TemplateSectionDef> = {
     description: "Сітка показників великими цифрами (лише реальні дані).",
     component: AiSaasStats,
   },
+  publications: {
+    block: "publications",
+    label: "Кейси та публікації",
+    description:
+      "Сітка пастельних карток: кейси, статті, згадки у пресі чи нагороди — назва, підзаголовок, джерело і рік у пастельному чипі. Лише реальні матеріали, без вигадок. Варіант list — редакційний перелік із тонкими лінійками.",
+    component: AiSaasPublications,
+    variants: { list: AiSaasPublicationsList },
+  },
   testimonials: {
     block: "testimonials",
     label: "Відгуки",
     description: "М'які картки відгуків — цитата, автор, роль.",
     component: AiSaasTestimonials,
+  },
+  team: {
+    block: "team",
+    label: "Команда",
+    description:
+      "Сітка м'яких карток команди — кругле фото або пастельний бейдж з ініціалами (без фото), ім'я, роль кораловим і короткий опис. Лише реальні люди.",
+    component: AiSaasTeam,
   },
   faq: {
     block: "faq",
@@ -102,10 +128,13 @@ export const aisaasMeta: {
   order: [
     "hero",
     "highlights",
+    "showcase",
     "marquee",
     "process",
     "stats",
+    "publications",
     "testimonials",
+    "team",
     "faq",
     "cta",
     "lead_form",
