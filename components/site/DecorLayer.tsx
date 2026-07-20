@@ -62,6 +62,7 @@ export function DecorLayer({ decorId }: { decorId?: string }): ReactNode {
       return (
         <div
           aria-hidden
+          className="print:hidden"
           style={{
             ...base,
             background: [
@@ -79,6 +80,7 @@ export function DecorLayer({ decorId }: { decorId?: string }): ReactNode {
       return (
         <div
           aria-hidden
+          className="print:hidden"
           style={{
             ...base,
             backgroundImage: `radial-gradient(${tint("--color-muted-foreground", 30)} 1px, transparent 1.6px)`,
@@ -93,6 +95,7 @@ export function DecorLayer({ decorId }: { decorId?: string }): ReactNode {
       return (
         <div
           aria-hidden
+          className="print:hidden"
           style={{
             ...base,
             background: `linear-gradient(120deg, transparent 30%, ${tint("--color-accent", 10)} 38%, ${tint("--color-accent", 10)} 44%, transparent 52%, transparent 66%, ${tint("--color-primary", 15)} 66.4%, ${tint("--color-primary", 15)} 67.1%, transparent 67.6%)`,
@@ -106,6 +109,7 @@ export function DecorLayer({ decorId }: { decorId?: string }): ReactNode {
       return (
         <div
           aria-hidden
+          className="print:hidden"
           style={{
             ...base,
             backgroundImage: `url("${NOISE_URI}")`,
@@ -118,7 +122,7 @@ export function DecorLayer({ decorId }: { decorId?: string }): ReactNode {
       // Thin double-hairline inset frame — a poster-like border pinned to the
       // viewport edges. muted-foreground keeps it visible on light and dark.
       return (
-        <div aria-hidden style={base}>
+        <div aria-hidden className="print:hidden" style={base}>
           <div
             style={{
               position: "absolute",
@@ -142,7 +146,7 @@ export function DecorLayer({ decorId }: { decorId?: string }): ReactNode {
       // Token-driven aurora: large, heavily blurred, STATIC blobs (the salon
       // aurora without framer-motion) drawn from accent/primary.
       return (
-        <div aria-hidden style={base}>
+        <div aria-hidden className="print:hidden" style={base}>
           <div
             style={{
               position: "absolute",

@@ -18,7 +18,9 @@ import type { PaletteFamily } from "./dna";
  * exactly as before).
  */
 
-const FETCH_TIMEOUT_MS = 10_000;
+// Advisory-short: publish/re-roll WAIT on this before falling back — storage
+// hiccups must not push the whole action into a timeout (codex review).
+const FETCH_TIMEOUT_MS = 4_000;
 const MAX_BYTES = 8 * 1024 * 1024;
 
 export function familyFromHct(hue: number, chroma: number): PaletteFamily {
@@ -39,6 +41,11 @@ export async function logoPaletteFamily(logoUrl: string | undefined | null): Pro
     try {
       const res = await fetch(logoUrl, { signal: controller.signal });
       if (!res.ok) return null;
+      // Bound BEFORE buffering (codex review): arrayBuffer() would otherwise
+      // allocate the full body first. Our upload route caps files at 8MB, so
+      // a larger declared length is abnormal by construction.
+      const declared = Number(res.headers.get("content-length"));
+      if (Number.isFinite(declared) && declared > MAX_BYTES) return null;
       buf = Buffer.from(await res.arrayBuffer());
     } finally {
       clearTimeout(timer);
@@ -47,23 +54,27 @@ export async function logoPaletteFamily(logoUrl: string | undefined | null): Pro
 
     // sharp is native → lazy + fail-open, same contract as the media layer.
     const sharp = (await import("sharp")).default;
-    const { data } = await sharp(buf)
+    const { data, info } = await sharp(buf)
       .resize(64, 64, { fit: "inside" })
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
+    if (info.channels !== 4) return null; // RGBA stride assumption must hold
 
     const pixels: number[] = [];
     for (let i = 0; i + 3 < data.length; i += 4) {
       const a = data[i + 3];
       if (a < 128) continue; // transparent pixels say nothing about the brand
-      // eslint-disable-next-line no-bitwise
       pixels.push(((0xff << 24) | (data[i] << 16) | (data[i + 1] << 8) | data[i + 2]) >>> 0);
     }
     if (pixels.length < 32) return null; // nearly-empty logo — no signal
 
     const quantized = QuantizerCelebi.quantize(pixels, 128);
-    const ranked = Score.score(quantized);
+    // filter:false (codex review): the default scorer DROPS low-chroma colors
+    // and substitutes a Google-blue fallback — an all-white/gray/black logo
+    // would classify «cold» instead of neutral. Unfiltered, the true dominant
+    // wins and familyFromHct's chroma gate maps achromatics to «neutral».
+    const ranked = Score.score(quantized, { filter: false });
     if (!ranked.length) return null;
     const hct = Hct.fromInt(ranked[0]);
     return familyFromHct(hct.hue, hct.chroma);

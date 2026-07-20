@@ -82,7 +82,9 @@ export function rollBundleDna(opts: {
   photosCount: number;
   previous?: DesignDNA | null;
   /** DNA-3: the owner-logo palette family — prefer bundles of this family
-   *  when the distinctness rules leave any (variety still wins a re-roll). */
+   *  when the distinctness rules leave any (variety still wins a re-roll).
+   *  NOTE: this makes tenantId+nonce determinism CONDITIONAL on logo state —
+   *  replays match only while the logo (and its fetchability) is unchanged. */
   logoFamily?: PaletteFamily | null;
 }): { dna: DesignDNA; bundle: StyleBundle } {
   const rng = mulberry32(dnaSeed(opts.tenantId, opts.nonce));
@@ -113,13 +115,16 @@ export function rollBundleDna(opts: {
     skinOverrides[type] = alternates?.length ? (pick(rng, alternates) ?? base ?? "") : (base ?? "");
   }
 
+  // Motion draws at its PRE-DNA-3 rng position, decor strictly after — a
+  // stored nonce replays the same motionId it produced before (codex review).
+  const motionId = pick(rng, bundle.motionIds) ?? "none";
   const decorId = bundle.decorIds?.length ? pick(rng, bundle.decorIds) : undefined;
 
   return {
     dna: {
       presetId,
       fontPairId: bundle.fontPairId,
-      motionId: pick(rng, bundle.motionIds) ?? "none",
+      motionId,
       designNonce: opts.nonce,
       bundleId: bundle.id,
       skinOverrides,
