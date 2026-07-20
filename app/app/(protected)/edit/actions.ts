@@ -10,6 +10,7 @@ import { themePresets, resolveTheme, type ThemePresetId } from "@/lib/theme/pres
 import { getVertical } from "@/lib/verticals/registry";
 import { generateSite } from "@/lib/ai/generate";
 import type { Theme } from "@/lib/theme/tokens";
+import { carryDnaFields } from "@/lib/theme/dna";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import { displayLogoUrl, type PageSeo } from "@/lib/tenant/types";
 import { adaptLogoForTemplate } from "@/lib/media/logo-adapt";
@@ -248,8 +249,18 @@ export async function switchTheme(
   const gate = await requireMember({ host }); // §3.1
   if (!gate.ok) return { ok: false, error: gate.error };
   if (!(presetId in themePresets)) return { ok: false, error: "unknown preset" };
-  const theme = resolveTheme(presetId as ThemePresetId);
   const sb = getServiceClient();
+  // Preserve the design-DNA genome across a manual palette switch (codex
+  // review, wave DNA-1): only the preset changes; pair/motion/nonce survive.
+  const { data: prevRow } = await sb
+    .from("tenants")
+    .select("draft_theme")
+    .eq("host", host)
+    .maybeSingle();
+  const theme: Theme = {
+    ...resolveTheme(presetId as ThemePresetId),
+    ...carryDnaFields(prevRow?.draft_theme as { fontPairId?: string; dna?: unknown } | null, presetId),
+  };
   const { error } = await sb.from("tenants").update({ draft_theme: theme }).eq("host", host);
   if (error) return { ok: false, error: error.message };
   return { ok: true, theme };
@@ -269,7 +280,7 @@ export async function regenerateSite(
     const sb = getServiceClient();
     const { data: t } = await sb
       .from("tenants")
-      .select("id, facts, vertical, brand")
+      .select("id, facts, vertical, brand, draft_theme")
       .eq("host", host)
       .maybeSingle();
     if (!t) return { ok: false, error: "tenant not found" };
@@ -328,7 +339,15 @@ export async function regenerateSite(
     // Pin the design source the first time (older sites have neither id yet) so
     // future regenerations keep this look; merge into brand without clobbering it.
     const tenantUpdate: { draft_theme: Theme; brand?: Record<string, unknown> } = {
-      draft_theme: site.theme,
+      // Genome survives regeneration (codex review): new preset recorded,
+      // pair/motion/nonce history intact.
+      draft_theme: {
+        ...site.theme,
+        ...carryDnaFields(
+          t.draft_theme as { fontPairId?: string; dna?: unknown } | null,
+          site.themePresetId,
+        ),
+      },
     };
     const brandPatch: Record<string, unknown> = {};
     if (!brand.packId && site.packId) brandPatch.packId = site.packId;

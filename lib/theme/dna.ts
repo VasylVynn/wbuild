@@ -22,11 +22,13 @@ export const PALETTE_FAMILIES = ["warm", "cold", "neutral", "earthy", "contrast"
 export type PaletteFamily = (typeof PALETTE_FAMILIES)[number];
 
 export const designDnaSchema = z.object({
-  presetId: z.string(),
-  fontPairId: z.string(),
-  motionId: z.enum(MOTION_IDS),
+  presetId: z.string().max(64),
+  fontPairId: z.string().max(64),
+  // .catch: a motion id written by a NEWER deployment must not invalidate the
+  // whole stored theme on an older one — unknown ids degrade to "none".
+  motionId: z.enum(MOTION_IDS).catch("none"),
   /** Incremented by every design re-roll; same nonce ⇒ reproducible DNA. */
-  designNonce: z.number().int().nonnegative(),
+  designNonce: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1),
   /** DNA-2: style bundle + per-section skin/variant picks from its allowlist. */
   bundleId: z.string().optional(),
   skinOverrides: z.record(z.string(), z.string()).optional(),
@@ -64,4 +66,22 @@ export function dnaSeed(tenantId: string, nonce: number): number {
 export function pick<T>(rng: () => number, options: readonly T[]): T | undefined {
   if (options.length === 0) return undefined;
   return options[Math.floor(rng() * options.length) % options.length];
+}
+
+/**
+ * Carry the genome across a MANUAL theme rewrite (switchTheme /
+ * switchDesignPack / regenerateSite — codex review, wave DNA-1): the newly
+ * applied preset is recorded into the genome; the font pair, motion and the
+ * monotonic nonce history survive. Invalid/absent stored DNA carries nothing.
+ */
+export function carryDnaFields(
+  prevTheme: { fontPairId?: string; dna?: unknown } | null | undefined,
+  newPresetId?: string,
+): { fontPairId?: string; dna?: DesignDNA } {
+  const parsed = designDnaSchema.safeParse(prevTheme?.dna);
+  if (!parsed.success) {
+    return prevTheme?.fontPairId ? { fontPairId: prevTheme.fontPairId } : {};
+  }
+  const dna = newPresetId ? { ...parsed.data, presetId: newPresetId } : parsed.data;
+  return { ...(prevTheme?.fontPairId && { fontPairId: prevTheme.fontPairId }), dna };
 }

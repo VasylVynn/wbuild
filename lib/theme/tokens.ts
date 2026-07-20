@@ -39,7 +39,7 @@ export const themeSchema = z.object({
   // overrides the role-based fonts above. Optional + lenient so every stored
   // theme (draft or published) keeps validating; unknown ids fall back to the
   // legacy role stacks at resolve time — never at parse time.
-  fontPairId: z.string().optional(),
+  fontPairId: z.string().max(64).optional(),
   // The full style genome that produced this theme (lib/theme/dna.ts) —
   // versioned with the theme (draft→published), optional for every pre-DNA row.
   dna: designDnaSchema.optional(),

@@ -30,18 +30,24 @@ export function rollDna(opts: {
   const rng = mulberry32(dnaSeed(opts.tenantId, opts.nonce));
   const prev = opts.previous ?? undefined;
 
-  const pool = (opts.allowedPresets ?? THEME_PRESET_IDS).filter((id): id is ThemePresetId =>
-    (THEME_PRESET_IDS as readonly string[]).includes(id),
-  );
+  const pool = [
+    ...new Set(
+      (opts.allowedPresets ?? THEME_PRESET_IDS).filter((id): id is ThemePresetId =>
+        (THEME_PRESET_IDS as readonly string[]).includes(id),
+      ),
+    ),
+  ];
   const presets = pool.length ? pool : [...THEME_PRESET_IDS];
 
   // Palette: prefer a DIFFERENT family than before; degrade to a different
   // preset; degrade to any (single-preset verticals must still resolve).
+  // A previous preset with an UNKNOWN family (registry drift) still forces at
+  // least a different preset id (codex review).
   const prevFamily = prev ? presetFamily(prev.presetId) : undefined;
+  const otherPreset = prev ? presets.filter((id) => id !== prev.presetId) : presets;
   const otherFamily = prevFamily
     ? presets.filter((id) => presetFamily(id) !== prevFamily)
-    : presets;
-  const otherPreset = prev ? presets.filter((id) => id !== prev.presetId) : presets;
+    : otherPreset;
   const presetId =
     pick(rng, otherFamily.length ? otherFamily : otherPreset) ?? presets[0];
 

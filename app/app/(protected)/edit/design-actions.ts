@@ -3,7 +3,7 @@
 import { getServiceClient } from "@/lib/supabase/server";
 import { requireMember } from "@/lib/tenant/membership";
 import { resolveTheme } from "@/lib/theme/presets";
-import { designDnaSchema } from "@/lib/theme/dna";
+import { designDnaSchema, carryDnaFields } from "@/lib/theme/dna";
 import { rollDna } from "@/lib/theme/dna-roll";
 import { getPack } from "@/lib/design/packs";
 import type { StoredBlock } from "@/lib/blocks/schema";
@@ -76,7 +76,7 @@ export async function switchDesignPack(
     const sb = getServiceClient();
     const { data: t } = await sb
       .from("tenants")
-      .select("id, brand")
+      .select("id, brand, draft_theme")
       .eq("host", host)
       .maybeSingle();
     if (!t) return { ok: false, error: "tenant not found" };
@@ -114,7 +114,15 @@ export async function switchDesignPack(
       .eq("id", p.id);
     if (pe) return { ok: false, error: pe.message };
 
-    const theme = resolveTheme(pack.themePresetId);
+    // Genome survives a pack switch (codex review): preset updates, the rest
+    // of the DNA (pair/motion/nonce) carries over.
+    const theme: Theme = {
+      ...resolveTheme(pack.themePresetId),
+      ...carryDnaFields(
+        t.draft_theme as { fontPairId?: string; dna?: unknown } | null,
+        pack.themePresetId,
+      ),
+    };
     // Read-modify-write brand so logo/photos/name survive; stamp the pack id so
     // the editor can highlight the active pack on reload.
     const brand = { ...((t.brand ?? {}) as Record<string, unknown>), packId };

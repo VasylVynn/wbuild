@@ -39,11 +39,14 @@ export async function generateAndPublish(
   // advances the nonce, so the drawn font pair (and, with bundles in DNA-2,
   // the whole look) shifts on every run — «same data ⇒ different site».
   const sbPre = getServiceClient();
-  const { data: prevRow } = await sbPre
+  const { data: prevRow, error: prevErr } = await sbPre
     .from("tenants")
     .select("draft_theme")
     .eq("host", host)
     .maybeSingle();
+  // A transient read failure must not masquerade as «new tenant» and reset
+  // the nonce history (codex review) — fail loudly, the caller retries.
+  if (prevErr) throw new Error(`tenant pre-read failed: ${prevErr.message}`);
   const prevDna = designDnaSchema.safeParse(
     (prevRow?.draft_theme as { dna?: unknown } | null)?.dna,
   );

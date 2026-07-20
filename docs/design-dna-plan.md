@@ -72,3 +72,19 @@
 > дизайн-рішення DNA-2: бандли замінюють паки, скіни де-фонтяться до var(--font-*).
 > Дрібне: steps у dna-check клампиться до min=2 (steps:1 повертає 2 роли) — косметика.
 > Смоук-тенант wave-dna-smoke.lvh.me — у чистку разом з попередніми.
+
+> **Нотатка хвилі DNA-1 (adversarial review, виправлено):** codex дав 4 must-fix + 10 should-fix.
+> Виправлено: (1) switchTheme/switchDesignPack/regenerateSite стирали fontPairId+dna з draft_theme —
+> тепер геном переноситься через carryDnaFields (preset оновлюється, пара/motion/нонс-історія живуть);
+> (2) dna-check: apply-мутації замкнені на *.lvh.me (спільна Supabase — NODE_ENV не є authz-межею),
+> steps:1 дозволений (скріншот-сітка покроково), published-запис задокументований як свідомий dev-only
+> виняток; (3) publish.ts падає голосно при помилці pre-read (замість тихого скидання нонса в 0);
+> (4) MotionDriver: cleanup знімає mo-armed (контент не застрягає прихованим), справжній stagger через
+> transitionDelay з драйвера (CSS nth-child-трюк не працював), CSS заскоуплений під [data-motion];
+> (5) forward-compat: невідомий motionId деградує в "none" через zod .catch, межі на nonce/fontPairId,
+> дедуп пулу пресетів, «інша сімʼя» деградує в «інший preset» при невідомій сімʼї попередника.
+> Прийнято свідомо: неатомарний read-before-upsert нонса (прееxisting RMW-патерн repo; наслідок гонки —
+> двічі той самий DNA, останній запис виграє — нешкідливо для one-click UI); порожній allowedPresets →
+> увесь каталог (single-preset вертикалі мають резолвитись); FOUT обраної пари і CSS-пейлоад 12 сімей —
+> прийнятий трейд-оф зі спеки (замір у DNA-2 при бандлах); hydration-флеш при швидкому скролі —
+> заміряти браузерно в DNA-2 разом із visual-regression базлайном.

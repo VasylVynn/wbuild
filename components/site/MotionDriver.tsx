@@ -31,15 +31,32 @@ export function MotionDriver({ motionId }: { motionId: MotionId }) {
       { rootMargin: "0px 0px -8% 0px" },
     );
 
+    const armed: HTMLElement[] = [];
+    let staggerIndex = 0;
     for (const s of sections) {
       // Only sections still below the viewport get hidden — anything already
       // on screen (or above) stays put, so hydration never blanks content.
       if (s.getBoundingClientRect().top > window.innerHeight) {
         s.classList.add("mo-armed");
+        // Real sibling stagger: deterministic per-position delay from the
+        // driver (a CSS-only nth-child trick can't express this — codex review).
+        if (motionId === "stagger") {
+          s.style.transitionDelay = `${Math.min(staggerIndex * 0.1, 0.4)}s`;
+          staggerIndex += 1;
+        }
         io.observe(s);
+        armed.push(s);
       }
     }
-    return () => io.disconnect();
+    return () => {
+      io.disconnect();
+      // Never strand content hidden if the effect tears down mid-scroll
+      // (motion switched to none, layout reuse — codex review).
+      for (const s of armed) {
+        s.classList.remove("mo-armed");
+        s.style.transitionDelay = "";
+      }
+    };
   }, [motionId]);
 
   return null;

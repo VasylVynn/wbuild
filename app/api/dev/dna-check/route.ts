@@ -10,9 +10,12 @@ import type { Theme } from "@/lib/theme/tokens";
  *   POST /api/dev/dna-check { host, steps?, apply? }
  * Rolls `steps` successive DNAs for the host (each chained as `previous`) and
  * verdicts the guarantee: every consecutive roll differs in BOTH palette
- * family and font pair. With apply=true each roll is also written to the
- * tenant's draft AND published theme (test tenants only!) so a screenshot
- * grid can be captured between calls.
+ * family and font pair. With apply=true (LOCKED to *.lvh.me test tenants —
+ * the dev DB is the shared Supabase project) each roll is written to the
+ * tenant's draft AND published theme so a screenshot grid can be captured
+ * between steps:1 calls. The published write is a deliberate DEV-ONLY breach
+ * of the human-only-publish invariant, confined to the test namespace; no
+ * cache revalidation (local dev only).
  */
 export async function POST(req: Request) {
   if (process.env.NODE_ENV === "production") {
@@ -28,8 +31,14 @@ export async function POST(req: Request) {
     apply?: boolean;
   };
   const host = body.host ?? "";
-  const steps = Math.min(Math.max(body.steps ?? 6, 2), 12);
+  const steps = Math.min(Math.max(body.steps ?? 6, 1), 12);
   if (!host) return NextResponse.json({ error: "host required" }, { status: 400 });
+  // The dev DB is the SHARED Supabase project — NODE_ENV is not an authz
+  // boundary (codex review). Mutation is limited to the local test namespace;
+  // pure (apply-less) rolls stay read-only and are fine for any host.
+  if (body.apply && !host.endsWith(".lvh.me")) {
+    return NextResponse.json({ error: "apply allowed only for *.lvh.me test tenants" }, { status: 403 });
+  }
 
   const sb = getServiceClient();
   const { data: t } = await sb
