@@ -55,11 +55,11 @@
       `visit-card` (світла «візитка», CTA-ряд). Один агент = один файл.
 - [ ] **DNA2.2. Реєстрація + NOTICES** — skins у `blockSkins` (інтегратор), UA-лейбли;
       `THIRD_PARTY_NOTICES.md` з першими джерелами структур.
-- [ ] **DNA2.3. Стильові бандли** — `lib/design/bundles.ts`: 4 бандли (сімʼя палітр 2–3 пресети,
+- [x] **DNA2.3. Стильові бандли** — `lib/design/bundles.ts`: 4 бандли (сімʼя палітр 2–3 пресети,
       fontPairId, heroArchetype, НАВМИСНО різні skin-сети решти блоків, photoPoorSet, verticalIds);
       rollDna v2: бандл → preset із сімʼї, пара з бандла; гарантія re-roll = інший бандл
       (⇒ інший hero+skin-set) + інша сімʼя + інша пара; фото-інвентар обирає photoPoorSet.
-- [ ] **DNA2.4. Композиційна вісь** — post-pass в assemble: skins/variants з allowlist бандла
+- [x] **DNA2.4. Композиційна вісь** — post-pass в assemble: skins/variants з allowlist бандла
       (seeded), seeded shuffle середніх секцій classic-шляху; склад секцій лишається data-driven.
 - [ ] **DNA2.5. Вживлення** — generateAndPublish/reroll застосовують бандл (тема+skins);
       бандл заміняє randomPack, коли для вертикалі є бандли; pack-шлях лишається fallback.

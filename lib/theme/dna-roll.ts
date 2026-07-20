@@ -8,6 +8,7 @@ import {
 } from "./dna";
 import { THEME_PRESET_IDS, presetFamily, type ThemePresetId } from "./presets";
 import { FONT_PAIR_IDS } from "./font-pairs";
+import { bundlesFor, type StyleBundle } from "@/lib/design/bundles";
 
 /**
  * Draw a DesignDNA for a tenant (wave DNA-1). Deterministic: the same
@@ -62,4 +63,54 @@ export function rollDna(opts: {
     pick(rng, [...MOTION_IDS.filter((m) => m !== "none"), ...MOTION_IDS]) ?? "fade-up";
 
   return { presetId, fontPairId, motionId, designNonce: opts.nonce };
+}
+
+/**
+ * Bundle-aware roll (wave DNA-2). Bundles carry four DISTINCT font pairs,
+ * palette families and hero archetypes, so «a different bundle than before»
+ * satisfies the whole 3-axis guarantee; presets still vary WITHIN the bundle's
+ * family between same-bundle draws. The photo inventory decides the hero:
+ * photo-poor owners get the bundle's deliberate no-photo archetype, never a
+ * degraded band (research risk #6). Composition axis: seeded picks from the
+ * bundle's blessed skinAlternates.
+ */
+export function rollBundleDna(opts: {
+  tenantId: string;
+  nonce: number;
+  verticalId?: string;
+  photosCount: number;
+  previous?: DesignDNA | null;
+}): { dna: DesignDNA; bundle: StyleBundle } {
+  const rng = mulberry32(dnaSeed(opts.tenantId, opts.nonce));
+  const prev = opts.previous ?? undefined;
+
+  const pool = bundlesFor(opts.verticalId);
+  const others = prev?.bundleId ? pool.filter((b) => b.id !== prev.bundleId) : pool;
+  // Single-bundle verticals degrade gracefully (research addendum §3).
+  const bundle = pick(rng, others.length ? others : pool) ?? pool[0];
+
+  const otherPresets = prev
+    ? bundle.presetIds.filter((id) => id !== prev.presetId)
+    : bundle.presetIds;
+  const presetId = pick(rng, otherPresets.length ? otherPresets : bundle.presetIds) ?? bundle.presetIds[0];
+
+  const skinOverrides: Record<string, string> = {
+    hero: opts.photosCount > 0 ? bundle.heroArchetype : bundle.photoPoorHero,
+  };
+  for (const [type, base] of Object.entries(bundle.skins)) {
+    const alternates = bundle.skinAlternates?.[type as keyof typeof bundle.skinAlternates];
+    skinOverrides[type] = alternates?.length ? (pick(rng, alternates) ?? base ?? "") : (base ?? "");
+  }
+
+  return {
+    dna: {
+      presetId,
+      fontPairId: bundle.fontPairId,
+      motionId: pick(rng, bundle.motionIds) ?? "none",
+      designNonce: opts.nonce,
+      bundleId: bundle.id,
+      skinOverrides,
+    },
+    bundle,
+  };
 }

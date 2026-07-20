@@ -8,7 +8,33 @@ import { getVertical } from "@/lib/verticals/registry";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import type { SiteMedia } from "@/lib/media/media";
 import { designDnaSchema, dnaSeed, mulberry32 } from "@/lib/theme/dna";
-import { rollDna } from "@/lib/theme/dna-roll";
+import { rollBundleDna } from "@/lib/theme/dna-roll";
+import { resolveTheme } from "@/lib/theme/presets";
+import type { StoredBlock } from "@/lib/blocks/schema";
+
+/**
+ * Composition axis (DNA-2): a seeded permutation of the MIDDLE blocks. Hero
+ * stays first, the lead_form/contacts tail stays put, and services blocks
+ * keep their slots (commercial story arc) — the other middles permute among
+ * their own positions, so re-rolls change the page rhythm, not its logic.
+ */
+function shuffleMiddles(blocks: StoredBlock[], rng: () => number): StoredBlock[] {
+  const tail = blocks.findIndex((b) => b.type === "lead_form" || b.type === "contacts");
+  if (tail < 0) return blocks;
+  const slots: number[] = [];
+  for (let i = 1; i < tail; i++) if (blocks[i].type !== "services") slots.push(i);
+  if (slots.length < 2) return blocks;
+  const perm = [...slots];
+  for (let i = perm.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [perm[i], perm[j]] = [perm[j], perm[i]];
+  }
+  const out = [...blocks];
+  slots.forEach((pos, k) => {
+    out[pos] = blocks[perm[k]];
+  });
+  return out;
+}
 
 /**
  * Generate a site from facts for a vertical (Phase 2) and persist it as a
@@ -51,33 +77,58 @@ export async function generateAndPublish(
     (prevRow?.draft_theme as { dna?: unknown } | null)?.dna,
   );
   const previous = prevDna.success ? prevDna.data : null;
-  const dna = rollDna({
+  // Bundle-aware roll (DNA-2): the bundle carries palette family, font pair,
+  // hero archetype and the whole skin-set — «different bundle» = a different
+  // SITE, not a recolor. The photo inventory picks the honest hero.
+  const { dna } = rollBundleDna({
     tenantId: host,
     nonce: previous ? previous.designNonce + 1 : 0,
+    verticalId: vertical.id,
+    photosCount: media?.photos?.length ?? 0,
     previous,
   });
   const rng = mulberry32(dnaSeed(host, dna.designNonce));
 
   const site = await generateSite(facts, vertical.id, media, undefined, templateId, rng);
 
-  // The generation's own palette pick (pack/model — vertical-grounded) wins in
-  // phase 1; DNA records it and contributes the FONT PAIR + motion axes. The
-  // re-roll action and DNA-2 bundles take over the palette axis.
-  const themeWithDna = {
-    ...site.theme,
-    fontPairId: dna.fontPairId,
-    dna: { ...dna, presetId: site.themePresetId ?? dna.presetId },
-  };
+  // Classic (registry) path: the bundle REPLACES the pack's look — its preset
+  // becomes the theme, its skin-set re-skins the blocks, middles get a seeded
+  // permutation (composition axis; services keep their slots — load-bearing).
+  // Template path: the template owns the look; DNA rides along as the pair +
+  // motion record only (bundles reach templates in a later DNA-2 subwave).
+  const isClassic = !site.templateId;
+  if (isClassic) {
+    if (dna.skinOverrides) {
+      site.blocks = site.blocks.map((b) => {
+        const o = dna.skinOverrides?.[b.type];
+        return o === undefined ? b : { ...b, skin: o || undefined };
+      });
+    }
+    site.blocks = shuffleMiddles(site.blocks, rng);
+  }
+  const themeWithDna = isClassic
+    ? { ...resolveTheme(dna.presetId), fontPairId: dna.fontPairId, dna }
+    : {
+        ...site.theme,
+        fontPairId: dna.fontPairId,
+        dna: { ...dna, presetId: site.themePresetId ?? dna.presetId },
+      };
 
   // No owner photos → generate ONE atmospheric hero background (§4.8). Runs
   // AFTER site generation so the prompt gets the model's business-specific
   // subject AND the chosen theme palette (a mismatched image is worse than
   // none). Fail-open: null on any error, and a site with no image is fine.
-  if (!media?.photos?.length && !media?.generatedHero) {
+  // Skip the paid atmospheric image when the bundle chose a hero that ignores
+  // imagery BY DESIGN (editorial) — a generated file nobody renders is waste.
+  const heroIgnoresImage = isClassic && dna.skinOverrides?.hero === "editorial";
+  if (!media?.photos?.length && !media?.generatedHero && !heroIgnoresImage) {
     const gen = await generateHeroImage({
       verticalId: vertical.id,
       subject: site.imageSubject,
-      palette: { primary: site.theme.colors.primary, background: site.theme.colors.background },
+      palette: {
+        primary: themeWithDna.colors.primary,
+        background: themeWithDna.colors.background,
+      },
     });
     if (gen) {
       media = { ...(media ?? { photos: [] }), generatedHero: gen };
