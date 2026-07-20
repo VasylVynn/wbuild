@@ -45,13 +45,35 @@
 
 ## Хвиля DNA-2 — Hero-архетипи + перша двадцятка + бандли (10–14 днів)
 
-- [ ] 5 hero-архетипів (≥4 світлі) + обовʼязкові no-photo fallback-и; далі хвилі по 4–5 секцій
-      (партиціонування: один агент = один block type; skins.ts/packs.ts — один інтегратор).
-- [ ] `THIRD_PARTY_NOTICES.md` з першою секцією; блок `team` окремо (новий block type).
-- [ ] 3–4 стильові бандли з НАВМИСНО різними hero/skin-сетами; композиційна вісь
-      (variants з allowlist бандла + seeded shuffle середини).
-- [ ] Visual-regression baseline (Playwright скріншоти skin×breakpoint + diff, окремий бюджет).
-- [ ] Повний 3-осьовий distinctness-гейт наприкінці хвилі 1 (N = 2×бандли, мін. 6).
+### Підхвиля DNA-2.А (поточна): архетипи + бандли + композиційна вісь
+
+- [ ] **DNA2.1. 5 hero-архетипів** — нові skins у `components/blocks/Hero.tsx`, re-authoring
+      структур з MIT-джерел (HyperUI/Flowbite/TailGrids), лише токени var(--color-*/font-*/radius),
+      ≥4 світлі, КОЖЕН з чесним no-photo станом (decor-фон, не primary band):
+      `photo-scrim` (full-bleed фото+скрім), `editorial` (типографічний світлий, photo-poor герой),
+      `split-light` (асиметричний спліт на світлому), `card-overlay` (картка поверх фото),
+      `visit-card` (світла «візитка», CTA-ряд). Один агент = один файл.
+- [ ] **DNA2.2. Реєстрація + NOTICES** — skins у `blockSkins` (інтегратор), UA-лейбли;
+      `THIRD_PARTY_NOTICES.md` з першими джерелами структур.
+- [ ] **DNA2.3. Стильові бандли** — `lib/design/bundles.ts`: 4 бандли (сімʼя палітр 2–3 пресети,
+      fontPairId, heroArchetype, НАВМИСНО різні skin-сети решти блоків, photoPoorSet, verticalIds);
+      rollDna v2: бандл → preset із сімʼї, пара з бандла; гарантія re-roll = інший бандл
+      (⇒ інший hero+skin-set) + інша сімʼя + інша пара; фото-інвентар обирає photoPoorSet.
+- [ ] **DNA2.4. Композиційна вісь** — post-pass в assemble: skins/variants з allowlist бандла
+      (seeded), seeded shuffle середніх секцій classic-шляху; склад секцій лишається data-driven.
+- [ ] **DNA2.5. Вживлення** — generateAndPublish/reroll застосовують бандл (тема+skins);
+      бандл заміняє randomPack, коли для вертикалі є бандли; pack-шлях лишається fallback.
+- [ ] **DNA2.6. Гейт 3-осьовий** — dna-check v2 (бандл+сімʼя+пара), N=8 (2×бандли),
+      скріншот-сітка, критерій «жодна пара не читається як той самий сайт».
+- [ ] **DNA2.7. Верифікація підхвилі** — tsc/build/живі скріншоти архетипів (з фото і без),
+      adversarial review, нотатки.
+
+### Наступні підхвилі DNA-2 (після 2.А)
+
+- [ ] Хвилі по 4–5 секцій із двадцятки (партиціонування: один агент = один block type;
+      skins.ts — один інтегратор); блок `team` окремо (новий block type, повна процедура).
+- [ ] Visual-regression baseline (Playwright skin×breakpoint + diff; сюди ж браузерна
+      перевірка hydration-флешу MotionDriver — борг з рев'ю DNA-1).
 
 ## Хвиля DNA-3 — Смакові множники (2–3 дні)
 
