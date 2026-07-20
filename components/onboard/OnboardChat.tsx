@@ -26,6 +26,7 @@ import {
   loadConversation,
 } from "@/app/app/new/persist-actions";
 import type { BusinessFacts } from "@/lib/verticals/schema";
+import { normalizeIgHandle } from "@/lib/blocks/contact-links";
 import { MAX_PHOTOS, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
 import { processImage } from "@/lib/media/client-image";
 import { Button, Chip, Card } from "@/components/ui";
@@ -43,6 +44,25 @@ const GREETING: ChatMsg = {
   content:
     "Вітаю! 👋 Я допоможу створити сайт для вашого бізнесу. Розкажіть трохи — що це за бізнес, у якому місті, і який телефон для звʼязку?",
 };
+
+// Instagram-first greeting (wave E) — shown only when the Apify import is
+// configured server-side (igImportEnabled prop), so the promise is never empty.
+const IG_GREETING: ChatMsg = {
+  role: "assistant",
+  content:
+    "Вітаю! 👋 Я допоможу створити сайт для вашого бізнесу. Розкажіть трохи — що це за бізнес і в якому місті? А якщо у вас є Instagram-сторінка бізнесу — просто надішліть посилання, і я витягну все звідти сам 😉",
+};
+
+// Conservative Instagram detection in a sent message: a pasted profile URL
+// anywhere in the text, or a message that IS a bare "@handle". A plain word
+// («квіти», «kvity») is NOT treated as a handle — the agent saves those to
+// factsPatch.instagram instead, which surfaces the import button.
+function detectIgHandle(text: string): string | null {
+  if (/instagram\.com\//i.test(text)) return normalizeIgHandle(text);
+  const t = text.trim();
+  if (/^@[A-Za-z0-9._]{1,30}$/.test(t)) return normalizeIgHandle(t);
+  return null;
+}
 
 // Progress chips mirror the server's computeProgress (lib/ai/onboard.ts): a pure
 // function of `facts`, so we derive them client-side too — this keeps the header
@@ -266,9 +286,9 @@ const TelegramMark = ({ size = 34 }: { size?: number }) => (
 // Main component
 // ---------------------------------------------------------------------------
 
-export function OnboardChat() {
+export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boolean }) {
   // --- Chat phase state ---
-  const [messages, setMessages] = useState<ChatMsg[]>([GREETING]);
+  const [messages, setMessages] = useState<ChatMsg[]>([igImportEnabled ? IG_GREETING : GREETING]);
   const [facts, setFacts] = useState<Partial<BusinessFacts>>({});
   const [ready, setReady] = useState(false);
   // A6: the user explicitly confirmed the chat summary — unlocks the create CTA.
@@ -280,7 +300,9 @@ export function OnboardChat() {
   const [typing, setTyping] = useState(false);
   // Extended-thinking phase of the streaming turn — «Думаю…» label.
   const [thinking, setThinking] = useState(false);
-  const [quickReplies, setQuickReplies] = useState<string[]>([]);
+  const [quickReplies, setQuickReplies] = useState<string[]>(
+    igImportEnabled ? ["У мене є Instagram"] : [],
+  );
   // «✓ Записав: …» під останньою відповіддю — реальний diff прогресу за хід.
   const [savedNote, setSavedNote] = useState<string | null>(null);
 
@@ -306,6 +328,15 @@ export function OnboardChat() {
   // confirmation (one card at a time) before becoming testimonial facts
   // (invariant №5 — no invented facts).
   const [pendingReviews, setPendingReviews] = useState<{ quote: string; author: string }[]>([]);
+
+  // --- Instagram import (wave E) — blocking staged spinner card. ---
+  const [importCard, setImportCard] = useState<
+    { stage: "profile" | "posts" | "photos"; done: number; total: number } | null
+  >(null);
+  // One import per session: after it ran (or after reload once photos exist)
+  // the mid-chat button stays hidden. A ref is enough — every import path ends
+  // in setState calls that re-render.
+  const igImportedRef = useRef(false);
 
   // --- Done / error state ---
   const [siteUrl, setSiteUrl] = useState("");
@@ -455,6 +486,186 @@ export function OnboardChat() {
     return final;
   };
 
+  // -------------------------------------------------------------------------
+  // Instagram import (wave E): blocking pipeline over /api/ig-import (SSE).
+  // Runs behind `loading`; the result lands as ONE aggregated assistant
+  // message + facts/media merges, persisted in ONE awaited saveTurn (same
+  // lost-update reasoning as the photo-batch flow).
+  // -------------------------------------------------------------------------
+
+  type IgImportFinal = {
+    handle: string;
+    bio?: string;
+    items: BatchItem[];
+    extracted?: Partial<Pick<BusinessFacts, "businessName" | "city" | "about" | "services">>;
+  };
+
+  const runIgImport = async (
+    handle: string,
+    uiBase: ChatMsg[],
+    progressBefore: Set<string>,
+  ) => {
+    setImportCard({ stage: "profile", done: 0, total: 0 });
+    // Fail-open exit: a soft assistant bubble, conversation continues classic.
+    const softFail = async (text: string) => {
+      const next: ChatMsg[] = [...uiBase, { role: "assistant", content: text }];
+      setMessages(next);
+      if (convIdRef.current) {
+        await saveTurn(
+          convIdRef.current, next, facts, verticalId, ready, confirmed, template?.id, media,
+        ).catch(() => {});
+      }
+    };
+    try {
+      const res = await fetch("/api/ig-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: convIdRef.current, handle }),
+      });
+      const ct = res.headers.get("content-type") ?? "";
+      if (ct.includes("application/json")) {
+        const j = (await res.json().catch(() => null)) as { message?: string } | null;
+        await softFail(
+          j?.message ?? "Імпорт з Instagram зараз недоступний — розкажіть про бізнес самі 🙂",
+        );
+        return;
+      }
+      if (!res.ok || !res.body) throw new Error(`ig import failed: ${res.status}`);
+
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      let final: IgImportFinal | null = null;
+      let softError: string | null = null;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const chunks = buf.split("\n\n");
+        buf = chunks.pop() ?? "";
+        for (const c of chunks) {
+          const line = c.trim();
+          if (!line.startsWith("data:")) continue;
+          let obj: { t?: string; stage?: string; done?: number; total?: number; message?: string } & Partial<IgImportFinal>;
+          try {
+            obj = JSON.parse(line.slice(5));
+          } catch {
+            continue;
+          }
+          if (obj.t === "stage") {
+            setImportCard({ stage: obj.stage === "posts" ? "posts" : "profile", done: 0, total: 0 });
+          } else if (obj.t === "photos") {
+            setImportCard({ stage: "photos", done: obj.done ?? 0, total: obj.total ?? 0 });
+          } else if (obj.t === "final") {
+            final = obj as IgImportFinal;
+          } else if (obj.t === "error") {
+            softError = obj.message ?? null;
+          }
+        }
+      }
+      if (softError) {
+        await softFail(softError);
+        return;
+      }
+      if (!final) throw new Error("ig import ended without final event");
+
+      igImportedRef.current = true;
+
+      // Don't let an imported logo (usually the avatar) stomp one the owner
+      // already uploaded — drop logo-classified items in that case.
+      const items = media.logoUrl
+        ? final.items.filter(
+            (it) => it.failed || !(it.analysis.ok && it.analysis.analysis.kind === "logo"),
+          )
+        : final.items;
+      const routed = routeBatch(media, items);
+      const mediaNow = applyMediaLocal(routed.media);
+      if (routed.reviews.length) setPendingReviews((prev) => [...prev, ...routed.reviews]);
+
+      // User-typed facts always win over scraped candidates; the handle itself
+      // comes from the user's own link, so it lands unconditionally.
+      const ig = final.extracted ?? {};
+      const newFacts: Partial<BusinessFacts> = { ...ig, ...facts, instagram: final.handle };
+      setFacts(newFacts);
+
+      const factLines: string[] = [];
+      if (ig.businessName && !facts.businessName) factLines.push(`**Назва:** ${ig.businessName}`);
+      if (ig.city && !facts.city) factLines.push(`**Місто:** ${ig.city}`);
+      if (ig.about && !facts.about) factLines.push(`**Про вас:** ${ig.about}`);
+      if (ig.services?.length && !facts.services?.length) {
+        factLines.push(
+          `**Послуги:** ${ig.services.map((s) => (s.price ? `${s.name} — ${s.price}` : s.name)).join(", ")}`,
+        );
+      }
+      const gotAnyPhoto = items.some((it) => !it.failed);
+      const summary =
+        factLines.length || gotAnyPhoto
+          ? [
+              `Зазирнув у ваш Instagram (@${final.handle}) — ось що я дізнався:`,
+              ...factLines,
+              ...(gotAnyPhoto ? [routed.summary] : []),
+              "Все вірно? Далі спитаю лише те, чого бракує — виправити щось можна просто повідомленням.",
+            ].join("\n")
+          : `Профіль @${final.handle} виглядає порожнім або закритим — не зміг нічого витягнути. Нічого страшного: розкажіть про бізнес самі 🙂`;
+
+      const next: ChatMsg[] = [...uiBase, { role: "assistant", content: summary }];
+      setMessages(next);
+      if (factLines.length || gotAnyPhoto) setQuickReplies(["Все вірно", "Хочу виправити"]);
+
+      const newly = deriveProgress(newFacts)
+        .filter((p) => p.done && !progressBefore.has(p.label))
+        .map((p) => p.label);
+      setSavedNote(newly.length ? newly.join(", ") : null);
+
+      if (convIdRef.current) {
+        await saveTurn(
+          convIdRef.current,
+          next,
+          newFacts,
+          verticalId,
+          ready,
+          confirmed,
+          template?.id,
+          mediaNow,
+        ).catch(() => {});
+      }
+    } catch {
+      await softFail("Щось пішло не так з імпортом. Нічого страшного: розкажіть про бізнес самі 🙂");
+    } finally {
+      setImportCard(null);
+    }
+  };
+
+  // Mid-chat import button: the handle arrived as TEXT (the agent saved it to
+  // facts.instagram) — the deterministic pipeline still wants an explicit tap.
+  const handleIgImportClick = async () => {
+    const handle = normalizeIgHandle(facts.instagram);
+    if (!handle || loading) return;
+    setLoading(true);
+    setQuickReplies([]);
+    setSavedNote(null);
+    try {
+      if (convIdRef.current === null) {
+        const started = await startConversation();
+        if (started) {
+          convIdRef.current = started.conversationId;
+          localStorage.setItem("vitryna_conv_id", started.conversationId);
+        }
+      }
+      if (!convIdRef.current) {
+        setUploadError("Не вдалося запустити імпорт — спробуйте трохи пізніше.");
+        return;
+      }
+      const progressBefore = new Set(
+        deriveProgress(facts).filter((p) => p.done).map((p) => p.label),
+      );
+      await runIgImport(handle, messages, progressBefore);
+    } finally {
+      setLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  };
+
   // Core send — used by the input row AND by quick-reply chips. Carries the
   // composer's pending photo attachments: the batch uploads/analyzes in
   // parallel, routes into ONE aggregated summary, and only then (if there was
@@ -504,6 +715,18 @@ export function OnboardChat() {
     setPending([]);
 
     try {
+      // Instagram-first (wave E): a pasted profile link runs the IMPORT instead
+      // of an agent turn — the link message stays in history and the aggregated
+      // summary answers it. Photo batches keep the normal path.
+      const igHandle =
+        igImportEnabled && !igImportedRef.current && batch.length === 0 && convIdRef.current
+          ? detectIgHandle(text)
+          : null;
+      if (igHandle) {
+        await runIgImport(igHandle, uiMessages, progressBefore);
+        return;
+      }
+
       if (batch.length > 0) {
         setBatchCard({ thumbs: batch.map((b) => b.thumbUrl), done: 0, total: batch.length });
         const settled = await Promise.all(
@@ -948,6 +1171,25 @@ export function OnboardChat() {
               </div>
             )}
 
+            {importCard && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-3 rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface px-4 py-3">
+                  <span
+                    className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent"
+                    aria-hidden
+                  />
+                  <span className="text-[14px] font-semibold text-ink-muted">
+                    {importCard.stage === "profile" && "Відкриваю ваш Instagram…"}
+                    {importCard.stage === "posts" && "Читаю пости й фото…"}
+                    {importCard.stage === "photos" &&
+                      (importCard.total > 0
+                        ? `Розкладаю фото… ${Math.min(importCard.done + 1, importCard.total)} з ${importCard.total}`
+                        : "Розкладаю фото…")}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {typing && <AgentTyping thinking={thinking} />}
 
             <div ref={messagesEndRef} />
@@ -966,6 +1208,19 @@ export function OnboardChat() {
               Додати фото й створити сайт →
             </button>
           )}
+
+          {igImportEnabled &&
+            !igImportedRef.current &&
+            !loading &&
+            media.photos.length === 0 &&
+            normalizeIgHandle(facts.instagram) && (
+              <button
+                onClick={() => void handleIgImportClick()}
+                className="mb-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[16px] border-[1.5px] border-brand bg-brand-soft px-5 text-[15px] font-bold text-brand transition-colors hover:bg-brand hover:text-white"
+              >
+                📸 Підтягнути фото й опис з Instagram
+              </button>
+            )}
 
           {quickReplies.length > 0 && !loading && (
             <div className="mb-3 flex flex-wrap gap-2">
