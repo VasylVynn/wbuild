@@ -7,7 +7,7 @@ import { resolveTheme, presetFamily } from "@/lib/theme/presets";
 import type { Theme } from "@/lib/theme/tokens";
 
 /**
- * DEV-ONLY: the phase-1 distinctness gate (design-DNA wave 1, plan DNA1.7).
+ * DEV-ONLY: the 3-axis distinctness gate (bundle+family+pair, plan DNA2.6).
  *   POST /api/dev/dna-check { host, steps?, apply? }
  * Rolls `steps` successive DNAs for the host (each chained as `previous`) and
  * verdicts the guarantee: every consecutive roll differs in BOTH palette
@@ -121,15 +121,16 @@ export async function POST(req: Request) {
             }),
           };
         };
-        await sb.from("pages").update({
+        const { error: pgErr } = await sb.from("pages").update({
           draft_content: reskin(pg.draft_content),
           published_content: reskin(pg.published_content),
         }).eq("id", pg.id);
+        if (pgErr) return NextResponse.json({ error: pgErr.message }, { status: 500 });
       }
       // Direct DB write bypasses every action-level purge — without this the
       // public page keeps serving the cached previous look (found live: three
       // "different" grid states rendered one stale page).
-      revalidateTenant(host);
+      await revalidateTenant(host);
     }
     previous = dna;
   }

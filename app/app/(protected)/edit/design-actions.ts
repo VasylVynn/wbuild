@@ -20,10 +20,11 @@ import type { PageSeo } from "@/lib/tenant/types";
  * that (see saveDraftBlocks §5.5).
  */
 /**
- * Design re-roll (wave DNA-1): bump designNonce → draw a new DNA with the
- * full phase-1 distinctness guarantee (different palette FAMILY + different
- * font pair vs the current one) and rewrite the DRAFT theme from it. Content
- * untouched; draft-only — no cache purge (invariant №6, publish is human).
+ * Design re-roll (bundle-aware since DNA-2): bump designNonce → draw a new
+ * bundle DNA (different bundle ⇒ different hero archetype, skin-set, font
+ * pair, palette family vs the PREVIOUS roll — consecutive guarantee by spec)
+ * and rewrite the DRAFT theme + re-skin/re-rhythm the DRAFT blocks. Props/
+ * copy untouched; draft-only — no cache purge (invariant №6).
  */
 export async function rerollDesignAction(
   host: string,
@@ -63,13 +64,16 @@ export async function rerollDesignAction(
     };
 
     // Re-skin + re-rhythm the DRAFT page from the new bundle (draft-only).
+    // A missing home page is an ERROR, not a silent theme-only success — DNA
+    // claiming one bundle while blocks keep old skins is a lie (codex review).
     const { data: p } = await sb
       .from("pages")
       .select("id, draft_content")
       .eq("tenant_id", t.id)
       .eq("slug", "")
       .maybeSingle();
-    if (p) {
+    if (!p) return { ok: false, error: "page not found" };
+    {
       const draft = (p.draft_content ?? {}) as {
         blocks?: StoredBlock[];
         pocket?: StoredBlock[];

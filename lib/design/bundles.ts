@@ -115,7 +115,10 @@ export function bundlesFor(verticalId?: string): StyleBundle[] {
   const matched = styleBundles.filter(
     (b) => !b.verticalIds || (verticalId != null && b.verticalIds.includes(verticalId)),
   );
-  return matched.length > 0 ? matched : styleBundles;
+  // A pool of ONE cannot honour the re-roll distinctness guarantee (codex
+  // review: a new vertical matches only the unrestricted bundle) — below two
+  // matches, distinctness beats affinity and the full catalog applies.
+  return matched.length >= 2 ? matched : styleBundles;
 }
 
 export function getBundle(id: string | undefined | null): StyleBundle | undefined {

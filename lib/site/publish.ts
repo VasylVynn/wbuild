@@ -19,10 +19,12 @@ import type { StoredBlock } from "@/lib/blocks/schema";
  * their own positions, so re-rolls change the page rhythm, not its logic.
  */
 export function shuffleMiddles(blocks: StoredBlock[], rng: () => number): StoredBlock[] {
-  const tail = blocks.findIndex((b) => b.type === "lead_form" || b.type === "contacts");
-  if (tail < 0) return blocks;
+  // Pin by TYPE, not by position (codex review): hero/funnel/services stay
+  // wherever they are — robust to owner-reordered drafts and malformed
+  // compositions; everything else permutes among its own slots.
+  const PINNED = new Set(["hero", "lead_form", "contacts", "services"]);
   const slots: number[] = [];
-  for (let i = 1; i < tail; i++) if (blocks[i].type !== "services") slots.push(i);
+  for (let i = 0; i < blocks.length; i++) if (!PINNED.has(blocks[i].type)) slots.push(i);
   if (slots.length < 2) return blocks;
   const perm = [...slots];
   for (let i = perm.length - 1; i > 0; i--) {
@@ -217,7 +219,7 @@ export async function generateAndPublish(
 
   return {
     host,
-    themePresetId: site.themePresetId,
+    themePresetId: isClassic ? dna.presetId : site.themePresetId,
     verticalId: vertical.id,
     composition: site.blocks.map((b) => b.type),
   };

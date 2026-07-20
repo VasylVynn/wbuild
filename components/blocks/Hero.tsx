@@ -1,4 +1,5 @@
 import type { BlockProps } from "@/lib/blocks/schema";
+/* eslint-disable @next/next/no-img-element -- tenant photos are plain <img> by design (§4.8 storage URLs, no next/image loader) */
 
 /**
  * Hero — SKINS (layout variants of the SAME content, brief §3):
@@ -28,7 +29,8 @@ import type { BlockProps } from "@/lib/blocks/schema";
  *  - "visit-card"   light centred "business card": muted-bordered card with
  *                   corner accents; photo (if any) is a small media strip inside.
  * Only layout changes between skins — content/props are identical, so switching
- * is instant and safe. All skins use only tenant CSS vars, never platform
+ * is instant and safe. Skins use tenant CSS vars for THEMED surfaces; white
+ * text/scrims over REAL PHOTOS are content-driven constants, never platform
  * classes. Every skin supports an optional second (outline) CTA.
  */
 
@@ -564,7 +566,7 @@ function HeroPhotoScrim({ data }: { data: HeroData }) {
         src={imageUrl}
         alt={data.imageAlt ?? ""}
         aria-hidden
-        loading="lazy"
+        loading="eager"
         className="absolute inset-0 h-full w-full object-cover"
       />
       {/* Bottom-up scrim keeps the bottom-left copy legible over any photo. */}
@@ -653,7 +655,6 @@ function HeroEditorial({ data }: { data: HeroData }) {
         </h1>
         {/* Thin accent rule under the headline. */}
         <div
-          aria-hidden
           className="mt-8 h-px w-24"
           style={{ backgroundColor: "color-mix(in srgb, var(--color-primary) 55%, transparent)" }}
         />
@@ -702,7 +703,7 @@ function HeroSplitLight({ data }: { data: HeroData }) {
             <img
               src={imageUrl}
               alt={data.imageAlt ?? ""}
-              loading="lazy"
+              loading="eager"
               className="w-full rounded-[var(--radius)] object-cover"
               style={{ maxHeight: "460px" }}
             />
@@ -747,8 +748,7 @@ function HeroCardOverlay({ data }: { data: HeroData }) {
           <img
             src={imageUrl}
             alt={data.imageAlt ?? ""}
-            aria-hidden
-            loading="lazy"
+            loading="eager"
             className="absolute inset-0 h-full w-full object-cover"
           />
           {/* Light scrim only — the card carries legibility, not the photo. */}
