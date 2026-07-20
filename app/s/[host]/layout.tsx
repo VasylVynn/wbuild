@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getTenantByHost, getNav } from "@/lib/tenant/data";
 import { themeToCssVars } from "@/lib/theme/tokens";
 import { TENANT_FONT_CLASSES } from "@/lib/theme/fonts";
+import { MotionDriver } from "@/components/site/MotionDriver";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { Beacon } from "@/components/site/Beacon";
@@ -51,10 +52,12 @@ export default async function TenantLayout({
         fontFamily: "var(--font-body)",
       }}
       className={`flex min-h-screen flex-col ${TENANT_FONT_CLASSES}`}
+      data-motion={tenant.theme.dna?.motionId ?? "none"}
     >
       <SiteHeader tenant={tenant} nav={nav} />
       <main className="flex-1">{children}</main>
       <SiteFooter tenant={tenant} />
+      <MotionDriver motionId={tenant.theme.dna?.motionId ?? "none"} />
       <Beacon />
     </div>
   );

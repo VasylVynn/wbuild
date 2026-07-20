@@ -32,7 +32,7 @@
       hero-архетипи додадуться в DNA-2), draft-only (інваріант №6). UI-кнопка в редакторі —
       ЯКЩО EditorShell вільний від чужих правок; інакше — самодостатня панель + гачок,
       а хвиля тестує через dev-скрипт.
-- [ ] **DNA1.6. Motion-пресети** — 3 CSS-first пресети (none / fade-up / stagger),
+- [x] **DNA1.6. Motion-пресети** — 3 CSS-first пресети (none / fade-up / stagger),
       IntersectionObserver + CSS transitions, `prefers-reduced-motion`, видимість без JS
       (уроки H5); data-атрибут на shell, привʼязка до DNA.motionId.
 - [ ] **DNA1.7. Distinctness-скрипт (гейт Фази 1)** — dev-скрипт: N=6 генерацій однієї
