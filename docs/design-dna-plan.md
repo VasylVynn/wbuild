@@ -194,3 +194,21 @@
 > СПРАВЖНІ кандидати на видалення старого (свідомим рішенням, не побіжно): 6 legacy
 > hero-скінів «primary band» (default/split/minimal/photo/gradient/mesh) + консолідація
 > packs→bundles — заплановано в DNA-2c/3 після де-фонтінгу ferri.
+
+## Хвиля DNA-2c — жонглювання секціями шаблонів + палітри + legacy clean (гілка wave-DNA2c)
+
+- [ ] **C1. Variant-жонглювання шаблонів** — publish, template-гілка: сідований вибір
+      layout-варіанта кожної секції з варіантів шаблону (повтори секції не отримують
+      однаковий варіант — правило C1 хвилі C), сідована перестановка середніх блоків
+      (shuffleMiddles уже пінить по типу), re-roll теж перекидає варіанти.
+- [ ] **C2. Data-theme вісь** — `TemplateBrand.dnaTheme`; шаблони з ≥2 темами (salon
+      light/dark, ferri dark/light) отримують сідований вибір стартової теми з DNA;
+      тумблер відвідувача далі працює.
+- [ ] **C3. Ferri де-фонтінг** (агент A) — центральна індирекція замість прямих
+      `var(--font-cormorant)` у секціях + body-ланцюг; після цього повернути
+      `dnaFontPairs` ferri в registry (інтегратор).
+- [ ] **C4. Legacy hero clean** (агент B) — видалити 6 band-скінів
+      (default/split/minimal/photo/gradient/mesh) з Hero.tsx; дефолт-диспетч →
+      `editorial`; інтегратор: skins.ts (лише 5 архетипів), packs.ts hero→архетипи.
+- [ ] **C5. Верифікація** — tsc/build; жива генерація шаблонного сайта ×2: різні
+      варіанти секцій/порядок/тема/пара; adversarial review; нотатки.
