@@ -275,7 +275,7 @@
 
 ## Хвиля DNA-3 — Смакові множники (гілка wave-DNA3)
 
-- [ ] **D3.1. AA-guard + пресети 15→25+** — `lib/theme/contrast.ts` (WCAG relative
+- [x] **D3.1. AA-guard + пресети 15→25+** — `lib/theme/contrast.ts` (WCAG relative
       luminance/ratio); ~10-12 нових ручних пресетів з сімʼями (усі пари фон/текст
       проходять AA 4.5:1 — перевіряється скриптом, не оком); PRESET_FAMILIES доповнено.
 - [ ] **D3.2. Decor-токени** — 5-6 CSS-only прийомів (mesh, dot-grid, діагональні

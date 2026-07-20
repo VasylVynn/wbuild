@@ -43,7 +43,7 @@ export const styleBundles: StyleBundle[] = [
   {
     id: "warm-editorial",
     label: "Тепла редакційна",
-    presetIds: ["rose-classic", "peach-soft", "warm-bakery"],
+    presetIds: ["rose-classic", "peach-soft", "warm-bakery", "cherry-blush", "honey-mustard"],
     fontPairId: "lora-source",
     heroArchetype: "split-light",
     photoPoorHero: "editorial",
@@ -62,7 +62,7 @@ export const styleBundles: StyleBundle[] = [
   {
     id: "light-visit",
     label: "Світла візитівка",
-    presetIds: ["sage-minimal", "organic-emerald", "market-green"],
+    presetIds: ["sage-minimal", "organic-emerald", "market-green", "deep-forest", "terracotta-clay"],
     fontPairId: "manrope-inter",
     heroArchetype: "visit-card",
     photoPoorHero: "visit-card",
@@ -80,7 +80,7 @@ export const styleBundles: StyleBundle[] = [
   {
     id: "photo-first",
     label: "Фото на повний екран",
-    presetIds: ["studio-violet", "bold-slate"],
+    presetIds: ["studio-violet", "bold-slate", "plum-pop", "petrol-pop"],
     fontPairId: "unbounded-inter",
     heroArchetype: "photo-scrim",
     photoPoorHero: "editorial",
@@ -99,7 +99,7 @@ export const styleBundles: StyleBundle[] = [
   {
     id: "classic-trust",
     label: "Класична довіра",
-    presetIds: ["navy-trust", "slate-professional", "clinic-blue"],
+    presetIds: ["navy-trust", "slate-professional", "clinic-blue", "denim-craft", "lavender-provence"],
     fontPairId: "literata-inter",
     heroArchetype: "card-overlay",
     photoPoorHero: "visit-card",
