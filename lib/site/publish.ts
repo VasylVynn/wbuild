@@ -109,10 +109,39 @@ export async function generateAndPublish(
     }
     site.blocks = shuffleMiddles(site.blocks, rng);
   }
+  // Template sites (DNA-2c): the composition axis reaches templates too —
+  // every section with layout variants gets a SEEDED variant (repeats never
+  // share one, wave-C rule), and the non-pinned middles get the same seeded
+  // permutation classic sites have. The model's «best» variant converges to a
+  // constant for the same data — the seed is what makes re-generation differ.
+  const tpl = getTemplate(site.templateId);
+  if (!isClassic && tpl) {
+    const usedVariants = new Map<string, Set<string>>();
+    site.blocks = site.blocks.map((b) => {
+      const sec = b.section;
+      const variants = sec ? Object.keys(tpl.sections[sec]?.variants ?? {}) : [];
+      if (!sec || variants.length === 0) return b;
+      const used = usedVariants.get(sec) ?? new Set<string>();
+      usedVariants.set(sec, used);
+      const options = ["", ...variants].filter((v) => !used.has(v));
+      const v = options.length ? options[Math.floor(rng() * options.length)] : (b.variant ?? "");
+      used.add(v);
+      return { ...b, variant: v || undefined };
+    });
+    site.blocks = shuffleMiddles(site.blocks, rng);
+  }
+  // DNA-2c: templates with >1 data-theme start on a seeded one (visitor
+  // toggle still wins later); ≠ previous when the pool allows.
+  const tplThemes = tpl?.themes ?? [];
+  const themePool = previous?.templateTheme
+    ? tplThemes.filter((th) => th !== previous.templateTheme)
+    : tplThemes;
+  const templateTheme =
+    tplThemes.length > 1 ? (pick(rng, themePool.length ? themePool : tplThemes) ?? tplThemes[0]) : undefined;
   // Template sites (DNA-2b): the pair comes from the TEMPLATE's identity
   // allowlist, not the bundle — seeded, different from the previous roll.
   // A template without an allowlist gets no override (renders as authored).
-  const tplPairs = getTemplate(site.templateId)?.dnaFontPairs ?? [];
+  const tplPairs = tpl?.dnaFontPairs ?? [];
   // Repeat-avoidance falls back to the top-level fontPairId when stored DNA
   // didn't parse (partially migrated themes — review).
   const prevPairId =
@@ -133,6 +162,7 @@ export async function generateAndPublish(
           // "" = honestly no pair (template without an allowlist) — never the
           // bundle's pair that this render ignores (review).
           fontPairId: tplPair ?? "",
+          ...(templateTheme && { templateTheme }),
         },
       };
 

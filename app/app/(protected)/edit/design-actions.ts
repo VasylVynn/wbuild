@@ -50,13 +50,21 @@ export async function rerollDesignAction(
     // Template sites (DNA-2b): pair-only re-roll from the template's identity
     // allowlist — theme colors/blocks untouched (the template owns them).
     if (brand.templateId) {
-      const tplPairs = getTemplate(brand.templateId)?.dnaFontPairs ?? [];
-      if (!tplPairs.length) return { ok: false, error: "цей шаблон ще без dna-пар" };
+      const tpl = getTemplate(brand.templateId);
+      const tplPairs = tpl?.dnaFontPairs ?? [];
+      if (!tpl || !tplPairs.length) return { ok: false, error: "цей шаблон ще без dna-пар" };
       const nonce = previous ? previous.designNonce + 1 : 1;
       const rng = mulberry32(dnaSeed(host, nonce));
       const prevPairId = previous?.fontPairId ?? prevTheme.fontPairId;
       const pool = prevPairId ? tplPairs.filter((id) => id !== prevPairId) : tplPairs;
       const fontPairId = pick(rng, pool.length ? pool : tplPairs) ?? tplPairs[0];
+      // DNA-2c: data-theme joins the roll (≠ previous when possible)…
+      const tplThemes = tpl.themes;
+      const themePool = previous?.templateTheme
+        ? tplThemes.filter((th) => th !== previous.templateTheme)
+        : tplThemes;
+      const templateTheme =
+        tplThemes.length > 1 ? (pick(rng, themePool.length ? themePool : tplThemes) ?? tplThemes[0]) : undefined;
       const theme = {
         ...prevTheme,
         fontPairId,
@@ -66,8 +74,42 @@ export async function rerollDesignAction(
           fontPairId,
           motionId: previous?.motionId ?? "none",
           designNonce: nonce,
+          ...(templateTheme && { templateTheme }),
         },
       };
+      // …and so does the composition axis: seeded section variants (repeats
+      // never share one) + the same middle permutation classic sites get.
+      const { data: pg } = await sb
+        .from("pages")
+        .select("id, draft_content")
+        .eq("tenant_id", t.id)
+        .eq("slug", "")
+        .maybeSingle();
+      if (!pg) return { ok: false, error: "page not found" };
+      const draft = (pg.draft_content ?? {}) as {
+        blocks?: StoredBlock[];
+        pocket?: StoredBlock[];
+        seo?: PageSeo;
+      };
+      const usedVariants = new Map<string, Set<string>>();
+      let blocks = (draft.blocks ?? []).map((b) => {
+        const sec = (b as StoredBlock & { section?: string }).section;
+        const variants = sec ? Object.keys(tpl.sections[sec]?.variants ?? {}) : [];
+        if (!sec || variants.length === 0) return b;
+        const used = usedVariants.get(sec) ?? new Set<string>();
+        usedVariants.set(sec, used);
+        const options = ["", ...variants].filter((v) => !used.has(v));
+        const v = options.length ? options[Math.floor(rng() * options.length)] : "";
+        used.add(v);
+        return { ...b, variant: v || undefined };
+      });
+      blocks = shuffleMiddles(blocks, rng);
+      const { error: pe } = await sb
+        .from("pages")
+        .update({ draft_content: { ...draft, blocks } })
+        .eq("id", pg.id);
+      if (pe) return { ok: false, error: pe.message };
+
       const { error } = await sb.from("tenants").update({ draft_theme: theme }).eq("id", t.id);
       if (error) return { ok: false, error: error.message };
       return { ok: true, theme: theme as Theme };

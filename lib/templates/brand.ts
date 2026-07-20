@@ -16,6 +16,8 @@ export function buildTemplateBrand(
   template: SiteTemplate,
   /** Display logo (storage URL) — the caller resolves original vs adapted. */
   logoUrl?: string,
+  /** DNA-2c: seeded template data-theme from the tenant's DNA. */
+  dnaTheme?: string,
 ): TemplateBrand {
   const name = businessName.trim();
   const words = name.split(/\s+/).filter(Boolean);
@@ -41,6 +43,7 @@ export function buildTemplateBrand(
     ...(logoUrl ? { logoUrl } : {}),
     navLinks,
     ctaHref: "#lead_form",
+    ...(dnaTheme ? { dnaTheme } : {}),
     contact,
   };
 }

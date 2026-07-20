@@ -34,6 +34,8 @@ export const designDnaSchema = z.object({
   skinOverrides: z.record(z.string(), z.string()).optional(),
   /** DNA-3: decorative treatment token. */
   decorId: z.string().optional(),
+  /** DNA-2c: the template data-theme this site starts on (salon light/dark…). */
+  templateTheme: z.string().max(32).optional(),
 });
 export type DesignDNA = z.infer<typeof designDnaSchema>;
 

@@ -102,6 +102,7 @@ export default async function TenantPage({ params }: { params: Params }) {
       page.blocks,
       template,
       displayLogoUrl(tenant.brand),
+      tenant.theme.dna?.templateTheme,
     );
   }
 

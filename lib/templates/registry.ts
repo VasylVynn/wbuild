@@ -39,6 +39,8 @@ export interface TemplateBrand {
   logoUrl?: string;
   navLinks?: { href: string; label: string }[];
   ctaHref?: string;
+  /** DNA-2c: the data-theme this site starts on (wrapper initial; visitor toggle still wins). */
+  dnaTheme?: string;
   /** Real contact facts for the footer's «Контакти» column. */
   contact?: {
     phone?: string;

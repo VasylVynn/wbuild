@@ -48,7 +48,7 @@ export default async function EditorFramePage({
         <PageRenderer
           blocks={data.blocks}
           templateId={data.templateId}
-          brand={buildTemplateBrand(data.businessName, data.blocks, template, data.displayLogoUrl)}
+          brand={buildTemplateBrand(data.businessName, data.blocks, template, data.displayLogoUrl, (data.theme as { dna?: { templateTheme?: string } }).dna?.templateTheme)}
         />
       </div>
     );
