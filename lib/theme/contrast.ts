@@ -7,7 +7,9 @@
 
 function channel(v: number): number {
   const s = v / 255;
-  return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  // 0.04045 — the spec-exact sRGB linearization breakpoint (WCAG 2.x errata);
+  // identical results for 8-bit integer channels, correct for float inputs.
+  return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
 }
 
 /** Relative luminance of a #rgb/#rrggbb hex color. */
