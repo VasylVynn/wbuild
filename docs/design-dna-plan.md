@@ -20,7 +20,7 @@
       display/serif/rounded/sans мапляться на дефолтні завантажені сімʼї — старі пресети
       ПОЧИНАЮТЬ рендерити обіцяні шрифти); `themeSchema` + optional `fontPairId`
       (назад-сумісно, без SQL). FOUT обраної пари — свідомо прийнятий, заміряти на E2E.
-- [ ] **DNA1.3. DNA-ядро** — `lib/theme/dna.ts`: fnv1a + mulberry32, тип `DesignDNA`
+- [x] **DNA1.3. DNA-ядро** — `lib/theme/dna.ts`: fnv1a + mulberry32, тип `DesignDNA`
       (bundleId?, presetId, fontPairId, radius, skinOverrides, motionId, decorId?, designNonce),
       персист optional-полями theme-JSON у `draft_theme` (Publish копіює draft→published як зараз).
       Пресети отримують метадані СІМʼЇ (тепла/холодна/нейтральна/землиста/контрастна).

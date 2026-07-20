@@ -1,4 +1,5 @@
 import type { Theme } from "./tokens";
+import type { PaletteFamily } from "./dna";
 
 /**
  * Curated theme presets across verticals. Generation picks ONE (by id) from the
@@ -176,4 +177,32 @@ export const themePresets: Record<ThemePresetId, PresetEntry> = {
 export function resolveTheme(id: string): Theme {
   const preset = (themePresets as Record<string, PresetEntry>)[id];
   return preset ? preset.theme : themePresets["rose-classic"].theme;
+}
+
+/**
+ * Perceptual palette FAMILY per preset (design-DNA wave 1). The re-roll
+ * distinctness guarantee works on families — «інша сімʼя», not «сусідній
+ * відтінок». Kept as a colocated map (not a per-entry field) so adding a
+ * preset without a family is a type error here, not a silent hole.
+ */
+export const PRESET_FAMILIES: Record<ThemePresetId, PaletteFamily> = {
+  "rose-classic": "warm",
+  "peach-soft": "warm",
+  "warm-bakery": "warm",
+  "burgundy-elegant": "warm",
+  "amber-craft": "earthy",
+  "sage-minimal": "earthy",
+  "organic-emerald": "earthy",
+  "market-green": "earthy",
+  "construction-slate": "neutral",
+  "slate-professional": "cold",
+  "navy-trust": "cold",
+  "clinic-blue": "cold",
+  "emerald-fresh": "cold",
+  "bold-slate": "contrast",
+  "studio-violet": "contrast",
+};
+
+export function presetFamily(id: string): PaletteFamily | undefined {
+  return (PRESET_FAMILIES as Record<string, PaletteFamily>)[id];
 }

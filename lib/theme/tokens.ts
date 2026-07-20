@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { z } from "zod";
 import { resolveFontPair } from "./font-pairs";
+import { designDnaSchema } from "./dna";
 
 /**
  * Theme = design tokens, stored SEPARATELY from content (brief §4.5).
@@ -39,6 +40,9 @@ export const themeSchema = z.object({
   // theme (draft or published) keeps validating; unknown ids fall back to the
   // legacy role stacks at resolve time — never at parse time.
   fontPairId: z.string().optional(),
+  // The full style genome that produced this theme (lib/theme/dna.ts) —
+  // versioned with the theme (draft→published), optional for every pre-DNA row.
+  dna: designDnaSchema.optional(),
 });
 export type Theme = z.infer<typeof themeSchema>;
 
