@@ -32,12 +32,12 @@ export default function FerriTestimonialsAlt({ data }: { data: unknown }) {
                 transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
               >
                 <span
-                  className="font-[family-name:var(--font-cormorant)] text-7xl leading-none text-gold-500/30 sm:text-8xl"
+                  className="font-[family-name:var(--ferri-display)] text-7xl leading-none text-gold-500/30 sm:text-8xl"
                   aria-hidden="true"
                 >
                   &ldquo;
                 </span>
-                <p className="mx-auto -mt-4 max-w-xl font-[family-name:var(--font-cormorant)] text-2xl italic leading-snug text-cream-200 sm:text-3xl">
+                <p className="mx-auto -mt-4 max-w-xl font-[family-name:var(--ferri-display)] text-2xl italic leading-snug text-cream-200 sm:text-3xl">
                   {item.quote}
                 </p>
                 <div className="mx-auto mt-8 h-px w-8 bg-gold-500/40" />

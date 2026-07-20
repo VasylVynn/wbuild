@@ -32,7 +32,7 @@ export default function FerriAbout({ data }: { data: unknown }) {
           <p className="text-xs uppercase tracking-[3px] text-gold-500">Про нас</p>
 
           {d.title && (
-            <h2 className="mt-3 font-[family-name:var(--font-cormorant)] text-2xl font-normal text-cream-100 sm:text-3xl md:text-4xl">
+            <h2 className="mt-3 font-[family-name:var(--ferri-display)] text-2xl font-normal text-cream-100 sm:text-3xl md:text-4xl">
               {d.title}
             </h2>
           )}

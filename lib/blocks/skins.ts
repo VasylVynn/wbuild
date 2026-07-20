@@ -17,14 +17,10 @@ export interface SkinOption {
 
 export const blockSkins: Partial<Record<BlockType, SkinOption[]>> = {
   hero: [
-    { id: "", label: "Класичний (по центру)" },
-    { id: "split", label: "Текст ліворуч, акцент праворуч" },
-    { id: "minimal", label: "Мінімальний" },
-    { id: "photo", label: "Фото на весь екран" },
-    { id: "gradient", label: "Градієнт" },
-    { id: "mesh", label: "М'які кольорові плями" },
-    // Design-DNA wave 2 archetypes — structurally distinct, honest no-photo
-    // states (see components/blocks/Hero.tsx; sources in THIRD_PARTY_NOTICES).
+    // Legacy band skins removed (owner order, DNA-2c): only the wave-2
+    // archetypes remain — structurally distinct, honest no-photo states
+    // (components/blocks/Hero.tsx; sources in THIRD_PARTY_NOTICES). "" maps
+    // to the dispatcher fallback (editorial / split-light by photo presence).
     { id: "photo-scrim", label: "Фото на весь екран, текст знизу" },
     { id: "editorial", label: "Типографічний (без фото)" },
     { id: "split-light", label: "Світлий спліт: текст + фото" },

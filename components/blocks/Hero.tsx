@@ -2,21 +2,14 @@ import type { BlockProps } from "@/lib/blocks/schema";
 /* eslint-disable @next/next/no-img-element -- tenant photos are plain <img> by design (§4.8 storage URLs, no next/image loader) */
 
 /**
- * Hero — SKINS (layout variants of the SAME content, brief §3):
- *  - ""        classic: text column + optional image (the original layout).
- *  - "split"   two-column on md+; right side is the image, or a decorative
- *              accent panel bearing an oversized initial when no image exists.
- *  - "minimal" compact centred band: eyebrow + title + CTA, thin muted rule.
- *  - "photo"   full-bleed background photo + dark scrim, white centred text.
- *              Degrades to a primary band when no imageUrl is supplied.
- *  - "gradient" no-image band on a primary→darkened-primary linear gradient.
- *  - "mesh"    LIGHT band with soft blurred colour blobs drifting via CSS
- *              keyframes (reduced-motion aware); dark text on --color-background.
+ * Hero — five Design-DNA wave 2 archetypes: STRUCTURALLY distinct shapes, each
+ * with an honest no-photo state (a LIGHT, CSS-only decor composition — accent/
+ * muted mesh + dot-grid — never a flat band and never a fabricated image).
  *
- * Design-DNA wave 2 archetypes — STRUCTURALLY distinct shapes (not re-paddings
- * of the primary band above). Each has an honest no-photo state: a LIGHT,
- * CSS-only decor composition (accent/muted mesh + dot-grid), never a flat band
- * and never a fabricated image.
+ * The six legacy "primary band" skins ("" classic, split, minimal, photo,
+ * gradient, mesh) were removed per owner order 2026-07-20 (DNA-2c): the DB was
+ * wiped, there is no production data, and those band looks are unsupported.
+ *
  *  - "photo-scrim"  full-bleed photo, bottom-up scrim, content bottom-LEFT in
  *                   light text. No photo → light decor bg, dark bottom-left copy.
  *  - "editorial"    typographic hero (imageUrl ignored BY DESIGN): light bg,
@@ -28,6 +21,11 @@ import type { BlockProps } from "@/lib/blocks/schema";
  *                   left. No photo → card sits on a soft accent mesh.
  *  - "visit-card"   light centred "business card": muted-bordered card with
  *                   corner accents; photo (if any) is a small media strip inside.
+ *
+ * Fallback (no skin / unknown skin id / old stored ""): HeroEditorial when
+ * there is no photo, HeroSplitLight when data.imageUrl exists — a sensible
+ * default for both photo-poor and photo-rich content.
+ *
  * Only layout changes between skins — content/props are identical, so switching
  * is instant and safe. Skins use tenant CSS vars for THEMED surfaces; white
  * text/scrims over REAL PHOTOS are content-driven constants, never platform
@@ -163,359 +161,6 @@ function DecorMesh() {
         }}
       />
     </>
-  );
-}
-
-// "" — the original classic layout, extracted unchanged.
-function HeroDefault({ data }: { data: HeroData }) {
-  const { eyebrow, title, subtitle, imageUrl } = data;
-  return (
-    <section
-      style={{
-        backgroundColor: "var(--color-primary)",
-        color: "var(--color-primary-foreground)",
-      }}
-    >
-      <div className="mx-auto max-w-5xl px-4 py-16">
-        <div className="flex flex-col gap-8 md:flex-row md:items-center">
-          {/* Text column */}
-          <div className="flex-1 space-y-6">
-            {eyebrow && <Eyebrow text={eyebrow} />}
-
-            <h1
-              className="text-4xl font-bold leading-tight md:text-5xl"
-              style={{ fontFamily: "var(--font-heading)", color: "var(--color-primary-foreground)" }}
-            >
-              {title}
-            </h1>
-
-            {subtitle && (
-              <p
-                className="text-xl leading-relaxed"
-                style={{ color: "var(--color-primary-foreground)", opacity: 0.9 }}
-              >
-                {subtitle}
-              </p>
-            )}
-
-            <CtaGroup data={data} />
-          </div>
-
-          {/* Image column */}
-          {imageUrl && (
-            <div className="flex-1">
-              <img
-                src={imageUrl}
-                alt={data.imageAlt ?? ""}
-                loading="lazy"
-                className="w-full rounded-[var(--radius)] object-cover"
-                style={{ maxHeight: "480px" }}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// "split" — text left, image/accent panel right; stacks on mobile.
-function HeroSplit({ data }: { data: HeroData }) {
-  const { eyebrow, title, subtitle, imageUrl } = data;
-  return (
-    <section
-      style={{
-        backgroundColor: "var(--color-primary)",
-        color: "var(--color-primary-foreground)",
-      }}
-    >
-      <div className="mx-auto max-w-5xl px-4 py-16">
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 md:items-center">
-          {/* Text column (left-aligned) */}
-          <div className="space-y-6 text-left">
-            {eyebrow && <Eyebrow text={eyebrow} />}
-
-            <h1
-              className="text-4xl font-bold leading-tight md:text-5xl"
-              style={{ fontFamily: "var(--font-heading)", color: "var(--color-primary-foreground)" }}
-            >
-              {title}
-            </h1>
-
-            {subtitle && (
-              <p
-                className="text-xl leading-relaxed"
-                style={{ color: "var(--color-primary-foreground)", opacity: 0.9 }}
-              >
-                {subtitle}
-              </p>
-            )}
-
-            <CtaGroup data={data} />
-          </div>
-
-          {/* Accent column: image if present, else a decorative ornament panel. */}
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={data.imageAlt ?? ""}
-              loading="lazy"
-              className="w-full rounded-[var(--radius)] object-cover"
-              style={{ maxHeight: "480px" }}
-            />
-          ) : (
-            <div
-              aria-hidden
-              className="flex items-center justify-center overflow-hidden rounded-[var(--radius)] p-8"
-              style={{ backgroundColor: "var(--color-accent)", minHeight: "280px" }}
-            >
-              <span
-                className="font-bold leading-none"
-                style={{
-                  fontFamily: "var(--font-heading)",
-                  color: "var(--color-primary)",
-                  opacity: 0.25,
-                  fontSize: "12rem",
-                }}
-              >
-                {title.charAt(0)}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// "minimal" — compact centred band with a thin muted bottom rule.
-function HeroMinimal({ data }: { data: HeroData }) {
-  const { eyebrow, title, subtitle } = data;
-  return (
-    <section
-      style={{
-        backgroundColor: "var(--color-primary)",
-        color: "var(--color-primary-foreground)",
-        borderBottom: "1px solid var(--color-muted)",
-      }}
-    >
-      <div className="mx-auto max-w-3xl px-4 py-12 text-center">
-        <div className="space-y-4">
-          {eyebrow && <Eyebrow text={eyebrow} />}
-
-          <h1
-            className="text-3xl font-bold leading-tight md:text-4xl"
-            style={{ fontFamily: "var(--font-heading)", color: "var(--color-primary-foreground)" }}
-          >
-            {title}
-          </h1>
-
-          {subtitle && (
-            <p
-              className="text-base leading-relaxed"
-              style={{ color: "var(--color-primary-foreground)", opacity: 0.75 }}
-            >
-              {subtitle}
-            </p>
-          )}
-
-          {(data.ctaLabel || data.secondaryCtaLabel) && (
-            <div className="pt-2">
-              <CtaGroup data={data} align="center" />
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// "photo" — full-bleed background photo behind a dark scrim, white centred text.
-// No imageUrl → degrade to a primary band (never a broken empty box).
-function HeroPhoto({ data }: { data: HeroData }) {
-  const { eyebrow, title, subtitle, imageUrl } = data;
-
-  if (!imageUrl) {
-    return (
-      <section
-        style={{
-          backgroundColor: "var(--color-primary)",
-          color: "var(--color-primary-foreground)",
-        }}
-      >
-        <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 px-4 py-24 text-center md:py-32">
-          {eyebrow && <Eyebrow text={eyebrow} />}
-          <h1
-            className="text-4xl font-bold leading-tight md:text-6xl"
-            style={{ fontFamily: "var(--font-heading)", color: "var(--color-primary-foreground)" }}
-          >
-            {title}
-          </h1>
-          {subtitle && (
-            <p
-              className="max-w-2xl text-xl leading-relaxed"
-              style={{ color: "var(--color-primary-foreground)", opacity: 0.9 }}
-            >
-              {subtitle}
-            </p>
-          )}
-          <CtaGroup data={data} align="center" />
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section
-      className="relative flex items-center justify-center overflow-hidden"
-      style={{ minHeight: "78vh", backgroundColor: "var(--color-primary)" }}
-    >
-      <img
-        src={imageUrl}
-        alt={data.imageAlt ?? ""}
-        aria-hidden
-        loading="lazy"
-        className="absolute inset-0 h-full w-full object-cover"
-      />
-      {/* Dark scrim so white copy stays legible over any photo. */}
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          background: "linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.6) 100%)",
-        }}
-      />
-      <div
-        className="relative z-10 mx-auto flex max-w-4xl flex-col items-center gap-6 px-4 py-24 text-center"
-        style={{ color: "#ffffff" }}
-      >
-        {eyebrow && <Eyebrow text={eyebrow} color="#ffffff" />}
-        <h1
-          className="text-5xl font-bold leading-tight md:text-6xl"
-          style={{ fontFamily: "var(--font-heading)", color: "#ffffff" }}
-        >
-          {title}
-        </h1>
-        {subtitle && (
-          <p className="max-w-2xl text-xl leading-relaxed" style={{ color: "#ffffff", opacity: 0.9 }}>
-            {subtitle}
-          </p>
-        )}
-        <CtaGroup data={data} align="center" />
-      </div>
-    </section>
-  );
-}
-
-// "gradient" — no-image band on a primary → darkened-primary linear gradient.
-function HeroGradient({ data }: { data: HeroData }) {
-  const { eyebrow, title, subtitle } = data;
-  return (
-    <section
-      style={{
-        background:
-          "linear-gradient(135deg, var(--color-primary) 0%, color-mix(in srgb, var(--color-primary) 62%, #000) 100%)",
-        color: "var(--color-primary-foreground)",
-      }}
-    >
-      <div className="mx-auto flex max-w-3xl flex-col items-center gap-6 px-4 py-24 text-center md:py-32">
-        {eyebrow && <Eyebrow text={eyebrow} />}
-        <h1
-          className="text-4xl font-bold leading-tight md:text-6xl"
-          style={{ fontFamily: "var(--font-heading)", color: "var(--color-primary-foreground)" }}
-        >
-          {title}
-        </h1>
-        {subtitle && (
-          <p
-            className="max-w-2xl text-xl leading-relaxed"
-            style={{ color: "var(--color-primary-foreground)", opacity: 0.9 }}
-          >
-            {subtitle}
-          </p>
-        )}
-        <CtaGroup data={data} align="center" />
-      </div>
-    </section>
-  );
-}
-
-// "mesh" — LIGHT band with soft blurred colour blobs drifting via CSS keyframes.
-// Light-only adaptation of the design-template dark hero; motion is disabled
-// under prefers-reduced-motion. Blob/keyframe names are `hero-mesh-` scoped.
-function HeroMesh({ data }: { data: HeroData }) {
-  const { eyebrow, title, subtitle } = data;
-  return (
-    <section
-      className="relative overflow-hidden"
-      style={{
-        backgroundColor: "var(--color-background)",
-        color: "var(--color-foreground)",
-      }}
-    >
-      <style>{`
-        .hero-mesh-blob {
-          position: absolute;
-          border-radius: 9999px;
-          filter: blur(80px);
-          will-change: transform;
-          pointer-events: none;
-        }
-        .hero-mesh-a {
-          width: 32rem; height: 32rem; top: -8rem; left: -6rem;
-          background: radial-gradient(circle at center, color-mix(in srgb, var(--color-primary) 45%, transparent) 0%, transparent 70%);
-          animation: hero-mesh-drift-a 22s ease-in-out infinite;
-        }
-        .hero-mesh-b {
-          width: 28rem; height: 28rem; bottom: -10rem; right: -4rem;
-          background: radial-gradient(circle at center, color-mix(in srgb, var(--color-accent) 42%, transparent) 0%, transparent 70%);
-          animation: hero-mesh-drift-b 26s ease-in-out infinite;
-        }
-        .hero-mesh-c {
-          width: 22rem; height: 22rem; top: 28%; left: 46%;
-          background: radial-gradient(circle at center, color-mix(in srgb, var(--color-primary) 28%, transparent) 0%, transparent 70%);
-          animation: hero-mesh-drift-c 30s ease-in-out infinite;
-        }
-        @keyframes hero-mesh-drift-a {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(8%, 6%); }
-        }
-        @keyframes hero-mesh-drift-b {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(-7%, -5%); }
-        }
-        @keyframes hero-mesh-drift-c {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(4%, -8%) scale(1.08); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .hero-mesh-blob { animation: none !important; }
-        }
-      `}</style>
-
-      <div aria-hidden className="hero-mesh-blob hero-mesh-a" />
-      <div aria-hidden className="hero-mesh-blob hero-mesh-b" />
-      <div aria-hidden className="hero-mesh-blob hero-mesh-c" />
-
-      <div className="relative z-10 mx-auto flex max-w-3xl flex-col items-center gap-6 px-4 py-24 text-center md:py-32">
-        {eyebrow && <Eyebrow text={eyebrow} color="var(--color-primary)" />}
-        <h1
-          className="text-4xl font-bold leading-tight md:text-6xl"
-          style={{ fontFamily: "var(--font-heading)", color: "var(--color-foreground)" }}
-        >
-          {title}
-        </h1>
-        {subtitle && (
-          <p
-            className="max-w-2xl text-xl leading-relaxed"
-            style={{ color: "var(--color-muted-foreground)" }}
-          >
-            {subtitle}
-          </p>
-        )}
-        <CtaGroup data={data} align="center" onLight />
-      </div>
-    </section>
   );
 }
 
@@ -856,15 +501,13 @@ function HeroVisitCard({ data }: { data: HeroData }) {
 }
 
 export default function Hero({ data, skin }: { data: HeroData; skin?: string }) {
-  if (skin === "split") return <HeroSplit data={data} />;
-  if (skin === "minimal") return <HeroMinimal data={data} />;
-  if (skin === "photo") return <HeroPhoto data={data} />;
-  if (skin === "gradient") return <HeroGradient data={data} />;
-  if (skin === "mesh") return <HeroMesh data={data} />;
   if (skin === "photo-scrim") return <HeroPhotoScrim data={data} />;
   if (skin === "editorial") return <HeroEditorial data={data} />;
   if (skin === "split-light") return <HeroSplitLight data={data} />;
   if (skin === "card-overlay") return <HeroCardOverlay data={data} />;
   if (skin === "visit-card") return <HeroVisitCard data={data} />;
-  return <HeroDefault data={data} />;
+  // Fallback for no/unknown skin id (incl. old stored ""): editorial when the
+  // content has no photo, split-light when a photo exists — a sensible default
+  // for both photo-poor and photo-rich heroes now the legacy bands are gone.
+  return data.imageUrl ? <HeroSplitLight data={data} /> : <HeroEditorial data={data} />;
 }

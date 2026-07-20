@@ -61,7 +61,7 @@ export default function FerriFooter({
         <div className="grid gap-10 py-12 sm:gap-12 sm:py-16 md:grid-cols-3">
           {/* Brand column */}
           <div>
-            <a href="/" className="font-[family-name:var(--font-cormorant)] text-xl tracking-wide text-cream-100">
+            <a href="/" className="font-[family-name:var(--ferri-display)] text-xl tracking-wide text-cream-100">
               {brandName} <span className="text-gold-500">{brandAccent}</span>
             </a>
             <p className="mt-3 text-sm leading-relaxed text-txt-muted">{tagline}</p>

@@ -46,7 +46,7 @@ export default function FerriLeadForm({ data }: { data: unknown }) {
         <Reveal className="mx-auto max-w-xl border border-gold-500/12 bg-navy-800/30 p-8">
           <h2
             id="lead-form-title"
-            className="font-[family-name:var(--font-cormorant)] text-2xl font-normal text-cream-100 sm:text-3xl"
+            className="font-[family-name:var(--ferri-display)] text-2xl font-normal text-cream-100 sm:text-3xl"
           >
             {d.title ?? "Залишити заявку"}
           </h2>

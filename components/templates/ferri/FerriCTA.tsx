@@ -14,7 +14,7 @@ export default function FerriCTA({ data }: { data: unknown }) {
     <section className="border-t border-gold-500/8 py-14 sm:py-20 lg:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <h2 className="font-[family-name:var(--font-cormorant)] text-2xl font-normal text-cream-100 sm:text-3xl md:text-4xl">
+          <h2 className="font-[family-name:var(--ferri-display)] text-2xl font-normal text-cream-100 sm:text-3xl md:text-4xl">
             {d.title}
           </h2>
           {d.subtitle && (

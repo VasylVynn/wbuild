@@ -23,7 +23,7 @@ export default function FerriTestimonials({ data }: { data: unknown }) {
             <RevealItem key={i}>
               <div className="flex h-full flex-col border border-gold-500/8 bg-navy-800/30 p-6 sm:p-8">
                 <span
-                  className="font-[family-name:var(--font-cormorant)] text-4xl leading-none text-gold-500/30"
+                  className="font-[family-name:var(--ferri-display)] text-4xl leading-none text-gold-500/30"
                   aria-hidden="true"
                 >
                   &ldquo;

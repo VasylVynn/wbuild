@@ -45,7 +45,7 @@ export default function FerriContacts({ data }: { data: unknown }) {
           {title && (
             <h2
               id="contacts-title"
-              className="mb-8 font-[family-name:var(--font-cormorant)] text-2xl font-normal text-cream-100 sm:text-3xl"
+              className="mb-8 font-[family-name:var(--ferri-display)] text-2xl font-normal text-cream-100 sm:text-3xl"
             >
               {title}
             </h2>

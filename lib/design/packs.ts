@@ -33,7 +33,7 @@ export const designPacks: DesignPack[] = [
     source: "artisan-bakery",
     themePresetId: "amber-craft",
     skins: {
-      hero: "photo",
+      hero: "photo-scrim",
       services: "showcase",
       switchback: "framed",
       testimonials: "spotlight",
@@ -52,7 +52,7 @@ export const designPacks: DesignPack[] = [
     // Owner decision 2026-07-10: packs use ONLY mined skins — the legacy
     // default layouts must never appear in generated sites.
     skins: {
-      hero: "photo",
+      hero: "split-light",
       services: "showcase",
       switchback: "framed",
       testimonials: "spotlight",
@@ -69,7 +69,7 @@ export const designPacks: DesignPack[] = [
     source: "whole-foods",
     themePresetId: "market-green",
     skins: {
-      hero: "photo",
+      hero: "photo-scrim",
       services: "pricing",
       switchback: "framed",
       testimonials: "spotlight",
@@ -86,7 +86,7 @@ export const designPacks: DesignPack[] = [
     source: "construction-pro",
     themePresetId: "construction-slate",
     skins: {
-      hero: "photo",
+      hero: "card-overlay",
       services: "pricing",
       switchback: "framed",
       gallery: "captions",
@@ -103,7 +103,7 @@ export const designPacks: DesignPack[] = [
     source: "dental-care",
     themePresetId: "clinic-blue",
     skins: {
-      hero: "gradient",
+      hero: "editorial",
       services: "pricing",
       switchback: "framed",
       testimonials: "spotlight",
@@ -120,7 +120,7 @@ export const designPacks: DesignPack[] = [
     source: "design-template-main",
     themePresetId: "studio-violet",
     skins: {
-      hero: "mesh",
+      hero: "visit-card",
       services: "pricing",
       switchback: "framed",
       testimonials: "spotlight",

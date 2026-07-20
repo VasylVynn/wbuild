@@ -35,7 +35,7 @@ export default function FerriGallery({ data }: { data: unknown }) {
                 {(img.title || img.category) && (
                   <div className="absolute inset-x-0 bottom-0 bg-navy-950/80 p-4 backdrop-blur-sm">
                     {img.title && (
-                      <p className="font-[family-name:var(--font-cormorant)] text-lg text-cream-100">
+                      <p className="font-[family-name:var(--ferri-display)] text-lg text-cream-100">
                         {img.title}
                       </p>
                     )}

@@ -106,9 +106,9 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: ferriMeta.wrapper,
     themes: ["dark", "light"],
     defaultTheme: "dark",
-    // DNA-2b review: ferri sections read --font-cormorant DIRECTLY (no central
-    // indirection) — advertising pairs here would make re-roll a visual no-op.
-    // Restore once ferri is de-fonted (coordinate with the template session).
+    // Restored in DNA-2c: ferri now reads fonts through --ferri-display/--ferri-body
+    // indirections (C3), so pairs render for real.
+    dnaFontPairs: ["literata-inter", "playfair-jost", "lora-source"],
   },
   salon: {
     id: salonMeta.id,

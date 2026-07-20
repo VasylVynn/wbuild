@@ -6,7 +6,12 @@
  * and [data-theme="light"] overrides every colour var for the subtree only.
  *
  * The serif (Cormorant Garamond) is injected by the wrapper via next/font as
- * `--font-cormorant`; sections use `font-[family-name:var(--font-cormorant)]`.
+ * `--font-cormorant`. Fonts reach the sections through two indirections defined
+ * on `.tpl-ferri`: `--ferri-display` (headings) and `--ferri-body` (body). Each
+ * prefers a shell-injected design-DNA pair (`--font-heading` / `--font-body`,
+ * set on an ancestor when a pair is rolled) and falls back to the template's own
+ * Cormorant / sans stack when no pair exists, so the no-pair render is unchanged.
+ * Sections use `font-[family-name:var(--ferri-display)]`.
  */
 
 .tpl-ferri {
@@ -27,11 +32,17 @@
   --color-txt: #c8c4bc;
   --color-txt-muted: #8a8680;
 
+  /* DNA font indirection: a shell-injected pair (--font-heading / --font-body,
+     set on an ancestor when a pair is rolled) wins; with no pair these fall back
+     to the template's own Cormorant / sans stack, keeping the render unchanged. */
+  --ferri-display: var(--font-heading, var(--font-cormorant), Georgia, serif);
+  --ferri-body: var(--font-body, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
+
   position: relative;
   min-height: 100vh;
   background-color: var(--color-navy-950);
   color: var(--color-txt);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--ferri-body);
   font-size: 1rem;
   line-height: 1.6;
   color-scheme: dark;

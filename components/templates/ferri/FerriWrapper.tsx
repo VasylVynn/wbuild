@@ -17,8 +17,10 @@ import FerriFooter from "./FerriFooter";
  * forces a theme so both can be screenshotted.
  *
  * Client component on purpose (theme state). The ported serif, Cormorant
- * Garamond, is loaded via next/font and exposed as `--font-cormorant`, which the
- * sections read through `font-[family-name:var(--font-cormorant)]`.
+ * Garamond, is loaded via next/font and exposed as `--font-cormorant`. It stays
+ * loaded as the fallback: sections read the display font through the
+ * `--ferri-display` indirection (ferri.css), which prefers a shell-injected
+ * design-DNA pair and falls back to Cormorant when no pair is rolled.
  */
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],

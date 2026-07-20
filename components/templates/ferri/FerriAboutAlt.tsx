@@ -33,7 +33,7 @@ export default function FerriAboutAlt({ data }: { data: unknown }) {
 
         {statement && (
           <Reveal delay={0.1}>
-            <p className="mt-8 font-[family-name:var(--font-cormorant)] text-3xl font-light italic leading-[1.25] text-cream-100 sm:text-4xl md:text-5xl">
+            <p className="mt-8 font-[family-name:var(--ferri-display)] text-3xl font-light italic leading-[1.25] text-cream-100 sm:text-4xl md:text-5xl">
               {statement}
             </p>
           </Reveal>

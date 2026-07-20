@@ -22,11 +22,11 @@ export default function FerriPublications({ data }: { data: unknown }) {
           {d.items.map((item, i) => (
             <RevealItem key={i}>
               <div className="flex flex-col gap-4 bg-navy-800/20 p-6 sm:flex-row sm:items-baseline sm:gap-8 sm:p-8">
-                <span className="font-[family-name:var(--font-cormorant)] text-3xl text-gold-500/40">
+                <span className="font-[family-name:var(--ferri-display)] text-3xl text-gold-500/40">
                   {item.year}
                 </span>
                 <div>
-                  <h3 className="font-[family-name:var(--font-cormorant)] text-xl text-cream-100">
+                  <h3 className="font-[family-name:var(--ferri-display)] text-xl text-cream-100">
                     {item.title}
                   </h3>
                   {item.subtitle && (
