@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
-import { CircleAlert, PartyPopper, Paperclip } from "lucide-react";
+import { CircleAlert, PartyPopper, Paperclip, RotateCcw } from "lucide-react";
 import type { ChatMsg, ProgressItem } from "@/lib/ai/onboard";
 import {
   onboardAction,
@@ -29,7 +29,7 @@ import type { BusinessFacts } from "@/lib/verticals/schema";
 import { normalizeIgHandle } from "@/lib/blocks/contact-links";
 import { MAX_PHOTOS, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
 import { processImage } from "@/lib/media/client-image";
-import { Button, Chip, Card } from "@/components/ui";
+import { Button, Chip, Card, ConfirmDialog } from "@/components/ui";
 import PhotoField from "@/components/editor/PhotoField";
 import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 
@@ -337,6 +337,9 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // the mid-chat button stays hidden. A ref is enough — every import path ends
   // in setState calls that re-render.
   const igImportedRef = useRef(false);
+
+  // --- Reset-conversation confirm dialog ---
+  const [resetOpen, setResetOpen] = useState(false);
 
   // --- Done / error state ---
   const [siteUrl, setSiteUrl] = useState("");
@@ -674,6 +677,31 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
+  };
+
+  // Reset to a brand-new conversation (header ↺, confirm-gated). The old DB
+  // row is simply abandoned — same as clearing the browser; nothing to delete
+  // client-side. Local-only state: no server call, so it's instant.
+  const resetChat = () => {
+    localStorage.removeItem("vitryna_conv_id");
+    convIdRef.current = null;
+    igImportedRef.current = false;
+    for (const p of pending) URL.revokeObjectURL(p.thumbUrl);
+    setPending([]);
+    setMessages([igImportEnabled ? IG_GREETING : GREETING]);
+    setFacts({});
+    setReady(false);
+    setConfirmed(false);
+    setVerticalId(undefined);
+    setTemplate(null);
+    setInput("");
+    setQuickReplies(igImportEnabled ? ["У мене є Instagram"] : []);
+    setSavedNote(null);
+    setMedia({ photos: [] });
+    setPendingReviews([]);
+    setUploadError(null);
+    setResetOpen(false);
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   // Core send — used by the input row AND by quick-reply chips. Carries the
@@ -1102,6 +1130,14 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     return (
       <div className={`h-[100dvh] ${rootBase} lg:grid lg:grid-cols-[minmax(0,1fr)_420px]`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
+        <ConfirmDialog
+          open={resetOpen}
+          title="Почати нову розмову?"
+          body="Поточна розмова і зібрані дані зникнуть. Завантажені фото можна буде додати ще раз."
+          confirmLabel="Почати заново"
+          onConfirm={resetChat}
+          onCancel={() => setResetOpen(false)}
+        />
         <div className="flex h-full min-h-0 flex-col">
 
         {/* Header: honey «3» avatar + Помічник + status */}
@@ -1123,6 +1159,18 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
                 {typing ? "друкує…" : "онлайн"}
               </span>
             </div>
+            {/* Reset only makes sense once the user actually said something. */}
+            {messages.length > 1 && (
+              <button
+                onClick={() => setResetOpen(true)}
+                disabled={loading}
+                aria-label="Почати нову розмову"
+                title="Почати нову розмову"
+                className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-sunken hover:text-ink disabled:opacity-45"
+              >
+                <RotateCcw size={19} />
+              </button>
+            )}
           </div>
           {/* Progress chips */}
           <div className="border-b border-line">
