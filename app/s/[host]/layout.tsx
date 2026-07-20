@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { getTenantByHost, getNav } from "@/lib/tenant/data";
 import { themeToCssVars } from "@/lib/theme/tokens";
+import { TENANT_FONT_CLASSES } from "@/lib/theme/fonts";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { Beacon } from "@/components/site/Beacon";
@@ -28,9 +29,13 @@ export default async function TenantLayout({
   // and clash. Pack/legacy sites keep the shared shell.
   const isTemplate = Boolean(tenant.brand.templateId);
 
+  // Font variables ride on BOTH branches (design-DNA wave 1): the classic
+  // shell resolves --font-heading/--font-body against them now; template
+  // bundles will reference them in DNA wave 2. preload:false → a tenant
+  // downloads only the families its applied CSS actually uses.
   if (isTemplate) {
     return (
-      <div className="flex min-h-screen flex-col">
+      <div className={`flex min-h-screen flex-col ${TENANT_FONT_CLASSES}`}>
         <main className="flex-1">{children}</main>
         <Beacon />
       </div>
@@ -45,7 +50,7 @@ export default async function TenantLayout({
         color: "var(--color-foreground)",
         fontFamily: "var(--font-body)",
       }}
-      className="flex min-h-screen flex-col"
+      className={`flex min-h-screen flex-col ${TENANT_FONT_CLASSES}`}
     >
       <SiteHeader tenant={tenant} nav={nav} />
       <main className="flex-1">{children}</main>

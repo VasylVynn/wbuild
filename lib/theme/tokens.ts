@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { z } from "zod";
+import { resolveFontPair } from "./font-pairs";
 
 /**
  * Theme = design tokens, stored SEPARATELY from content (brief §4.5).
@@ -33,14 +34,26 @@ export const themeSchema = z.object({
     body: z.enum(FONT_FAMILIES),
   }),
   radius: z.enum(RADII),
+  // Design-DNA wave 1: a curated Cyrillic pair (lib/theme/font-pairs.ts)
+  // overrides the role-based fonts above. Optional + lenient so every stored
+  // theme (draft or published) keeps validating; unknown ids fall back to the
+  // legacy role stacks at resolve time — never at parse time.
+  fontPairId: z.string().optional(),
 });
 export type Theme = z.infer<typeof themeSchema>;
 
+/**
+ * Legacy role → stack mapping. The var(--font-*) references resolve because
+ * tenant shells attach TENANT_FONT_CLASSES (lib/theme/fonts.ts) + the root
+ * layout's Manrope/Unbounded — BEFORE design-DNA these named families were
+ * declared but never loaded, so every preset silently fell back to
+ * Georgia/system (the «all sites look the same» root cause, research doc).
+ */
 const FONT_STACK: Record<FontFamily, string> = {
-  sans: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-  serif: "ui-serif, Georgia, Cambria, Times New Roman, serif",
-  display: '"Playfair Display", ui-serif, Georgia, serif',
-  rounded: '"Nunito", ui-rounded, "Segoe UI", system-ui, sans-serif',
+  sans: "var(--font-manrope), ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+  serif: "var(--font-lora), ui-serif, Georgia, Cambria, Times New Roman, serif",
+  display: "var(--font-playfair), ui-serif, Georgia, serif",
+  rounded: "var(--font-nunito), ui-rounded, 'Segoe UI', system-ui, sans-serif",
 };
 
 const RADIUS_SCALE: Record<Radius, string> = {
@@ -58,6 +71,7 @@ const RADIUS_SCALE: Record<Radius, string> = {
  * etc. via Tailwind arbitrary values or inline styles.
  */
 export function themeToCssVars(theme: Theme): CSSProperties {
+  const pair = resolveFontPair(theme.fontPairId);
   return {
     "--color-primary": theme.colors.primary,
     "--color-primary-foreground": theme.colors.primaryForeground,
@@ -68,8 +82,8 @@ export function themeToCssVars(theme: Theme): CSSProperties {
     // NOT for text). Derived from foreground so contrast holds on every theme.
     "--color-muted-foreground": `color-mix(in srgb, ${theme.colors.foreground} 64%, ${theme.colors.background})`,
     "--color-accent": theme.colors.accent,
-    "--font-heading": FONT_STACK[theme.fonts.heading],
-    "--font-body": FONT_STACK[theme.fonts.body],
+    "--font-heading": pair?.heading ?? FONT_STACK[theme.fonts.heading],
+    "--font-body": pair?.body ?? FONT_STACK[theme.fonts.body],
     "--radius": RADIUS_SCALE[theme.radius],
   } as CSSProperties;
 }

@@ -8,14 +8,14 @@
 
 ## Хвиля DNA-1 — Typography-фікс (P0) + DNA-ядро (~3–4 дні)
 
-- [ ] **DNA1.1. Шрифтові пари** — `lib/theme/font-pairs.ts`: 8–10 пар із `next/font/google`,
+- [x] **DNA1.1. Шрифтові пари** — `lib/theme/font-pairs.ts`: 8–10 пар із `next/font/google`,
       `subsets: ["cyrillic"]`, усі `preload: false` + `display: "swap"` (дефолтна пара платформи
       лишається preload:true в root layout). Кандидати: Manrope+Inter, Montserrat+Rubik,
       Lora+Source Sans 3, PT Serif+Inter, Cormorant Garamond+Manrope (verify-first ґєії),
       Unbounded+Inter, Nunito+Nunito Sans, Playfair Display+Jost, Golos Text+Golos Text.
       Кожна пара — render-чек українського тексту (ґ є і ї) до включення. DM Sans виключений
       (нема кирилиці).
-- [ ] **DNA1.2. Tenant shell wiring** — `app/s/[host]/layout.tsx` вішає variable-класи всіх
+- [x] **DNA1.2. Tenant shell wiring** — `app/s/[host]/layout.tsx` вішає variable-класи всіх
       сімей; `FONT_STACK` → var-референси на реально завантажені сімʼї (legacy-ролі
       display/serif/rounded/sans мапляться на дефолтні завантажені сімʼї — старі пресети
       ПОЧИНАЮТЬ рендерити обіцяні шрифти); `themeSchema` + optional `fontPairId`

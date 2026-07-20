@@ -3,6 +3,7 @@ import { getEditorData } from "@/app/app/(protected)/edit/actions";
 import { getTemplate } from "@/lib/templates/registry";
 import { buildTemplateBrand } from "@/lib/templates/brand";
 import { themeToCssVars } from "@/lib/theme/tokens";
+import { TENANT_FONT_CLASSES } from "@/lib/theme/fonts";
 import { PageRenderer } from "@/components/PageRenderer";
 
 /**
@@ -32,16 +33,19 @@ export default async function EditorFramePage({
   const template = getTemplate(data.templateId);
   if (template) {
     return (
-      <PageRenderer
-        blocks={data.blocks}
-        templateId={data.templateId}
-        brand={buildTemplateBrand(data.businessName, data.blocks, template, data.displayLogoUrl)}
-      />
+      <div className={TENANT_FONT_CLASSES}>
+        <PageRenderer
+          blocks={data.blocks}
+          templateId={data.templateId}
+          brand={buildTemplateBrand(data.businessName, data.blocks, template, data.displayLogoUrl)}
+        />
+      </div>
     );
   }
 
   return (
     <div
+      className={TENANT_FONT_CLASSES}
       style={{
         ...themeToCssVars(data.theme),
         backgroundColor: "var(--color-background)",
