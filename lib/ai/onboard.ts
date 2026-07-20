@@ -27,7 +27,14 @@ import {
  * tool arguments — text output avoids both.
  */
 
-export type ChatMsg = { role: "user" | "assistant"; content: string };
+export type ChatMsg = {
+  role: "user" | "assistant";
+  content: string;
+  /** Storage URLs of photos attached to this message (composer batch). The
+   *  model NEVER sees these — prepareOnboardCall reduces them to a count
+   *  marker (§4.8: photo grounding is deterministic, not model-driven). */
+  attachments?: string[];
+};
 
 const factsPatchSchema = businessFactsSchema.partial();
 
@@ -252,7 +259,28 @@ export function prepareOnboardCall(
   const vertical = getVertical(currentVerticalId);
   const issues = validateFacts(currentFacts, vertical);
 
-  const all: Anthropic.MessageParam[] = history.map((m) => ({ role: m.role, content: m.content }));
+  // Attachments reach the model only as a count marker — never URLs. A
+  // photo-only message (empty text) becomes marker-only content, since the
+  // API rejects empty text blocks.
+  const flat = history
+    .map((m) => {
+      const n = m.attachments?.length ?? 0;
+      const marker = n === 0 ? "" : n === 1 ? "[надіслано фото]" : `[надіслано ${n} фото]`;
+      const content =
+        m.content && marker ? `${m.content}\n\n${marker}` : m.content || marker;
+      return { role: m.role, content };
+    })
+    // The API rejects empty text blocks — drop degenerate entries outright.
+    .filter((m) => m.content.trim() !== "");
+  // The batch flow writes summary + streamed reply as ADJACENT assistant
+  // messages. The API tolerates same-role runs today, but merge defensively
+  // so the model call never depends on that behavior.
+  const all: { role: "user" | "assistant"; content: string }[] = [];
+  for (const m of flat) {
+    const last = all[all.length - 1];
+    if (last && last.role === m.role) last.content = `${last.content}\n\n${m.content}`;
+    else all.push({ ...m });
+  }
   const firstUser = all.findIndex((m) => m.role === "user");
   const messages = firstUser >= 0 ? all.slice(firstUser) : all;
   if (messages.length === 0) return null;

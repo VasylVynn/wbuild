@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
 import type { ChatMsg } from "@/lib/ai/onboard";
-import { mediaSchema, type SiteMedia } from "@/lib/media/media";
+import { isStorageUrl, MAX_PHOTOS, mediaSchema, type SiteMedia } from "@/lib/media/media";
 import { getTemplate, templateDisplayName } from "@/lib/templates/registry";
 
 // Shape stored inside conversations.facts_state
@@ -90,6 +90,13 @@ export async function saveTurn(
 
   const db = getServiceClient();
 
+  // Message attachments are client-supplied storage URLs (composer photo
+  // batches). Defense in depth: only our-bucket URLs persist (§4.8).
+  const cleanMessages: ChatMsg[] = messages.map((m) => {
+    const atts = m.attachments?.filter(isStorageUrl).slice(0, MAX_PHOTOS);
+    return { role: m.role, content: m.content, ...(atts?.length && { attachments: atts }) };
+  });
+
   const mediaParsed = media !== undefined ? mediaSchema.safeParse(media) : null;
   const cleanMedia: SiteMedia | undefined = mediaParsed?.success
     ? {
@@ -128,7 +135,7 @@ export async function saveTurn(
 
   const { error } = await db
     .from("conversations")
-    .update({ messages, facts_state: factsState, is_complete: ready })
+    .update({ messages: cleanMessages, facts_state: factsState, is_complete: ready })
     .eq("id", conversationId);
 
   return { ok: !error };

@@ -11,7 +11,7 @@ import {
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
 import { getTemplate, templateDisplayName } from "@/lib/templates/registry";
-import { mediaSchema, type SiteMedia } from "@/lib/media/media";
+import { MAX_PHOTOS, mediaSchema, type SiteMedia } from "@/lib/media/media";
 
 /**
  * Streaming onboarding turn (P4). Same stateless contract as onboardAction —
@@ -48,9 +48,21 @@ function parseBody(body: unknown): {
   const history: ChatMsg[] = [];
   for (const m of b.messages) {
     if (!m || typeof m !== "object") return null;
-    const { role, content } = m as Record<string, unknown>;
+    const { role, content, attachments } = m as Record<string, unknown>;
     if ((role !== "user" && role !== "assistant") || typeof content !== "string") return null;
-    history.push({ role, content: content.slice(0, MAX_MSG_CHARS) });
+    // Composer photo batch: only the COUNT reaches the model (marker in
+    // prepareOnboardCall), so validation is lenient — malformed → dropped.
+    const atts = Array.isArray(attachments)
+      ? attachments
+          .filter((a): a is string => typeof a === "string")
+          .slice(0, MAX_PHOTOS)
+          .map((a) => a.slice(0, 500))
+      : [];
+    history.push({
+      role,
+      content: content.slice(0, MAX_MSG_CHARS),
+      ...(atts.length && { attachments: atts }),
+    });
   }
   // Facts feed the system prompt — accept ONLY what the real schema accepts.
   // Malformed shapes (e.g. non-array services) must 400 here, never throw

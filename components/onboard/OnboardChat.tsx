@@ -88,6 +88,149 @@ function pruneMeta(media: SiteMedia): PhotoMeta[] | undefined {
   return kept.length ? kept : undefined;
 }
 
+// One processed batch item: upload/analysis outcome for a single sent file.
+type BatchItem =
+  | { failed: true }
+  | { failed: false; url: string; analysis: AnalyzePhotoResult; warnings: string[] };
+
+// Ukrainian plural for «відгук» (2–4 відгуки, 5+ відгуків; a batch caps at 8).
+function reviewsWord(n: number): string {
+  return n < 5 ? "відгуки" : "відгуків";
+}
+
+// Client-side id for pending attachments. NOT crypto.randomUUID — that's
+// undefined outside secure contexts (http://app.lvh.me dev host).
+let nextAttachId = 0;
+function attachId(): string {
+  nextAttachId += 1;
+  return `att-${nextAttachId}`;
+}
+
+// Fold a processed batch into ONE media diff + ONE aggregated assistant
+// summary (approved design: variant A). Pure — threads its own accumulator
+// instead of re-reading React state (state updates are async; per-photo reads
+// would lose prior steps of the same batch: the MAX_PHOTOS cap and
+// last-logo-wins both depend on the running result).
+function routeBatch(
+  before: SiteMedia,
+  items: BatchItem[],
+): { media: SiteMedia; summary: string; reviews: { quote: string; author: string }[] } {
+  let m: SiteMedia = { ...before, photos: [...before.photos] };
+  const hadLogoBefore = Boolean(before.logoUrl);
+  let logoSet = 0;
+  let added = 0;
+  let failed = 0;
+  let overflow = 0;
+  let unreadable = 0;
+  const rejected: string[] = [];
+  const reviews: { quote: string; author: string }[] = [];
+  let firstWarning: string | null = null;
+
+  for (const item of items) {
+    if (item.failed) {
+      failed += 1;
+      continue;
+    }
+    const { url, analysis: result, warnings } = item;
+
+    // Fail-open (G5): no verdict → plain gallery photo, no meta.
+    if (!result.ok) {
+      if (m.photos.length >= MAX_PHOTOS) overflow += 1;
+      else {
+        m = { ...m, photos: [...m.photos, url] };
+        added += 1;
+      }
+      continue;
+    }
+    const a = result.analysis;
+
+    // Unsuitable or off-topic → nothing saved, reason lands in the summary.
+    if (a.suitable === false || a.kind === "irrelevant") {
+      rejected.push(lowerFirst(a.reason));
+      continue;
+    }
+
+    if (a.kind === "logo") {
+      m = {
+        ...m,
+        logoUrl: url,
+        photoMeta: upsertMeta(m.photoMeta, { url, kind: "logo", ...(a.alt && { alt: a.alt }) }),
+      };
+      logoSet += 1;
+      continue;
+    }
+
+    if (a.kind === "review") {
+      // OCR'd text is a CANDIDATE — the owner must confirm before it's a fact
+      // (invariant №5). The prefilled author is exactly what will be saved.
+      if (!a.reviewQuote) unreadable += 1;
+      else reviews.push({ quote: a.reviewQuote, author: a.reviewAuthor ?? "Клієнт" });
+      continue;
+    }
+
+    // work / interior / menu / person → gallery photo with class + honest alt.
+    if (m.photos.length >= MAX_PHOTOS) overflow += 1;
+    else {
+      m = {
+        ...m,
+        photos: [...m.photos, url],
+        photoMeta: upsertMeta(m.photoMeta, { url, kind: a.kind, ...(a.alt && { alt: a.alt }) }),
+      };
+      added += 1;
+      if (!firstWarning && warnings.length) firstWarning = warnings[0];
+    }
+  }
+
+  const lines: string[] = [];
+  if (logoSet > 0) {
+    lines.push(
+      hadLogoBefore || logoSet > 1
+        ? "Бачу лого — поставив його в шапку сайту, попереднє замінив. 👌"
+        : "Бачу лого — поставив його в шапку сайту. 👌",
+    );
+  }
+  if (added > 0) {
+    lines.push(
+      added === 1
+        ? `Гарне фото — додав у галерею (${m.photos.length} з ${MAX_PHOTOS}).`
+        : `Додав ${added} фото в галерею (${m.photos.length} з ${MAX_PHOTOS}).`,
+    );
+    if (firstWarning) lines.push(firstWarning);
+  }
+  if (reviews.length > 0) {
+    lines.push(
+      reviews.length === 1
+        ? "Знайшов відгук на скріншоті — підтвердіть його нижче."
+        : `Знайшов ${reviews.length} ${reviewsWord(reviews.length)} на скріншотах — підтвердіть їх нижче, по одному.`,
+    );
+  }
+  if (unreadable > 0) {
+    lines.push(
+      "Один зі скріншотів схожий на відгук, але текст не вдалося прочитати — можете написати його текстом, я збережу.",
+    );
+  }
+  if (rejected.length === 1) lines.push(`Одне фото я б на сайт не ставив: ${rejected[0]}`);
+  else if (rejected.length > 1) lines.push(`Кілька фото я б на сайт не ставив: ${rejected.join(" ")}`);
+  if (overflow > 0) {
+    lines.push(
+      `Ще ${overflow} не додав — у галереї вже максимум (${MAX_PHOTOS} фото). Замінити можна в редакторі.`,
+    );
+  }
+  if (failed > 0) {
+    lines.push(
+      failed === 1
+        ? "Одне фото не вдалося завантажити — спробуйте надіслати його ще раз."
+        : `${failed} фото не вдалося завантажити — спробуйте надіслати їх ще раз.`,
+    );
+  }
+
+  return {
+    media: m,
+    summary: lines.length ? lines.join("\n") : "Не вдалося обробити фото — спробуйте ще раз.",
+    reviews,
+  };
+}
+
 // Design animations (design/D). Kept in-file so this component owns everything;
 // prefixed `ob-` to avoid colliding with any global keyframes.
 const KEYFRAMES = `
@@ -150,15 +293,19 @@ export function OnboardChat() {
   // --- Media (logo + photos) — optional step before generation ---
   const [media, setMedia] = useState<SiteMedia>({ photos: [] });
 
-  // --- Chat photo upload (wave G) ---
-  // Transient card at the end of the message list while a paperclip upload is in
-  // flight — NOT part of `messages`, so it never persists.
-  const [uploadCard, setUploadCard] = useState<{ thumbUrl: string; label: string } | null>(null);
-  // Inline, transient error under the chat input for a failed upload.
+  // --- Chat photo attachments (wave G, attach-then-send) ---
+  // Files attached to the composer but not yet sent — local only (object
+  // URLs); nothing hits the server until the owner presses send.
+  const [pending, setPending] = useState<{ id: string; file: File; thumbUrl: string }[]>([]);
+  // Transient progress card at the end of the message list while a sent batch
+  // uploads/analyzes — NOT part of `messages`, so it never persists.
+  const [batchCard, setBatchCard] = useState<{ thumbs: string[]; done: number; total: number } | null>(null);
+  // Inline, transient error/hint under the chat input.
   const [uploadError, setUploadError] = useState<string | null>(null);
-  // A review OCR'd from a screenshot, awaiting the owner's explicit confirmation
-  // before it becomes a testimonial fact (invariant №5 — no invented facts).
-  const [pendingReview, setPendingReview] = useState<{ quote: string; author: string } | null>(null);
+  // Reviews OCR'd from screenshots, queued for the owner's explicit
+  // confirmation (one card at a time) before becoming testimonial facts
+  // (invariant №5 — no invented facts).
+  const [pendingReviews, setPendingReviews] = useState<{ quote: string; author: string }[]>([]);
 
   // --- Done / error state ---
   const [siteUrl, setSiteUrl] = useState("");
@@ -174,6 +321,17 @@ export function OnboardChat() {
 
   // Progress chips — derived, always in sync with the collected facts.
   const progress = deriveProgress(facts);
+
+  // Revoke still-attached (unsent) thumbnail blob URLs on unmount — they
+  // otherwise live for the whole tab. Ref keeps the cleanup closure current.
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  useEffect(
+    () => () => {
+      for (const p of pendingRef.current) URL.revokeObjectURL(p.thumbUrl);
+    },
+    [],
+  );
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -221,11 +379,19 @@ export function OnboardChat() {
     templateLabel?: string;
   };
 
-  const streamTurn = async (nextMessages: ChatMsg[]): Promise<TurnPayload> => {
+  // `modelMessages` go to the API (this turn's batch summary excluded — the
+  // system prompt's media inventory already covers it); `uiBase` is what the
+  // streamed reply paints onto; `mediaNow` is passed explicitly because the
+  // closure's `media` is stale right after a batch.
+  const streamTurn = async (
+    modelMessages: ChatMsg[],
+    uiBase: ChatMsg[],
+    mediaNow: SiteMedia,
+  ): Promise<TurnPayload> => {
     const res = await fetch("/api/onboard", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: nextMessages, facts, verticalId, templateId: template?.id, media }),
+      body: JSON.stringify({ messages: modelMessages, facts, verticalId, templateId: template?.id, media: mediaNow }),
     });
     const ct = res.headers.get("content-type") ?? "";
     if (ct.includes("application/json")) {
@@ -277,7 +443,7 @@ export function OnboardChat() {
             setThinking(false);
           }
           acc += obj.text;
-          setMessages([...nextMessages, { role: "assistant", content: acc }]);
+          setMessages([...uiBase, { role: "assistant", content: acc }]);
         } else if (obj.t === "final") {
           final = obj as TurnPayload;
         } else if (obj.t === "error") {
@@ -289,25 +455,23 @@ export function OnboardChat() {
     return final;
   };
 
-  // Core send — used by the input row AND by quick-reply chips.
+  // Core send — used by the input row AND by quick-reply chips. Carries the
+  // composer's pending photo attachments: the batch uploads/analyzes in
+  // parallel, routes into ONE aggregated summary, and only then (if there was
+  // text) the normal agent turn runs.
   const send = async (raw: string) => {
     const text = raw.trim();
-    if (!text || loading) return;
+    const batch = pending;
+    if ((!text && batch.length === 0) || loading) return;
 
-    const userMsg: ChatMsg = { role: "user", content: text };
-    const nextMessages = [...messages, userMsg];
-    const progressBefore = new Set(
-      deriveProgress(facts).filter((p) => p.done).map((p) => p.label),
-    );
-    setMessages(nextMessages);
-    setInput("");
-    setQuickReplies([]);
+    setUploadError(null);
     setSavedNote(null);
+    setQuickReplies([]);
     setLoading(true);
-    setTyping(true);
-    setThinking(false);
 
-    // Lazily create the DB row on the first user send (avoids empty rows)
+    // Lazily create the DB row BEFORE any optimistic UI (plan review): photo
+    // uploads scope by conversationId, so a failed start must leave the
+    // composer intact (text + attachments) instead of a dangling bubble.
     if (convIdRef.current === null) {
       const started = await startConversation();
       if (started) {
@@ -315,63 +479,161 @@ export function OnboardChat() {
         localStorage.setItem("vitryna_conv_id", started.conversationId);
       }
     }
+    if (batch.length > 0 && !convIdRef.current) {
+      setUploadError("Не вдалося завантажити фото — спробуйте трохи пізніше.");
+      setLoading(false);
+      return;
+    }
 
-    const applyResult = (result: TurnPayload) => {
-      const finalMessages: ChatMsg[] = [...nextMessages, { role: "assistant", content: result.message }];
-      setMessages(finalMessages);
-      setFacts(result.facts);
-      setReady(result.ready);
-      setConfirmed(result.confirmed ?? false);
-      setVerticalId(result.verticalId);
-      setQuickReplies(result.quickReplies ?? []);
+    const progressBefore = new Set(
+      deriveProgress(facts).filter((p) => p.done).map((p) => p.label),
+    );
 
-      // Last-wins: an existing pick must never be cleared by a result without
-      // one (e.g. a later turn that doesn't touch the design).
-      const nextTemplate =
-        result.templateId && result.templateLabel
-          ? { id: result.templateId, label: result.templateLabel }
-          : template;
-      setTemplate(nextTemplate);
-
-      // Agentic feedback: which facts the agent just recorded — a real diff of
-      // the same progress model as the header chips, not decoration.
-      const newly = deriveProgress(result.facts)
-        .filter((p) => p.done && !progressBefore.has(p.label))
-        .map((p) => p.label);
-      setSavedNote(newly.length ? newly.join(", ") : null);
-
-      // Persist turn fire-and-forget — never blocks the UI. Media rides along
-      // explicitly (loading gate = it can't be mid-change), so this write never
-      // depends on racing the stored value back in.
-      if (convIdRef.current) {
-        void saveTurn(
-          convIdRef.current,
-          finalMessages,
-          result.facts,
-          result.verticalId,
-          result.ready,
-          result.confirmed ?? false,
-          nextTemplate?.id,
-          media,
-        );
-      }
+    // Optimistic user bubble: local object-URL thumbnails until the upload
+    // swaps them for storage URLs.
+    const userMsg: ChatMsg = {
+      role: "user",
+      content: text,
+      ...(batch.length > 0 && { attachments: batch.map((b) => b.thumbUrl) }),
     };
+    let modelMessages: ChatMsg[] = [...messages, userMsg];
+    let uiMessages: ChatMsg[] = modelMessages;
+    let mediaNow = media;
+    setMessages(uiMessages);
+    setInput("");
+    setPending([]);
 
     try {
+      if (batch.length > 0) {
+        setBatchCard({ thumbs: batch.map((b) => b.thumbUrl), done: 0, total: batch.length });
+        const settled = await Promise.all(
+          batch.map(async (item): Promise<BatchItem> => {
+            try {
+              const blob = await processImage(item.file);
+              const ext = blob.type === "image/webp" ? "webp" : "jpg";
+              const fd = new FormData();
+              fd.append("file", blob, `photo.${ext}`);
+              fd.append("conversationId", convIdRef.current as string);
+              const res = await fetch("/api/upload", { method: "POST", body: fd });
+              const json = (await res.json().catch(() => null)) as
+                | { ok?: boolean; url?: string; warnings?: string[] }
+                | null;
+              if (!res.ok || !json?.url) return { failed: true };
+              const analysis = await analyzePhotoAction(json.url);
+              return { failed: false, url: json.url, analysis, warnings: json.warnings ?? [] };
+            } catch {
+              return { failed: true };
+            } finally {
+              setBatchCard((prev) => (prev ? { ...prev, done: prev.done + 1 } : prev));
+            }
+          }),
+        );
+
+        // Promise.all keeps INPUT order — routing (e.g. last-logo-wins) is
+        // deterministic, not network-timing dependent.
+        const uploaded = settled.flatMap((s) => (s.failed ? [] : [s.url]));
+        const routed = routeBatch(media, settled);
+        mediaNow = applyMediaLocal(routed.media);
+        if (routed.reviews.length) setPendingReviews((prev) => [...prev, ...routed.reviews]);
+
+        // Swap local thumbnails for storage URLs (failed uploads drop out). A
+        // fully-failed photo-only send keeps no user message at all — an empty
+        // bubble would persist and add an empty-content turn to history.
+        const userMsgFinal: ChatMsg = {
+          role: "user",
+          content: text,
+          ...(uploaded.length > 0 && { attachments: uploaded }),
+        };
+        const keepUserMsg = Boolean(text) || uploaded.length > 0;
+        modelMessages = keepUserMsg ? [...messages, userMsgFinal] : [...messages];
+        // The summary stays OUT of this turn's model input — the system
+        // prompt's media inventory already reflects the uploads (G4).
+        uiMessages = [...modelMessages, { role: "assistant", content: routed.summary }];
+        setMessages(uiMessages);
+        setBatchCard(null);
+        for (const b of batch) URL.revokeObjectURL(b.thumbUrl);
+
+        // Single write: summary message AND media together (wave G pattern —
+        // two racing read-modify-writes could lose the fresh upload). AWAITED
+        // (code review): applyResult fires its own saveTurn later with the
+        // full message list; if this earlier, shorter write ever landed AFTER
+        // it, the persisted conversation would lose the agent's reply.
+        if (convIdRef.current) {
+          await saveTurn(
+            convIdRef.current,
+            uiMessages,
+            facts,
+            verticalId,
+            ready,
+            confirmed,
+            template?.id,
+            mediaNow,
+          ).catch(() => {});
+        }
+      }
+
+      // Photo-only send stops here — the summary (+ review cards) IS the reply.
+      if (!text) return;
+
+      setTyping(true);
+      setThinking(false);
+
+      const applyResult = (result: TurnPayload) => {
+        const finalMessages: ChatMsg[] = [...uiMessages, { role: "assistant", content: result.message }];
+        setMessages(finalMessages);
+        setFacts(result.facts);
+        setReady(result.ready);
+        setConfirmed(result.confirmed ?? false);
+        setVerticalId(result.verticalId);
+        setQuickReplies(result.quickReplies ?? []);
+
+        // Last-wins: an existing pick must never be cleared by a result without
+        // one (e.g. a later turn that doesn't touch the design).
+        const nextTemplate =
+          result.templateId && result.templateLabel
+            ? { id: result.templateId, label: result.templateLabel }
+            : template;
+        setTemplate(nextTemplate);
+
+        // Agentic feedback: which facts the agent just recorded — a real diff of
+        // the same progress model as the header chips, not decoration.
+        const newly = deriveProgress(result.facts)
+          .filter((p) => p.done && !progressBefore.has(p.label))
+          .map((p) => p.label);
+        setSavedNote(newly.length ? newly.join(", ") : null);
+
+        // Persist turn fire-and-forget — never blocks the UI. Media rides along
+        // explicitly (loading gate = it can't be mid-change), so this write never
+        // depends on racing the stored value back in.
+        if (convIdRef.current) {
+          void saveTurn(
+            convIdRef.current,
+            finalMessages,
+            result.facts,
+            result.verticalId,
+            result.ready,
+            result.confirmed ?? false,
+            nextTemplate?.id,
+            mediaNow,
+          );
+        }
+      };
+
       try {
-        applyResult(await streamTurn(nextMessages));
+        applyResult(await streamTurn(modelMessages, uiMessages, mediaNow));
       } catch {
         // Streaming path failed (network, SSE parse, server) → the proven
         // non-stream server action still answers the turn.
         setTyping(true);
         applyResult(
-          await onboardAction(nextMessages, facts, verticalId, template?.id, { ready, confirmed }, media),
+          await onboardAction(modelMessages, facts, verticalId, template?.id, { ready, confirmed }, mediaNow),
         );
       }
     } finally {
       setLoading(false);
       setTyping(false);
       setThinking(false);
+      setBatchCard(null);
       // Return focus to input so the owner can keep typing
       setTimeout(() => inputRef.current?.focus(), 50);
     }
@@ -420,26 +682,20 @@ export function OnboardChat() {
   };
 
   // ---------------------------------------------------------------------------
-  // Chat photo upload (wave G) — paperclip → upload → vision analysis → route by
-  // class. Reuses the shared `loading` flag so chat send and photo upload are
-  // mutually exclusive.
+  // Chat photo attachments (wave G) — the paperclip only ATTACHES files to the
+  // composer; upload + vision analysis + routing run inside send(). The shared
+  // `loading` flag keeps sends mutually exclusive.
   // ---------------------------------------------------------------------------
 
-  // Append an assistant message from the upload flow and persist it
-  // fire-and-forget. `factsOverride` is passed only by the review-save case,
-  // where facts changed this turn and setFacts hasn't flushed into the closure;
-  // `mediaOverride` by the routing paths that just changed media — the ONE
-  // saveTurn write carries messages AND media together (codex must-fix: a
-  // separate saveMediaAction racing this saveTurn could lose the upload).
+  // Append an assistant message from the review-confirm flow and persist it
+  // fire-and-forget. `factsOverride` is passed by the review-save case, where
+  // facts changed this turn and setFacts hasn't flushed into the closure.
   // Closure state is safe here for the same reason applyResult's is: the
-  // `loading` gate makes upload/send mutually exclusive, so nothing else
-  // appends between the pick and this call. (A saveTurn INSIDE a setMessages
-  // updater would be a side effect during render — React flags it.)
-  const appendAssistant = (
-    content: string,
-    factsOverride?: Partial<BusinessFacts>,
-    mediaOverride?: SiteMedia,
-  ) => {
+  // `loading` gate keeps sends exclusive and the review cards are disabled
+  // while loading — nothing else appends between the click and this call. (A
+  // saveTurn INSIDE a setMessages updater would be a side effect during
+  // render — React flags it.)
+  const appendAssistant = (content: string, factsOverride?: Partial<BusinessFacts>) => {
     const next: ChatMsg[] = [...messages, { role: "assistant", content }];
     setMessages(next);
     if (convIdRef.current) {
@@ -451,147 +707,57 @@ export function OnboardChat() {
         ready,
         confirmed,
         template?.id,
-        mediaOverride ?? media,
+        media,
       );
     }
   };
 
   // Apply a media change locally WITHOUT the media-step's saveMediaAction —
-  // in the chat-upload flow persistence rides the same saveTurn write as the
-  // assistant message (see appendAssistant above).
+  // in the batch flow persistence rides send()'s single saveTurn write
+  // together with the summary message.
   const applyMediaLocal = (next: SiteMedia): SiteMedia => {
     const clean: SiteMedia = { ...next, photoMeta: pruneMeta(next) };
     setMedia(clean);
     return clean;
   };
 
-  // Route ONE analyzed photo by its class. The upload is already stored; this
-  // only decides where the url lands and what the assistant says.
-  const routePhoto = (url: string, result: AnalyzePhotoResult, warnings: string[]) => {
-    const poolFull = media.photos.length >= MAX_PHOTOS;
-    const poolFullMsg = "У нас вже максимум фото (8). Зайві можна буде замінити в редакторі.";
-
-    // Fail-open (G5): no verdict → keep it as a plain gallery photo, no meta.
-    if (!result.ok) {
-      if (poolFull) return appendAssistant(poolFullMsg);
-      const clean = applyMediaLocal({ ...media, photos: [...media.photos, url] });
-      return appendAssistant("Додав фото — побачите його в галереї сайту.", undefined, clean);
-    }
-
-    const a = result.analysis;
-
-    // Soft refusal — unsuitable or off-topic. Nothing is saved.
-    if (a.suitable === false || a.kind === "irrelevant") {
-      return appendAssistant(`Це фото я б на сайт не ставив: ${lowerFirst(a.reason)} Спробуєте інше?`);
-    }
-
-    if (a.kind === "logo") {
-      const hadLogo = Boolean(media.logoUrl);
-      const clean = applyMediaLocal({
-        ...media,
-        logoUrl: url,
-        photoMeta: upsertMeta(media.photoMeta, { url, kind: "logo", ...(a.alt && { alt: a.alt }) }),
-      });
-      return appendAssistant(
-        hadLogo
-          ? "Бачу лого — поставив його в шапку сайту. 👌 Попереднє замінив."
-          : "Бачу лого — поставив його в шапку сайту. 👌",
-        undefined,
-        clean,
-      );
-    }
-
-    if (a.kind === "review") {
-      if (!a.reviewQuote) {
-        return appendAssistant(
-          "Схоже, це скріншот відгуку, але текст не вдалося прочитати. Можете просто написати відгук текстом — я збережу.",
-        );
-      }
-      // OCR'd text is a CANDIDATE — the owner must confirm before it's a fact.
-      // No visible author on the screenshot → prefill the generic «Клієнт» so
-      // the owner SEES exactly what will be saved (codex must-fix: a silent
-      // fallback after an empty field is an unconfirmed invented attribution).
-      setPendingReview({ quote: a.reviewQuote, author: a.reviewAuthor ?? "Клієнт" });
-      return;
-    }
-
-    // work / interior / menu / person → gallery photo with class + honest alt.
-    if (poolFull) return appendAssistant(poolFullMsg);
-    const count = media.photos.length + 1;
-    const clean = applyMediaLocal({
-      ...media,
-      photos: [...media.photos, url],
-      photoMeta: upsertMeta(media.photoMeta, { url, kind: a.kind, ...(a.alt && { alt: a.alt }) }),
-    });
-    let msg = `Гарне фото — додав у галерею (${count} з ${MAX_PHOTOS}).`;
-    if (warnings.length) msg += ` ${warnings[0]}`;
-    return appendAssistant(msg, undefined, clean);
+  // Attach picked files to the composer (no server calls yet). Caps at
+  // MAX_PHOTOS per message; extras are dropped with an inline hint.
+  const addFiles = (files: File[]) => {
+    if (loading || files.length === 0) return;
+    const room = MAX_PHOTOS - pending.length;
+    setUploadError(files.length > room ? `Можна прикріпити до ${MAX_PHOTOS} фото за раз.` : null);
+    const taken = files.slice(0, Math.max(0, room)).map((file) => ({
+      id: attachId(),
+      file,
+      thumbUrl: URL.createObjectURL(file),
+    }));
+    if (taken.length) setPending([...pending, ...taken]);
   };
 
-  const handlePhotoPick = async (file: File) => {
-    if (loading) return;
-    setUploadError(null);
-    setLoading(true);
-
-    // Lazily create the DB row, exactly like send() (avoids empty rows).
-    if (convIdRef.current === null) {
-      const started = await startConversation();
-      if (started) {
-        convIdRef.current = started.conversationId;
-        localStorage.setItem("vitryna_conv_id", started.conversationId);
-      }
-    }
-    if (!convIdRef.current) {
-      setUploadError("Не вдалося завантажити фото — спробуйте трохи пізніше.");
-      setLoading(false);
-      return;
-    }
-
-    const thumbUrl = URL.createObjectURL(file);
-    setUploadCard({ thumbUrl, label: "Завантажую фото…" });
-
-    try {
-      const blob = await processImage(file);
-      const ext = blob.type === "image/webp" ? "webp" : "jpg";
-      const fd = new FormData();
-      fd.append("file", blob, `photo.${ext}`);
-      fd.append("conversationId", convIdRef.current);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const json = (await res.json().catch(() => null)) as
-        | { ok?: boolean; url?: string; warnings?: string[] }
-        | null;
-      if (!res.ok || !json?.url) {
-        setUploadError("Не вдалося завантажити фото — спробуйте трохи пізніше.");
-        return;
-      }
-
-      setUploadCard({ thumbUrl, label: "Роздивляюсь фото…" });
-      const result = await analyzePhotoAction(json.url);
-      routePhoto(json.url, result, json.warnings ?? []);
-    } catch {
-      setUploadError("Не вдалося завантажити фото — спробуйте трохи пізніше.");
-    } finally {
-      URL.revokeObjectURL(thumbUrl);
-      setUploadCard(null);
-      setLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+  const removePending = (id: string) => {
+    const item = pending.find((p) => p.id === id);
+    if (item) URL.revokeObjectURL(item.thumbUrl);
+    setPending(pending.filter((p) => p.id !== id));
   };
 
+  // Confirm/decline the FIRST queued review card; the next one (if any)
+  // surfaces automatically.
   const saveReview = () => {
-    if (!pendingReview) return;
-    const author = pendingReview.author.trim() || "Клієнт";
+    const current = pendingReviews[0];
+    if (!current) return;
+    const author = current.author.trim() || "Клієнт";
     const newFacts: Partial<BusinessFacts> = {
       ...facts,
-      testimonials: [...(facts.testimonials ?? []), { quote: pendingReview.quote, author }],
+      testimonials: [...(facts.testimonials ?? []), { quote: current.quote, author }],
     };
     setFacts(newFacts);
     setSavedNote("Відгук");
-    setPendingReview(null);
+    setPendingReviews(pendingReviews.slice(1));
     appendAssistant("Зберіг відгук — він зʼявиться на сайті. Дякую!", newFacts);
   };
 
-  const declineReview = () => setPendingReview(null);
+  const declineReview = () => setPendingReviews(pendingReviews.slice(1));
 
   const handleMediaNext = async () => {
     if (loading) return;
@@ -755,20 +921,29 @@ export function OnboardChat() {
               <div className="pl-1 text-[13px] font-bold text-ok">✓ Записав: {savedNote}</div>
             )}
 
-            {uploadCard && (
+            {batchCard && (
               <div className="flex justify-start">
                 <div className="flex items-center gap-3 rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface px-4 py-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={uploadCard.thumbUrl}
-                    alt=""
-                    className="h-12 w-12 shrink-0 rounded-[10px] object-cover"
-                  />
+                  <div className="flex -space-x-3">
+                    {batchCard.thumbs.slice(0, 3).map((t, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={i}
+                        src={t}
+                        alt=""
+                        className="h-12 w-12 shrink-0 rounded-[10px] border-2 border-surface object-cover"
+                      />
+                    ))}
+                  </div>
                   <span
                     className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent"
                     aria-hidden
                   />
-                  <span className="text-[14px] font-semibold text-ink-muted">{uploadCard.label}</span>
+                  <span className="text-[14px] font-semibold text-ink-muted">
+                    {batchCard.total === 1
+                      ? "Роздивляюсь фото…"
+                      : `Роздивляюсь фото… ${Math.min(batchCard.done + 1, batchCard.total)} з ${batchCard.total}`}
+                  </span>
                 </div>
               </div>
             )}
@@ -806,19 +981,25 @@ export function OnboardChat() {
             </div>
           )}
 
-          {/* Review OCR'd from a screenshot — the owner confirms before it
-              becomes a fact (invariant №5). */}
-          {pendingReview && (
+          {/* Reviews OCR'd from screenshots — the owner confirms each before it
+              becomes a fact (invariant №5). One card at a time. */}
+          {pendingReviews.length > 0 && (
             <div className="mb-3 flex flex-col gap-3 rounded-[18px] border-[1.5px] border-line bg-surface p-4">
-              <span className="text-[15px] font-bold text-ink">Знайшов відгук на скріншоті:</span>
+              <span className="text-[15px] font-bold text-ink">
+                {pendingReviews.length > 1
+                  ? `Знайшов відгук на скріншоті (ще ${pendingReviews.length - 1} у черзі):`
+                  : "Знайшов відгук на скріншоті:"}
+              </span>
               <p className="whitespace-pre-wrap rounded-[12px] bg-sunken px-3.5 py-3 text-[15px] leading-relaxed text-ink">
-                {pendingReview.quote}
+                {pendingReviews[0].quote}
               </p>
               <input
                 type="text"
-                value={pendingReview.author}
+                value={pendingReviews[0].author}
                 onChange={(e) =>
-                  setPendingReview((prev) => (prev ? { ...prev, author: e.target.value } : prev))
+                  setPendingReviews((prev) =>
+                    prev.length ? [{ ...prev[0], author: e.target.value }, ...prev.slice(1)] : prev,
+                  )
                 }
                 placeholder="Імʼя клієнта (необовʼязково)"
                 autoComplete="off"
@@ -837,15 +1018,39 @@ export function OnboardChat() {
             </div>
           )}
 
+          {/* Pending attachments — local previews, removable until sent. */}
+          {pending.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {pending.map((p) => (
+                <div key={p.id} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={p.thumbUrl}
+                    alt=""
+                    className="h-14 w-14 rounded-[12px] border-[1.5px] border-line object-cover"
+                  />
+                  <button
+                    onClick={() => removePending(p.id)}
+                    disabled={loading}
+                    aria-label="Прибрати фото"
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[12px] font-bold leading-none text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center gap-2.5">
             <input
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void handlePhotoPick(f);
+                addFiles(Array.from(e.target.files ?? []));
                 e.target.value = ""; // allow re-picking the same file
               }}
             />
@@ -870,7 +1075,7 @@ export function OnboardChat() {
             />
             <button
               onClick={handleSend}
-              disabled={loading || !input.trim()}
+              disabled={loading || (!input.trim() && pending.length === 0)}
               aria-label="Надіслати"
               className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-45"
             >
@@ -1194,17 +1399,29 @@ function renderBold(text: string): ReactNode[] {
 
 function ChatBubble({ msg }: { msg: ChatMsg }) {
   const isUser = msg.role === "user";
+  const atts = msg.attachments ?? [];
+  if (!msg.content && atts.length === 0) return null;
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <p
-        className={`max-w-[85%] whitespace-pre-wrap px-[18px] py-3.5 text-[17px] leading-relaxed sm:max-w-[75%] ${
+      <div
+        className={`max-w-[85%] px-[18px] py-3.5 text-[17px] leading-relaxed sm:max-w-[75%] ${
           isUser
             ? "rounded-[20px_20px_6px_20px] bg-brand text-white"
             : "rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface text-ink shadow-[0_1px_2px_rgba(23,36,47,0.04)]"
         }`}
       >
-        {isUser ? msg.content : renderBold(msg.content)}
-      </p>
+        {atts.length > 0 && (
+          <div className={`flex flex-wrap gap-1.5 ${msg.content ? "mb-2.5" : ""}`}>
+            {atts.map((u, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={u} alt="" className="h-24 w-24 rounded-[12px] object-cover" />
+            ))}
+          </div>
+        )}
+        {msg.content !== "" && (
+          <p className="whitespace-pre-wrap">{isUser ? msg.content : renderBold(msg.content)}</p>
+        )}
+      </div>
     </div>
   );
 }
