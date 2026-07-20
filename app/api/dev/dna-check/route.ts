@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
+import { revalidateTenant } from "@/lib/cache";
 import { designDnaSchema, type DesignDNA } from "@/lib/theme/dna";
-import { rollDna } from "@/lib/theme/dna-roll";
+import { rollBundleDna } from "@/lib/theme/dna-roll";
 import { resolveTheme, presetFamily } from "@/lib/theme/presets";
 import type { Theme } from "@/lib/theme/tokens";
 
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
   const sb = getServiceClient();
   const { data: t } = await sb
     .from("tenants")
-    .select("id, draft_theme")
+    .select("id, draft_theme, vertical, brand")
     .eq("host", host)
     .maybeSingle();
   if (!t) return NextResponse.json({ error: "tenant not found" }, { status: 404 });
@@ -58,13 +59,27 @@ export async function POST(req: Request) {
     family: string | undefined;
     fontPairId: string;
     motionId: string;
+    bundleId?: string;
+    hero?: string;
   }> = [];
   const violations: string[] = [];
 
+  const brand = (t.brand ?? {}) as { photos?: string[] };
   for (let i = 0; i < steps; i++) {
-    const dna = rollDna({ tenantId: host, nonce: startNonce + i, previous });
+    // v2 (DNA-2): the bundle IS the distinctness unit — same bundle in a row
+    // is a violation on top of the family/pair axes.
+    const { dna } = rollBundleDna({
+      tenantId: host,
+      nonce: startNonce + i,
+      verticalId: (t.vertical as string) ?? undefined,
+      photosCount: brand.photos?.length ?? 0,
+      previous,
+    });
     const family = presetFamily(dna.presetId);
     if (previous) {
+      if (previous.bundleId && previous.bundleId === dna.bundleId) {
+        violations.push(`nonce ${dna.designNonce}: same bundle (${dna.bundleId})`);
+      }
       if (presetFamily(previous.presetId) === family) {
         violations.push(`nonce ${dna.designNonce}: same palette family (${family})`);
       }
@@ -78,6 +93,8 @@ export async function POST(req: Request) {
       family,
       fontPairId: dna.fontPairId,
       motionId: dna.motionId,
+      bundleId: dna.bundleId,
+      hero: dna.skinOverrides?.hero,
     });
 
     if (body.apply) {
@@ -87,6 +104,32 @@ export async function POST(req: Request) {
         .update({ draft_theme: theme, published_theme: theme })
         .eq("id", t.id);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      // v2: the bundle re-skins the page too (both content states — dev-only,
+      // *.lvh.me test tenants; the real path does this draft-only).
+      const { data: pg } = await sb
+        .from("pages").select("id, draft_content, published_content")
+        .eq("tenant_id", t.id).eq("slug", "").maybeSingle();
+      if (pg && dna.skinOverrides) {
+        const reskin = (c: unknown) => {
+          const content = (c ?? {}) as { blocks?: Array<{ type: string; skin?: string }> };
+          if (!content.blocks) return content;
+          return {
+            ...content,
+            blocks: content.blocks.map((b) => {
+              const o = dna.skinOverrides?.[b.type];
+              return o === undefined ? b : { ...b, skin: o || undefined };
+            }),
+          };
+        };
+        await sb.from("pages").update({
+          draft_content: reskin(pg.draft_content),
+          published_content: reskin(pg.published_content),
+        }).eq("id", pg.id);
+      }
+      // Direct DB write bypasses every action-level purge — without this the
+      // public page keeps serving the cached previous look (found live: three
+      // "different" grid states rendered one stale page).
+      revalidateTenant(host);
     }
     previous = dna;
   }
