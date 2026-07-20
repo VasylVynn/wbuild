@@ -141,3 +141,21 @@
 > visit-card aspect-ratio CLS (полірування — у хвилю visual-regression). Підтверджено
 > рев'ювером: pocket/seo переживають reroll, price-hiding скінів у бандлах нема, no-photo
 > стани чесні, CTA-контракт спільний.
+
+## Хвиля DNA-2b — DNA у шаблонному шляху: вісь шрифтової пари (гілка wave-DNA2b)
+
+> Знахідка 2.А: нові сайти завжди шаблонні, а враппери несуть власні next/font —
+> DNA-осі до них не діставали. 2b дає шаблонам вісь ПАРИ (найпомітніша після фіксу
+> шрифтів); палітри/data-theme шаблонів = 2c (зміна інтерфейсу врапперів, координація
+> з паралельною сесією шаблонів).
+
+- [ ] **B1. Registry allowlists** — `dnaFontPairs` на кожному шаблоні (пари, що не ламають
+      ідентичність: salon serif-люкс, studio модерн, ferri преміум, restaurant тепло).
+- [ ] **B2. Shell wiring** — template-гілка TenantLayout і frame: інлайн `--font-heading/--font-body`
+      з `resolveFontPair(theme.fontPairId)` (нема пари → шаблонні дефолти, нуль змін).
+- [ ] **B3. CSS де-фонтінг** — font-індирекції 4 шаблонів у globals.css отримують
+      `var(--font-heading|--font-body, <шаблонний дефолт>)` fallback-ланцюги.
+- [ ] **B4. Publish** — шаблонна гілка: пара з allowlist шаблону (seeded, ≠попередня).
+- [ ] **B5. Re-roll** — дозволити шаблонним сайтам pair-only re-roll (draft-only).
+- [ ] **B6. Живий доказ** — wave-dna-smoke (salon): два роли → різні пари в computed h1;
+      без fontPairId — рендер untouched (регресія нуль).
