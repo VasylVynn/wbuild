@@ -278,16 +278,26 @@
 - [x] **D3.1. AA-guard + пресети 15→25+** — `lib/theme/contrast.ts` (WCAG relative
       luminance/ratio); ~10-12 нових ручних пресетів з сімʼями (усі пари фон/текст
       проходять AA 4.5:1 — перевіряється скриптом, не оком); PRESET_FAMILIES доповнено.
-- [ ] **D3.2. Decor-токени** — 5-6 CSS-only прийомів (mesh, dot-grid, діагональні
+- [x] **D3.2. Decor-токени** — 5-6 CSS-only прийомів (mesh, dot-grid, діагональні
       розділювачі, noise, hairline-рамки) як `decorId` вісь: DecorLayer у класичному
       shell, blessed-списки `decorIds` у бандлах, рол у rollBundleDna, фото-бідні
       сайти виглядають навмисними.
-- [ ] **D3.3. Logo→palette** — `@material/material-color-utilities` (Apache-2.0):
+- [x] **D3.3. Logo→palette** — `@material/material-color-utilities` (Apache-2.0):
       домінантний колір лого → hue-сімʼя → перевага бандлів/пресетів цієї сімʼї
       (snap до curated, НЕ сирий hex — смак і AA гарантує авторинг пресетів);
       детерміновано, сідований tie-break; fail-open без лого.
-- [ ] **D3.4. Верифікація** — tsc/build; живий доказ: тенант з кольоровим лого отримує
+- [x] **D3.4. Верифікація** — tsc/build; живий доказ: тенант з кольоровим лого отримує
       сімʼю палітри лого; decor рендериться на photo-poor класиці; gate нових осей;
       adversarial review; нотатки.
 - [ ] **D3.5. Packs→bundles консолідація** — ЗАБЛОКОВАНО EditorShell (паралельна
       сесія); зробити після її мержу — нотатка, не робота цієї хвилі.
+
+> **Нотатка хвилі DNA-3 (2026-07-21, verification):** усе доведено наживо: (1) нова палітра
+> petrol-pop + Unbounded + editorial-hero + DecorLayer (waves) на kvity.lvh.me — скріншот
+> у scratchpad, 1 fixed aria-hidden шар підтверджений DOM-ом; (2) рожеве тест-лого →
+> logo-family "warm" через dev-роут logo-family (fetch→sharp→quantize→HCT→сімʼя);
+> (3) незалежний аудит контрасту скриптом: 6 СТАРИХ палітр провалювали AA на CTA
+> (peach-soft 2.64:1!) — primary затемнені зі збереженням відтінку, глобальний мінімум
+> тепер 4.65:1 по 26×4 парах. Бандли збагачені новими пресетами сімей. D3.5
+> (packs→bundles) лишається заблокованим EditorShell. Смоук: kvity.lvh.me (сід) +
+> тест-PNG у generated/test/ — прибрати з наступною чисткою.
