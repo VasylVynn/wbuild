@@ -7,6 +7,7 @@ import {
   type MotionId,
 } from "./dna";
 import { THEME_PRESET_IDS, presetFamily, type ThemePresetId } from "./presets";
+import type { PaletteFamily } from "./dna";
 import { FONT_PAIR_IDS } from "./font-pairs";
 import { bundlesFor, type StyleBundle } from "@/lib/design/bundles";
 
@@ -80,6 +81,9 @@ export function rollBundleDna(opts: {
   verticalId?: string;
   photosCount: number;
   previous?: DesignDNA | null;
+  /** DNA-3: the owner-logo palette family — prefer bundles of this family
+   *  when the distinctness rules leave any (variety still wins a re-roll). */
+  logoFamily?: PaletteFamily | null;
 }): { dna: DesignDNA; bundle: StyleBundle } {
   const rng = mulberry32(dnaSeed(opts.tenantId, opts.nonce));
   const prev = opts.previous ?? undefined;
@@ -87,7 +91,14 @@ export function rollBundleDna(opts: {
   const pool = bundlesFor(opts.verticalId);
   const others = prev?.bundleId ? pool.filter((b) => b.id !== prev.bundleId) : pool;
   // Single-bundle verticals degrade gracefully (research addendum §3).
-  const bundle = pick(rng, others.length ? others : pool) ?? pool[0];
+  const candidates = others.length ? others : pool;
+  // Logo snap (DNA-3): among the allowed candidates prefer the logo's family
+  // — never against distinctness (a re-roll away from the only logo-family
+  // bundle honestly leaves the family; the next roll may come back).
+  const logoMatched = opts.logoFamily
+    ? candidates.filter((b) => presetFamily(b.presetIds[0]) === opts.logoFamily)
+    : [];
+  const bundle = pick(rng, logoMatched.length ? logoMatched : candidates) ?? pool[0];
 
   const otherPresets = prev
     ? bundle.presetIds.filter((id) => id !== prev.presetId)
@@ -102,6 +113,8 @@ export function rollBundleDna(opts: {
     skinOverrides[type] = alternates?.length ? (pick(rng, alternates) ?? base ?? "") : (base ?? "");
   }
 
+  const decorId = bundle.decorIds?.length ? pick(rng, bundle.decorIds) : undefined;
+
   return {
     dna: {
       presetId,
@@ -110,6 +123,7 @@ export function rollBundleDna(opts: {
       designNonce: opts.nonce,
       bundleId: bundle.id,
       skinOverrides,
+      ...(decorId && { decorId }),
     },
     bundle,
   };

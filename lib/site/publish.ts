@@ -10,6 +10,7 @@ import type { SiteMedia } from "@/lib/media/media";
 import { designDnaSchema, dnaSeed, mulberry32, pick } from "@/lib/theme/dna";
 import { getTemplate } from "@/lib/templates/registry";
 import { rollBundleDna } from "@/lib/theme/dna-roll";
+import { logoPaletteFamily } from "@/lib/theme/logo-palette";
 import { resolveTheme } from "@/lib/theme/presets";
 import type { StoredBlock } from "@/lib/blocks/schema";
 
@@ -110,12 +111,16 @@ export async function generateAndPublish(
   // Bundle-aware roll (DNA-2): the bundle carries palette family, font pair,
   // hero archetype and the whole skin-set — «different bundle» = a different
   // SITE, not a recolor. The photo inventory picks the honest hero.
+  // DNA-3: the logo's dominant color nudges the bundle family (snap to
+  // curated presets, never raw hex). Fail-open null keeps the plain roll.
+  const logoFamily = await logoPaletteFamily(media?.logoUrl);
   const { dna } = rollBundleDna({
     tenantId: host,
     nonce: previous ? previous.designNonce + 1 : 0,
     verticalId: vertical.id,
     photosCount: media?.photos?.length ?? 0,
     previous,
+    logoFamily,
   });
   const rng = mulberry32(dnaSeed(host, dna.designNonce));
 

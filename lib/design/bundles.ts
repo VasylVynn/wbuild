@@ -34,6 +34,8 @@ export interface StyleBundle {
   skinAlternates?: Partial<Record<BlockType, string[]>>;
   /** Blessed motion presets for this bundle. */
   motionIds: MotionId[];
+  /** Blessed decor treatments (DecorLayer ids, DNA-3); empty = none. */
+  decorIds?: string[];
   verticalIds?: string[]; // affinity; undefined = fits any vertical
 }
 
@@ -54,6 +56,7 @@ export const styleBundles: StyleBundle[] = [
     },
     skinAlternates: { services: ["list", "showcase"], testimonials: ["spotlight", ""] },
     motionIds: ["fade-up", "stagger"],
+    decorIds: ["mesh-soft", "noise"],
     verticalIds: ["florist", "bakery", "generic"],
   },
   {
@@ -72,6 +75,7 @@ export const styleBundles: StyleBundle[] = [
     },
     skinAlternates: { services: ["", "compact"], faq: ["", "accordion"] },
     motionIds: ["none", "fade-up"],
+    decorIds: ["frame", "dot-grid"],
   },
   {
     id: "photo-first",
@@ -89,6 +93,7 @@ export const styleBundles: StyleBundle[] = [
     },
     skinAlternates: { services: ["showcase", "compact"] },
     motionIds: ["fade-up", "stagger"],
+    decorIds: ["waves", "mesh-soft"],
     verticalIds: ["florist", "bakery", "generic"],
   },
   {
@@ -107,6 +112,7 @@ export const styleBundles: StyleBundle[] = [
     },
     skinAlternates: { services: ["pricing", "list"] },
     motionIds: ["none", "fade-up"],
+    decorIds: ["diagonal", "frame"],
     verticalIds: ["lawyer", "autoservice", "generic"],
   },
 ];

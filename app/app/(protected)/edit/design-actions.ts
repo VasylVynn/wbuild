@@ -6,6 +6,7 @@ import { resolveTheme } from "@/lib/theme/presets";
 import { designDnaSchema, carryDnaFields, dnaSeed, mulberry32, pick } from "@/lib/theme/dna";
 import { getTemplate } from "@/lib/templates/registry";
 import { rollBundleDna } from "@/lib/theme/dna-roll";
+import { logoPaletteFamily } from "@/lib/theme/logo-palette";
 import { shuffleMiddles, juggleTemplateVariants } from "@/lib/site/publish";
 import { getPack } from "@/lib/design/packs";
 import type { StoredBlock } from "@/lib/blocks/schema";
@@ -111,6 +112,7 @@ export async function rerollDesignAction(
       verticalId: (t.vertical as string) ?? undefined,
       photosCount: brand.photos?.length ?? 0,
       previous,
+      logoFamily: await logoPaletteFamily((brand as { logoUrl?: string }).logoUrl),
     });
     const theme: Theme = {
       ...resolveTheme(dna.presetId),
