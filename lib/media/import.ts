@@ -32,6 +32,40 @@ function fail(reason: string): null {
 }
 
 /**
+ * SSRF hardening (codex review): the URL comes from a scraped dataset, i.e.
+ * attacker-influenceable. IP-literal and obviously-internal hostnames are
+ * rejected outright; combined with `redirect: "error"` on the fetch this
+ * closes the realistic redirect-to-metadata/internal-service vectors.
+ */
+function isForbiddenHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) {
+    return true;
+  }
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return true; // IPv4 literal
+  if (h.includes(":") || h.startsWith("[")) return true; // IPv6 literal
+  return false;
+}
+
+/**
+ * The Content-Type header is attacker-controlled — the BYTES must look like
+ * the claimed raster format before we store them in a public bucket.
+ */
+function sniffImage(buf: Buffer): string | null {
+  if (buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return "image/png";
+  }
+  if (buf.subarray(0, 4).toString("ascii") === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WEBP") {
+    return "image/webp";
+  }
+  const gif = buf.subarray(0, 6).toString("ascii");
+  if (gif === "GIF87a" || gif === "GIF89a") return "image/gif";
+  return null;
+}
+
+/**
  * Classical quality pass, identical in spirit to the upload route's: sharp is a
  * NATIVE module that can fail to load, so it rides lazily and fail-open — any
  * load/processing error means "proceed with the original bytes" (returns null).
@@ -80,6 +114,7 @@ export async function importExternalImage(
       return fail("invalid url");
     }
     if (parsed.protocol !== "https:") return fail("non-https url");
+    if (isForbiddenHost(parsed.hostname)) return fail("forbidden host");
 
     if (!isSupabaseConfigured()) return fail("supabase not configured");
 
@@ -108,7 +143,9 @@ export async function importExternalImage(
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     let res: Response;
     try {
-      res = await fetch(url, { signal: controller.signal });
+      // No redirects: a redirect from a "photo CDN" URL is exactly the SSRF
+      // shape we refuse to follow (real image CDNs serve bytes directly).
+      res = await fetch(url, { signal: controller.signal, redirect: "error" });
     } finally {
       clearTimeout(timer);
     }
@@ -124,15 +161,21 @@ export async function importExternalImage(
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.length === 0 || buf.length > MAX_BYTES) return fail("empty or oversize body");
 
+    // Magic-byte check: unlike owner uploads (client re-encodes via canvas),
+    // these bytes come from an external host — headers alone prove nothing.
+    const sniffed = sniffImage(buf);
+    if (!sniffed) return fail("bytes are not a known raster image");
+
     const corrected = await qualityPass(buf);
 
     await ensureBucket();
     // No `-orig` copy: §4.8 "never destroy originals" is about OWNER uploads —
     // here the source photo stays untouched on the external host, so there is
     // nothing of ours to preserve alongside.
-    const path = `${tenantId}/${crypto.randomUUID()}.${corrected ? "webp" : ext}`;
+    const path = `${tenantId}/${crypto.randomUUID()}.${corrected ? "webp" : MIME_EXT[sniffed]}`;
     const up = await sb.storage.from(BUCKET).upload(path, corrected ?? buf, {
-      contentType: corrected ? "image/webp" : contentType,
+      // The sniffed type, not the header, names what we actually stored.
+      contentType: corrected ? "image/webp" : sniffed,
       upsert: false,
     });
     if (up.error) return fail("upload failed");

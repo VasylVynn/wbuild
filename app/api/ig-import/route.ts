@@ -82,17 +82,21 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const enc = new TextEncoder();
+  // Client disconnect must stop the paid pipeline (codex review): `cancelled`
+  // is flipped by cancel(), every send() is no-throw, and stage boundaries
+  // bail out instead of scraping/analyzing for a socket nobody reads.
+  let cancelled = false;
   const rs = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (obj: unknown) =>
-        controller.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`));
-      const heartbeat = setInterval(() => {
+      const send = (obj: unknown) => {
+        if (cancelled) return;
         try {
-          send({ t: "hb" });
+          controller.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`));
         } catch {
-          /* stream already closed */
+          cancelled = true;
         }
-      }, HEARTBEAT_MS);
+      };
+      const heartbeat = setInterval(() => send({ t: "hb" }), HEARTBEAT_MS);
 
       try {
         send({ t: "stage", stage: "profile" });
@@ -101,6 +105,7 @@ export async function POST(req: Request): Promise<Response> {
             if (phase === "fetching") send({ t: "stage", stage: "posts" });
           },
         });
+        if (cancelled) return;
         if (!profile) {
           send({
             t: "error",
@@ -122,8 +127,10 @@ export async function POST(req: Request): Promise<Response> {
         const items = await Promise.all(
           sources.map(async (src): Promise<ImportItem> => {
             try {
+              if (cancelled) return { failed: true };
               const url = await importExternalImage(src, { conversationId });
               if (!url) return { failed: true };
+              if (cancelled) return { failed: true };
               // Direct lib call (not the server action): the ig_import limit
               // already gates this batch; a second per-photo gate would let one
               // import exhaust img_analyze for the owner's own chat uploads.
@@ -144,6 +151,7 @@ export async function POST(req: Request): Promise<Response> {
         );
 
         // One text pass over bio+captions → candidate facts (fail-open null).
+        if (cancelled) return;
         const extracted: IgExtractedFacts | null = await extractFactsFromProfile(profile);
 
         send({
@@ -162,8 +170,15 @@ export async function POST(req: Request): Promise<Response> {
         });
       } finally {
         clearInterval(heartbeat);
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          /* already cancelled */
+        }
       }
+    },
+    cancel() {
+      cancelled = true;
     },
   });
 

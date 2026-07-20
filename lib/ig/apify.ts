@@ -161,10 +161,13 @@ export async function fetchInstagramProfile(
     const datasetId = str(startData.defaultDatasetId);
     if (!runId || !datasetId) return fail("start run returned no run id");
 
-    // 2) Poll the run until it succeeds, fails, or we hit the deadline.
+    // 2) Poll the run until it succeeds, fails, or we hit the deadline. Every
+    // wait — fetch or sleep — is clamped to the REMAINING deadline so the
+    // overall budget is accurate (codex review), not deadline + one more step.
+    const remaining = () => deadline - Date.now();
     let announced = false;
     for (;;) {
-      if (Date.now() >= deadline) return fail("run deadline exceeded");
+      if (remaining() <= 0) return fail("run deadline exceeded");
       if (!announced) {
         opts?.onPhase?.("scraping");
         announced = true;
@@ -172,21 +175,23 @@ export async function fetchInstagramProfile(
       const statusRes = await timedFetch(
         `${APIFY_BASE}/actor-runs/${runId}?token=${token}`,
         {},
-        POLL_TIMEOUT_MS,
+        Math.min(POLL_TIMEOUT_MS, Math.max(1, remaining())),
       );
       if (!statusRes.ok) return fail(`poll failed: HTTP ${statusRes.status}`);
       const status = str(asRecord(asRecord(await statusRes.json()).data).status) ?? "";
       if (status === "SUCCEEDED") break;
       if (FAILED_STATUSES.has(status)) return fail(`run failed: ${status}`);
+      if (remaining() <= POLL_INTERVAL_MS) return fail("run deadline exceeded");
       await sleep(POLL_INTERVAL_MS);
     }
 
     // 3) Fetch the dataset and parse the first (only) profile item.
     opts?.onPhase?.("fetching");
+    if (remaining() <= 0) return fail("run deadline exceeded");
     const dsRes = await timedFetch(
       `${APIFY_BASE}/datasets/${datasetId}/items?token=${token}&clean=true&format=json`,
       {},
-      DATASET_TIMEOUT_MS,
+      Math.min(DATASET_TIMEOUT_MS, Math.max(1, remaining())),
     );
     if (!dsRes.ok) return fail(`dataset fetch failed: HTTP ${dsRes.status}`);
     const items = await dsRes.json();

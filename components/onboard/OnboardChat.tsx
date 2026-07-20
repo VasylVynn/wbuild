@@ -389,6 +389,16 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       // Media survives the login-gate redirect (saved fire-and-forget) — restore
       // it so the media step shows what was already uploaded.
       setMedia(data.media ?? { photos: [] });
+      // The starter chip belongs to a FRESH conversation only (codex review).
+      setQuickReplies([]);
+      // An import that already produced artifacts must not be re-runnable
+      // after reload (paid scrape). A handle without artifacts keeps the
+      // button — that's the retry path for an import that yielded nothing.
+      const m = data.media;
+      const f = data.facts as Partial<BusinessFacts>;
+      if (f?.instagram && (m?.photos?.length || m?.logoUrl)) {
+        igImportedRef.current = true;
+      }
     });
   }, []);
 
