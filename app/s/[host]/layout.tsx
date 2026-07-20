@@ -5,6 +5,7 @@ import { getTenantByHost, getNav } from "@/lib/tenant/data";
 import { themeToCssVars } from "@/lib/theme/tokens";
 import { TENANT_FONT_CLASSES } from "@/lib/theme/fonts";
 import { MotionDriver } from "@/components/site/MotionDriver";
+import { DecorLayer } from "@/components/site/DecorLayer";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { Beacon } from "@/components/site/Beacon";
@@ -61,10 +62,15 @@ export default async function TenantLayout({
         backgroundColor: "var(--color-background)",
         color: "var(--color-foreground)",
         fontFamily: "var(--font-body)",
+        // Stacking context so the decor layer (z-index:-1) paints ABOVE this
+        // opaque background but BELOW the in-flow header/main/footer.
+        position: "relative",
+        isolation: "isolate",
       }}
       className={`flex min-h-screen flex-col ${TENANT_FONT_CLASSES}`}
       data-motion={tenant.theme.dna?.motionId ?? "none"}
     >
+      <DecorLayer decorId={tenant.theme.dna?.decorId} />
       <SiteHeader tenant={tenant} nav={nav} />
       <main className="flex-1">{children}</main>
       <SiteFooter tenant={tenant} />

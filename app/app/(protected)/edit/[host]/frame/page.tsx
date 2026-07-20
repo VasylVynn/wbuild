@@ -7,6 +7,7 @@ import { themeToCssVars } from "@/lib/theme/tokens";
 import { TENANT_FONT_CLASSES } from "@/lib/theme/fonts";
 import { resolveFontPair } from "@/lib/theme/font-pairs";
 import { PageRenderer } from "@/components/PageRenderer";
+import { DecorLayer } from "@/components/site/DecorLayer";
 
 /**
  * Device-preview frame (P2): renders the DRAFT exactly like the published site
@@ -63,8 +64,12 @@ export default async function EditorFramePage({
         color: "var(--color-foreground)",
         fontFamily: "var(--font-body)",
         minHeight: "100vh",
+        // Stacking context: decor (z-index:-1) above the background, below content.
+        position: "relative",
+        isolation: "isolate",
       }}
     >
+      <DecorLayer decorId={(data.theme as { dna?: { decorId?: string } }).dna?.decorId} />
       <PageRenderer blocks={data.blocks} />
     </div>
   );
