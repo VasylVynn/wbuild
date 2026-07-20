@@ -29,7 +29,8 @@ export type LimitName =
   | "editor_chat" // agentic editor chat turn (burns Anthropic tokens, P3)
   | "event" // public analytics beacon (view / tel_click / contact_click)
   | "custom_request" // «Хочу кастомні зміни» request to the platform team
-  | "img_analyze"; // vision photo analysis (burns Anthropic tokens, wave G)
+  | "img_analyze" // vision photo analysis (burns Anthropic tokens, wave G)
+  | "ig_import"; // Instagram profile scrape+import (burns Apify credit, wave E)
 
 type LimitConfig = { max: number; windowSec: number };
 
@@ -45,6 +46,7 @@ const DEFAULTS: Record<LimitName, LimitConfig> = {
   event: { max: 300, windowSec: 3600 }, // honest visitor: a handful of events
   custom_request: { max: 5, windowSec: 86400 }, // honest owner: 1-2 requests
   img_analyze: { max: 60, windowSec: 3600 }, // honest session: ~10 photos
+  ig_import: { max: 10, windowSec: 86400 }, // honest user: 1-2 imports/day
 };
 
 function envInt(name: string): number | undefined {
