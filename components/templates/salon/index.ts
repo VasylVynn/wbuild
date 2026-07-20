@@ -52,6 +52,7 @@ export const salonSections: Record<string, TemplateSectionDef> = {
   process: {
     block: "timeline",
     label: "Як відбувається візит",
+    navLabel: "Візит",
     description:
       "Пронумеровані кроки візиту (01, 02, 03…) — від запису до результату; етап, короткий опис.",
     component: SalonProcess,
@@ -93,6 +94,7 @@ export const salonSections: Record<string, TemplateSectionDef> = {
   faq: {
     block: "faq",
     label: "Питання та відповіді",
+    navLabel: "Питання",
     description: "Акордеон із питаннями та відповідями (одне відкрите).",
     component: SalonFAQ,
   },

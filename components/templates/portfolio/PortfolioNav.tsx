@@ -54,7 +54,7 @@ export default function PortfolioNav({
       <nav className="container mx-auto px-4 sm:px-6 flex items-center justify-between">
         <a href="/" className="flex items-center gap-2 text-xl font-bold tracking-tight hover:text-primary transition-colors">
           {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto max-w-[160px] shrink-0 object-contain" />}
-          <span>
+          <span className="truncate max-w-[220px] md:max-w-[320px]">
             {brandName}
             <span className="text-primary">{brandAccent}</span>
           </span>

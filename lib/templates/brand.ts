@@ -8,7 +8,9 @@ import type { SiteTemplate, TemplateBrand } from "@/lib/templates/registry";
  * real contacts from the grounded contacts block.
  */
 
-const NAV_SKIP = new Set(["hero", "stats", "cta", "lead_form", "contacts"]);
+// banner = a cta-band section id in several templates — a CTA is a target,
+// not a nav destination (integrator decision on the nav-fix agent's flag).
+const NAV_SKIP = new Set(["hero", "stats", "cta", "banner", "lead_form", "contacts"]);
 
 export function buildTemplateBrand(
   businessName: string,
@@ -27,10 +29,10 @@ export function buildTemplateBrand(
   for (const b of blocks) {
     const s = b.section;
     if (!s || b.hidden || NAV_SKIP.has(s) || seen.has(s)) continue;
-    const label = template.sections[s]?.label;
-    if (!label) continue;
+    const def = template.sections[s];
+    if (!def?.label) continue;
     seen.add(s);
-    navLinks.push({ href: `#${s}`, label });
+    navLinks.push({ href: `#${s}`, label: def.navLabel ?? def.label });
   }
 
   const contact = blocks.find((b) => b.type === "contacts")?.props as

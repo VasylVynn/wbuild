@@ -53,7 +53,7 @@ export default function AiSaasNav({
       <div className="mx-auto grid max-w-6xl grid-cols-2 items-center px-4 sm:px-6 md:grid-cols-3">
         <a href="/" className="flex items-center gap-2 text-xl font-bold tracking-tight text-[#2F4550]">
           {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto max-w-[160px] shrink-0 object-contain" />}
-          <span>
+          <span className="truncate max-w-[220px] md:max-w-[320px]">
             {brandName}
             <span className="text-[#E07A5F]">{brandAccent}</span>
           </span>

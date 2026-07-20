@@ -51,7 +51,7 @@ export default function FerriNav({
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
         <a href="/" className="flex items-center gap-2 font-[family-name:var(--ferri-display)] text-2xl tracking-wide text-cream-100">
           {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto max-w-[160px] shrink-0 object-contain" />}
-          <span>
+          <span className="truncate max-w-[220px] md:max-w-[320px]">
             {brandName} <span className="text-gold-500">{brandAccent}</span>
           </span>
         </a>

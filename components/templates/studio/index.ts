@@ -24,6 +24,7 @@ import StudioTestimonialsAlt from "./StudioTestimonialsAlt";
  *  - `block`     — which of our block schemas feeds it (many sections may share
  *                  one block, e.g. features/howitworks both read `services`).
  *  - `label`     — Ukrainian name, for the editor/registry.
+ *  - `navLabel`  — коротка мітка для навігації; відсутня → label.
  *  - `description` — one Ukrainian line, guidance for the generation model.
  *  - `component` — renders the section from `{ data }` (already-validated block
  *                  props, passed as `unknown`) plus an optional `extra` (only
@@ -32,6 +33,8 @@ import StudioTestimonialsAlt from "./StudioTestimonialsAlt";
 export interface TemplateSectionDef {
   block: BlockType;
   label: string;
+  /** Коротка мітка для навігації (щоб довгий label не ламав nav); відсутня → label. */
+  navLabel?: string;
   description: string;
   component: ComponentType<{ data: unknown; extra?: unknown }>;
   /**
@@ -109,6 +112,7 @@ export const studioSections: Record<string, TemplateSectionDef> = {
   banner: {
     block: "cta",
     label: "Смуга-твердження",
+    navLabel: "Гасло",
     description:
       "Повноширинна смуга з великим твердженням/гаслом і підзаголовком — без кнопки, розриває ритм сторінки.",
     component: StudioBanner,

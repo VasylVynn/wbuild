@@ -33,6 +33,7 @@ export const aisaasSections: Record<string, TemplateSectionDef> = {
   highlights: {
     block: "services",
     label: "Переваги (bento)",
+    navLabel: "Переваги",
     description:
       "Bento-сітка ціннісних пропозицій «чому ми» — асиметричні плитки з іконками, назва й опис; ціни ігноруються.",
     component: AiSaasHighlights,
@@ -40,6 +41,7 @@ export const aisaasSections: Record<string, TemplateSectionDef> = {
   showcase: {
     block: "switchback",
     label: "Можливості великим планом",
+    navLabel: "Можливості",
     description:
       "Почергові рядки «фото + текст» (зиґзаґ) для детального показу ключових можливостей, переваг чи процесу: заголовок, розповідь і опційне посилання-стрілка. Фото беруться лише з props; без фото рядок стає м'якою пастельною панеллю. Варіант cards — компактні картки з фото зверху.",
     component: AiSaasShowcase,
@@ -68,6 +70,7 @@ export const aisaasSections: Record<string, TemplateSectionDef> = {
   publications: {
     block: "publications",
     label: "Кейси та публікації",
+    navLabel: "Кейси",
     description:
       "Сітка пастельних карток: кейси, статті, згадки у пресі чи нагороди — назва, підзаголовок, джерело і рік у пастельному чипі. Лише реальні матеріали, без вигадок. Варіант list — редакційний перелік із тонкими лінійками.",
     component: AiSaasPublications,
@@ -89,6 +92,7 @@ export const aisaasSections: Record<string, TemplateSectionDef> = {
   faq: {
     block: "faq",
     label: "Питання та відповіді",
+    navLabel: "Питання",
     description: "Акордеон із питаннями та відповідями (одне відкрите).",
     component: AiSaasFAQ,
   },

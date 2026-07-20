@@ -42,6 +42,7 @@ export const nextlySections: Record<string, TemplateSectionDef> = {
   switchback: {
     block: "switchback",
     label: "Історія (фото + текст)",
+    navLabel: "Історія",
     description:
       "Почергові рядки «зигзаг»: велике округле фото поруч із текстом, ліворуч/праворуч по черзі; індиго-акцент і кнопка. Рядок без фото стає центрованим текстовим блоком.",
     component: NextlySwitchback,

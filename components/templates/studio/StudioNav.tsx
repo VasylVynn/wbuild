@@ -63,7 +63,7 @@ export default function StudioNav({
           <div className="flex items-center justify-between">
             <a href="/" className="flex items-center gap-2 text-xl font-semibold text-white tracking-tight">
               {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto max-w-[160px] shrink-0 object-contain" />}
-              <span>
+              <span className="truncate max-w-[220px] md:max-w-[320px]">
                 {brandName}
                 <span className="text-zinc-500 font-normal">{brandAccent}</span>
               </span>

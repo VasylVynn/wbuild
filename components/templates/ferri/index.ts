@@ -71,6 +71,7 @@ export const ferriSections: Record<string, TemplateSectionDef> = {
   banner: {
     block: "cta",
     label: "Смуга-твердження",
+    navLabel: "Гасло",
     description:
       "Повноширинна смуга з великим серифним гаслом/цитатою і підзаголовком — без кнопки, розриває ритм сторінки.",
     component: FerriBanner,

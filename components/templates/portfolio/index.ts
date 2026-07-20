@@ -32,6 +32,7 @@ export const portfolioSections: Record<string, TemplateSectionDef> = {
   marquee: {
     block: "marquee",
     label: "Стрічка навичок",
+    navLabel: "Навички",
     description: "Рухома стрічка коротких ключових слів (навички / технології / напрямки). Лише реальні.",
     component: PortfolioMarquee,
   },
@@ -44,6 +45,7 @@ export const portfolioSections: Record<string, TemplateSectionDef> = {
   switchback: {
     block: "switchback",
     label: "Історія у деталях",
+    navLabel: "Історія",
     description:
       "Чергування фото + текст «зиґзаґом»: широкі ряди, у яких зображення міняє бік, а поруч — serif-заголовок, короткий текст і опційне посилання-стрілка. Без фото ряд стає центрованим текстом.",
     component: PortfolioSwitchback,
@@ -57,6 +59,7 @@ export const portfolioSections: Record<string, TemplateSectionDef> = {
   publications: {
     block: "publications",
     label: "Праці та згадки",
+    navLabel: "Праці",
     description:
       "Індекс робіт / публікацій / кейсів: рядки з порядковим номером, назвою (serif), підзаголовком і роком + джерелом праворуч. Тонкі лінії-роздільники, без фото. Лише реальні праці.",
     component: PortfolioPublications,
@@ -77,6 +80,7 @@ export const portfolioSections: Record<string, TemplateSectionDef> = {
   banner: {
     block: "cta",
     label: "Смуга-твердження",
+    navLabel: "Гасло",
     description:
       "Повноширинна смуга з великим гаслом/цитатою і підзаголовком, із неоновою підсвіткою — без кнопки.",
     component: PortfolioBanner,

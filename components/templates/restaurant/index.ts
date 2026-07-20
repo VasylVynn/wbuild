@@ -59,6 +59,7 @@ export const restaurantSections: Record<string, TemplateSectionDef> = {
   switchback: {
     block: "switchback",
     label: "Історія у деталях",
+    navLabel: "Історія",
     description:
       "Почергові рядки «фото + текст» (зиґзаґ): заголовок серифом, розповідь і опційне посилання-стрілка — про кухню, продукти, шлях «від ферми до столу». Фото беруться з props; без фото — тепла декоративна панель. Варіант stacked — компактні картки з фото зверху.",
     component: RestaurantSwitchback,
@@ -91,6 +92,7 @@ export const restaurantSections: Record<string, TemplateSectionDef> = {
   publications: {
     block: "publications",
     label: "Про нас пишуть",
+    navLabel: "Преса",
     description:
       "Згадки у пресі, відзнаки та нагороди: назва матеріалу/нагороди, підзаголовок, видання (source) і рік золотом. Лише реальні згадки, без вигадок. Варіант cards — сітка теплих карток.",
     component: RestaurantPublications,
@@ -99,6 +101,7 @@ export const restaurantSections: Record<string, TemplateSectionDef> = {
   faq: {
     block: "faq",
     label: "Питання та відповіді",
+    navLabel: "Питання",
     description: "Акордеон питань/відповідей із теракотовим індикатором (одне відкрите).",
     component: RestaurantFAQ,
   },
