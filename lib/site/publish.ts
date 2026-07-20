@@ -18,7 +18,7 @@ import type { StoredBlock } from "@/lib/blocks/schema";
  * keep their slots (commercial story arc) — the other middles permute among
  * their own positions, so re-rolls change the page rhythm, not its logic.
  */
-function shuffleMiddles(blocks: StoredBlock[], rng: () => number): StoredBlock[] {
+export function shuffleMiddles(blocks: StoredBlock[], rng: () => number): StoredBlock[] {
   const tail = blocks.findIndex((b) => b.type === "lead_form" || b.type === "contacts");
   if (tail < 0) return blocks;
   const slots: number[] = [];

@@ -3,8 +3,9 @@
 import { getServiceClient } from "@/lib/supabase/server";
 import { requireMember } from "@/lib/tenant/membership";
 import { resolveTheme } from "@/lib/theme/presets";
-import { designDnaSchema, carryDnaFields } from "@/lib/theme/dna";
-import { rollDna } from "@/lib/theme/dna-roll";
+import { designDnaSchema, carryDnaFields, dnaSeed, mulberry32 } from "@/lib/theme/dna";
+import { rollBundleDna } from "@/lib/theme/dna-roll";
+import { shuffleMiddles } from "@/lib/site/publish";
 import { getPack } from "@/lib/design/packs";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import type { Theme } from "@/lib/theme/tokens";
@@ -34,7 +35,7 @@ export async function rerollDesignAction(
     const sb = getServiceClient();
     const { data: t } = await sb
       .from("tenants")
-      .select("id, draft_theme")
+      .select("id, draft_theme, brand, vertical")
       .eq("host", host)
       .maybeSingle();
     if (!t) return { ok: false, error: "tenant not found" };
@@ -42,10 +43,17 @@ export async function rerollDesignAction(
     const prevTheme = (t.draft_theme ?? {}) as Theme & { dna?: unknown };
     const prevParsed = designDnaSchema.safeParse(prevTheme.dna);
     const previous = prevParsed.success ? prevParsed.data : null;
+    const brand = (t.brand ?? {}) as { photos?: string[]; templateId?: string };
 
-    const dna = rollDna({
+    // Template sites: the template owns the look — bundles reach them in a
+    // later DNA-2 subwave; re-roll stays a no-op there rather than lying.
+    if (brand.templateId) return { ok: false, error: "template sites re-roll in DNA-2b" };
+
+    const { dna } = rollBundleDna({
       tenantId: host,
       nonce: previous ? previous.designNonce + 1 : 1,
+      verticalId: (t.vertical as string) ?? undefined,
+      photosCount: brand.photos?.length ?? 0,
       previous,
     });
     const theme: Theme = {
@@ -53,6 +61,32 @@ export async function rerollDesignAction(
       fontPairId: dna.fontPairId,
       dna,
     };
+
+    // Re-skin + re-rhythm the DRAFT page from the new bundle (draft-only).
+    const { data: p } = await sb
+      .from("pages")
+      .select("id, draft_content")
+      .eq("tenant_id", t.id)
+      .eq("slug", "")
+      .maybeSingle();
+    if (p) {
+      const draft = (p.draft_content ?? {}) as {
+        blocks?: StoredBlock[];
+        pocket?: StoredBlock[];
+        seo?: PageSeo;
+      };
+      const rng = mulberry32(dnaSeed(host, dna.designNonce));
+      let blocks = (draft.blocks ?? []).map((b) => {
+        const o = dna.skinOverrides?.[b.type];
+        return o === undefined ? b : { ...b, skin: o || undefined };
+      });
+      blocks = shuffleMiddles(blocks, rng);
+      const { error: pe } = await sb
+        .from("pages")
+        .update({ draft_content: { ...draft, blocks } })
+        .eq("id", p.id);
+      if (pe) return { ok: false, error: pe.message };
+    }
 
     const { error } = await sb.from("tenants").update({ draft_theme: theme }).eq("id", t.id);
     if (error) return { ok: false, error: error.message };

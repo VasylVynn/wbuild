@@ -61,7 +61,7 @@
       (⇒ інший hero+skin-set) + інша сімʼя + інша пара; фото-інвентар обирає photoPoorSet.
 - [x] **DNA2.4. Композиційна вісь** — post-pass в assemble: skins/variants з allowlist бандла
       (seeded), seeded shuffle середніх секцій classic-шляху; склад секцій лишається data-driven.
-- [ ] **DNA2.5. Вживлення** — generateAndPublish/reroll застосовують бандл (тема+skins);
+- [x] **DNA2.5. Вживлення** — generateAndPublish/reroll застосовують бандл (тема+skins);
       бандл заміняє randomPack, коли для вертикалі є бандли; pack-шлях лишається fallback.
 - [ ] **DNA2.6. Гейт 3-осьовий** — dna-check v2 (бандл+сімʼя+пара), N=8 (2×бандли),
       скріншот-сітка, критерій «жодна пара не читається як той самий сайт».
