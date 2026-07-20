@@ -32,6 +32,7 @@ import type { SiteMedia } from "@/lib/media/media";
 import { isStorageUrl } from "@/lib/media/media";
 import {
   normalizeUaPhoneDigits,
+  instagramHref,
   telegramHref,
   viberHref,
 } from "@/lib/blocks/contact-links";
@@ -651,6 +652,10 @@ function allowedFactHrefs(facts: BusinessFacts): Set<string> {
   if (tg) set.add(tg);
   const vb = viberHref(facts.viber);
   if (vb) set.add(vb);
+  // E9/H3: with a confirmed handle in the facts, a CTA to the owner's real
+  // Instagram profile is a truthful destination (bare instagram.com is not).
+  const ig = instagramHref(facts.instagram);
+  if (ig) set.add(ig);
   return set;
 }
 
@@ -772,6 +777,9 @@ function groundAndPlace(
         hours: facts.hours ?? b.props.hours,
         viber: facts.viber ?? b.props.viber,
         telegram: facts.telegram ?? b.props.telegram,
+        // Strict (unlike the ?? fields above): a handle is only ever a FACT —
+        // a model-invented one must not survive when the owner gave none.
+        instagram: facts.instagram,
       },
       ...placement,
       variant,

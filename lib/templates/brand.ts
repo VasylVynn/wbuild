@@ -32,7 +32,7 @@ export function buildTemplateBrand(
   }
 
   const contact = blocks.find((b) => b.type === "contacts")?.props as
-    | { phone?: string; address?: string; hours?: string; email?: string; telegram?: string; viber?: string }
+    | { phone?: string; address?: string; hours?: string; email?: string; telegram?: string; viber?: string; instagram?: string }
     | undefined;
 
   return {

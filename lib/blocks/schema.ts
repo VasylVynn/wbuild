@@ -122,6 +122,8 @@ export const contactsSchema = z.object({
   viber: z.string().optional(),
   // Username (with/without "@") or a phone number — normalized in contact-links.ts.
   telegram: z.string().optional(),
+  // Handle («@name», bare, or a full profile URL) — normalized in contact-links.ts.
+  instagram: z.string().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -391,7 +393,7 @@ export const factPaths: Record<BlockType, string[]> = {
   faq: [], // creative — kept grounded by prompt
   cta: [], // creative marketing copy
   lead_form: [], // labels only; submitted data goes to /api/leads, not props
-  contacts: ["phone", "address", "hours", "email", "viber", "telegram"],
+  contacts: ["phone", "address", "hours", "email", "viber", "telegram", "instagram"],
   team: [], // real people — kept honest by the prompt, not string-compared
   timeline: [], // real dates/steps — kept honest by the prompt
   marquee: [], // short real keywords — kept honest by the prompt

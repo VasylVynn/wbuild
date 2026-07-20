@@ -47,6 +47,8 @@ export interface TemplateBrand {
     email?: string;
     telegram?: string;
     viber?: string;
+    /** Freeform handle/URL — footers link via instagramHref (contact-links). */
+    instagram?: string;
   };
 }
 
