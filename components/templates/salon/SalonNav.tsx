@@ -69,27 +69,27 @@ export default function SalonNav({
           scrolled ? "liquid-glass shadow-elegant" : "glass"
         }`}
       >
-        <div className="flex items-center justify-between px-6 py-3">
-          <a href="#" className="flex items-center gap-2 font-display text-xl font-bold text-foreground tracking-tight">
+        <div className="flex items-center justify-between gap-3 px-6 py-3 min-w-0">
+          <a href="#" className="flex min-w-0 shrink items-center gap-2 font-display text-xl font-bold text-foreground tracking-tight">
             {logoUrl && <img src={logoUrl} alt="" className="h-7 w-auto max-w-[150px] shrink-0 object-contain" />}
-            <span className="truncate max-w-[220px] md:max-w-[320px]">
+            <span className="truncate max-w-[160px] lg:max-w-[260px]">
               {brandName} <span className="text-gradient-gold">{brandAccent}</span>
             </span>
           </a>
 
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex min-w-0 shrink items-center justify-center gap-1 overflow-hidden">
             {navLinks.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
-                className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-full hover:bg-accent/10 transition-colors"
+                className="whitespace-nowrap px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-full hover:bg-accent/10 transition-colors"
               >
                 {link.label}
               </a>
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <a href={ctaHref} className="hidden md:inline-flex btn-gold-luxe rounded-full px-6 py-2.5 text-sm font-medium">
               {ctaLabel}
             </a>

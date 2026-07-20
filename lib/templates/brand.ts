@@ -21,7 +21,11 @@ export function buildTemplateBrand(
   /** DNA-2c: seeded template data-theme from the tenant's DNA. */
   dnaTheme?: string,
 ): TemplateBrand {
-  const name = businessName.trim();
+  // Nav real estate is precious: a name like «DIVA | салон краси Самбір»
+  // renders as just «DIVA» — the first segment before a separator. The full
+  // name still lives everywhere else (SEO, footer copyright, facts).
+  const compact = businessName.split(/\s*[|—–·]\s*/)[0].trim() || businessName.trim();
+  const name = compact;
   const words = name.split(/\s+/).filter(Boolean);
 
   const seen = new Set<string>();
