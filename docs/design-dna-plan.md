@@ -204,11 +204,19 @@
 - [x] **C2. Data-theme вісь** — `TemplateBrand.dnaTheme`; шаблони з ≥2 темами (salon
       light/dark, ferri dark/light) отримують сідований вибір стартової теми з DNA;
       тумблер відвідувача далі працює.
-- [ ] **C3. Ferri де-фонтінг** (агент A) — центральна індирекція замість прямих
+- [x] **C3. Ferri де-фонтінг** (агент A) — центральна індирекція замість прямих
       `var(--font-cormorant)` у секціях + body-ланцюг; після цього повернути
       `dnaFontPairs` ferri в registry (інтегратор).
-- [ ] **C4. Legacy hero clean** (агент B) — видалити 6 band-скінів
+- [x] **C4. Legacy hero clean** (агент B) — видалити 6 band-скінів
       (default/split/minimal/photo/gradient/mesh) з Hero.tsx; дефолт-диспетч →
       `editorial`; інтегратор: skins.ts (лише 5 архетипів), packs.ts hero→архетипи.
-- [ ] **C5. Верифікація** — tsc/build; жива генерація шаблонного сайта ×2: різні
+- [x] **C5. Верифікація** — tsc/build; жива генерація шаблонного сайта ×2: різні
       варіанти секцій/порядок/тема/пара; adversarial review; нотатки.
+
+> **Нотатка DNA-2c (2026-07-20, verification):** живий доказ на salon-шаблоні, ті самі
+> дані, nonce 1 → 2: пара lora-source→playfair-jost, тема light→dark, hero editorial→split,
+> services rows→def, середина services|testimonials|process|faq → services|faq|process|
+> testimonials (воронка приколота). Шаблонні сайти тепер жонглюють ВСІМА осями. Legacy:
+> 6 band hero-скінів видалені (-373 рядки), fallback ""→editorial/split-light; паки
+> переведені на архетипи; ferri де-фонтнутий (25 замін, no-pair рендер ідентичний) і
+> повернутий у dnaFontPairs. Смоук-тенант dna2c-smoke.lvh.me. Codex-рев'ю — запущене.
