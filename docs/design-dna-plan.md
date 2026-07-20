@@ -47,13 +47,13 @@
 
 ### Підхвиля DNA-2.А (поточна): архетипи + бандли + композиційна вісь
 
-- [ ] **DNA2.1. 5 hero-архетипів** — нові skins у `components/blocks/Hero.tsx`, re-authoring
+- [x] **DNA2.1. 5 hero-архетипів** — нові skins у `components/blocks/Hero.tsx`, re-authoring
       структур з MIT-джерел (HyperUI/Flowbite/TailGrids), лише токени var(--color-*/font-*/radius),
       ≥4 світлі, КОЖЕН з чесним no-photo станом (decor-фон, не primary band):
       `photo-scrim` (full-bleed фото+скрім), `editorial` (типографічний світлий, photo-poor герой),
       `split-light` (асиметричний спліт на світлому), `card-overlay` (картка поверх фото),
       `visit-card` (світла «візитка», CTA-ряд). Один агент = один файл.
-- [ ] **DNA2.2. Реєстрація + NOTICES** — skins у `blockSkins` (інтегратор), UA-лейбли;
+- [x] **DNA2.2. Реєстрація + NOTICES** — skins у `blockSkins` (інтегратор), UA-лейбли;
       `THIRD_PARTY_NOTICES.md` з першими джерелами структур.
 - [x] **DNA2.3. Стильові бандли** — `lib/design/bundles.ts`: 4 бандли (сімʼя палітр 2–3 пресети,
       fontPairId, heroArchetype, НАВМИСНО різні skin-сети решти блоків, photoPoorSet, verticalIds);

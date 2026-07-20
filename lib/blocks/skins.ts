@@ -23,6 +23,13 @@ export const blockSkins: Partial<Record<BlockType, SkinOption[]>> = {
     { id: "photo", label: "Фото на весь екран" },
     { id: "gradient", label: "Градієнт" },
     { id: "mesh", label: "М'які кольорові плями" },
+    // Design-DNA wave 2 archetypes — structurally distinct, honest no-photo
+    // states (see components/blocks/Hero.tsx; sources in THIRD_PARTY_NOTICES).
+    { id: "photo-scrim", label: "Фото на весь екран, текст знизу" },
+    { id: "editorial", label: "Типографічний (без фото)" },
+    { id: "split-light", label: "Світлий спліт: текст + фото" },
+    { id: "card-overlay", label: "Картка поверх фото" },
+    { id: "visit-card", label: "Світла візитівка" },
   ],
   services: [
     { id: "", label: "Картки" },
