@@ -6,7 +6,7 @@ import { resolveTheme } from "@/lib/theme/presets";
 import { designDnaSchema, carryDnaFields, dnaSeed, mulberry32, pick } from "@/lib/theme/dna";
 import { getTemplate } from "@/lib/templates/registry";
 import { rollBundleDna } from "@/lib/theme/dna-roll";
-import { shuffleMiddles } from "@/lib/site/publish";
+import { shuffleMiddles, juggleTemplateVariants } from "@/lib/site/publish";
 import { getPack } from "@/lib/design/packs";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import type { Theme } from "@/lib/theme/tokens";
@@ -60,9 +60,8 @@ export async function rerollDesignAction(
       const fontPairId = pick(rng, pool.length ? pool : tplPairs) ?? tplPairs[0];
       // DNA-2c: data-theme joins the roll (≠ previous when possible)…
       const tplThemes = tpl.themes;
-      const themePool = previous?.templateTheme
-        ? tplThemes.filter((th) => th !== previous.templateTheme)
-        : tplThemes;
+      const prevTplTheme = previous?.templateTheme ?? tpl.defaultTheme;
+      const themePool = prevTplTheme ? tplThemes.filter((th) => th !== prevTplTheme) : tplThemes;
       const templateTheme =
         tplThemes.length > 1 ? (pick(rng, themePool.length ? themePool : tplThemes) ?? tplThemes[0]) : undefined;
       const theme = {
@@ -91,27 +90,18 @@ export async function rerollDesignAction(
         pocket?: StoredBlock[];
         seo?: PageSeo;
       };
-      const usedVariants = new Map<string, Set<string>>();
-      let blocks = (draft.blocks ?? []).map((b) => {
-        const sec = (b as StoredBlock & { section?: string }).section;
-        const variants = sec ? Object.keys(tpl.sections[sec]?.variants ?? {}) : [];
-        if (!sec || variants.length === 0) return b;
-        const used = usedVariants.get(sec) ?? new Set<string>();
-        usedVariants.set(sec, used);
-        const options = ["", ...variants].filter((v) => !used.has(v));
-        const v = options.length ? options[Math.floor(rng() * options.length)] : "";
-        used.add(v);
-        return { ...b, variant: v || undefined };
-      });
+      let blocks = juggleTemplateVariants(draft.blocks ?? [], tpl, rng);
       blocks = shuffleMiddles(blocks, rng);
+      // Theme (with the advanced nonce) writes FIRST (review): if the page
+      // write then fails, a retry re-rolls with a NEW nonce instead of
+      // re-shuffling an already-mutated draft under the old one.
+      const { error } = await sb.from("tenants").update({ draft_theme: theme }).eq("id", t.id);
+      if (error) return { ok: false, error: error.message };
       const { error: pe } = await sb
         .from("pages")
         .update({ draft_content: { ...draft, blocks } })
         .eq("id", pg.id);
       if (pe) return { ok: false, error: pe.message };
-
-      const { error } = await sb.from("tenants").update({ draft_theme: theme }).eq("id", t.id);
-      if (error) return { ok: false, error: error.message };
       return { ok: true, theme: theme as Theme };
     }
 

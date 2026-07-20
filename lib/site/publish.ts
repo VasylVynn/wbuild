@@ -19,6 +19,33 @@ import type { StoredBlock } from "@/lib/blocks/schema";
  * keep their slots (commercial story arc) — the other middles permute among
  * their own positions, so re-rolls change the page rhythm, not its logic.
  */
+/**
+ * Seeded layout-variant per template section (composition axis, DNA-2c).
+ * C1-parity rules (review): hidden blocks neither juggle nor consume the
+ * pool; when a section's pool is exhausted (more instances than variants)
+ * the block keeps whatever it has instead of collapsing repeats to default.
+ */
+export function juggleTemplateVariants(
+  blocks: StoredBlock[],
+  tpl: { sections: Record<string, { variants?: Record<string, unknown> } | undefined> },
+  rng: () => number,
+): StoredBlock[] {
+  const used = new Map<string, Set<string>>();
+  return blocks.map((b) => {
+    if (b.hidden) return b;
+    const sec = b.section;
+    const variants = sec ? Object.keys(tpl.sections[sec]?.variants ?? {}) : [];
+    if (!sec || variants.length === 0) return b;
+    const usedSet = used.get(sec) ?? new Set<string>();
+    used.set(sec, usedSet);
+    const options = ["", ...variants].filter((v) => !usedSet.has(v));
+    if (!options.length) return b;
+    const v = options[Math.floor(rng() * options.length)];
+    usedSet.add(v);
+    return { ...b, variant: v || undefined };
+  });
+}
+
 export function shuffleMiddles(blocks: StoredBlock[], rng: () => number): StoredBlock[] {
   // Pin by TYPE, not by position (codex review): hero/funnel/services stay
   // wherever they are — robust to owner-reordered drafts and malformed
@@ -116,26 +143,16 @@ export async function generateAndPublish(
   // constant for the same data — the seed is what makes re-generation differ.
   const tpl = getTemplate(site.templateId);
   if (!isClassic && tpl) {
-    const usedVariants = new Map<string, Set<string>>();
-    site.blocks = site.blocks.map((b) => {
-      const sec = b.section;
-      const variants = sec ? Object.keys(tpl.sections[sec]?.variants ?? {}) : [];
-      if (!sec || variants.length === 0) return b;
-      const used = usedVariants.get(sec) ?? new Set<string>();
-      usedVariants.set(sec, used);
-      const options = ["", ...variants].filter((v) => !used.has(v));
-      const v = options.length ? options[Math.floor(rng() * options.length)] : (b.variant ?? "");
-      used.add(v);
-      return { ...b, variant: v || undefined };
-    });
+    site.blocks = juggleTemplateVariants(site.blocks, tpl, rng);
     site.blocks = shuffleMiddles(site.blocks, rng);
   }
   // DNA-2c: templates with >1 data-theme start on a seeded one (visitor
   // toggle still wins later); ≠ previous when the pool allows.
   const tplThemes = tpl?.themes ?? [];
-  const themePool = previous?.templateTheme
-    ? tplThemes.filter((th) => th !== previous.templateTheme)
-    : tplThemes;
+  // First DNA-2c roll on an old site: the visible theme is the template
+  // default — exclude it too, so the axis genuinely participates (review).
+  const prevTplTheme = previous?.templateTheme ?? tpl?.defaultTheme;
+  const themePool = prevTplTheme ? tplThemes.filter((th) => th !== prevTplTheme) : tplThemes;
   const templateTheme =
     tplThemes.length > 1 ? (pick(rng, themePool.length ? themePool : tplThemes) ?? tplThemes[0]) : undefined;
   // Template sites (DNA-2b): the pair comes from the TEMPLATE's identity
