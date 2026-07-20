@@ -7,6 +7,8 @@ import { adaptLogoForTemplate } from "@/lib/media/logo-adapt";
 import { getVertical } from "@/lib/verticals/registry";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import type { SiteMedia } from "@/lib/media/media";
+import { designDnaSchema, dnaSeed, mulberry32 } from "@/lib/theme/dna";
+import { rollDna } from "@/lib/theme/dna-roll";
 
 /**
  * Generate a site from facts for a vertical (Phase 2) and persist it as a
@@ -32,7 +34,37 @@ export async function generateAndPublish(
 ): Promise<PublishResult> {
   const vertical = getVertical(verticalId);
 
-  const site = await generateSite(facts, vertical.id, media, undefined, templateId);
+  // Design-DNA (wave DNA-1). Seeded by HOST (stable and known BEFORE the
+  // tenant upsert — tenant.id is not). A repeat generation for the same host
+  // advances the nonce, so the drawn font pair (and, with bundles in DNA-2,
+  // the whole look) shifts on every run — «same data ⇒ different site».
+  const sbPre = getServiceClient();
+  const { data: prevRow } = await sbPre
+    .from("tenants")
+    .select("draft_theme")
+    .eq("host", host)
+    .maybeSingle();
+  const prevDna = designDnaSchema.safeParse(
+    (prevRow?.draft_theme as { dna?: unknown } | null)?.dna,
+  );
+  const previous = prevDna.success ? prevDna.data : null;
+  const dna = rollDna({
+    tenantId: host,
+    nonce: previous ? previous.designNonce + 1 : 0,
+    previous,
+  });
+  const rng = mulberry32(dnaSeed(host, dna.designNonce));
+
+  const site = await generateSite(facts, vertical.id, media, undefined, templateId, rng);
+
+  // The generation's own palette pick (pack/model — vertical-grounded) wins in
+  // phase 1; DNA records it and contributes the FONT PAIR + motion axes. The
+  // re-roll action and DNA-2 bundles take over the palette axis.
+  const themeWithDna = {
+    ...site.theme,
+    fontPairId: dna.fontPairId,
+    dna: { ...dna, presetId: site.themePresetId ?? dna.presetId },
+  };
 
   // No owner photos → generate ONE atmospheric hero background (§4.8). Runs
   // AFTER site generation so the prompt gets the model's business-specific
@@ -99,8 +131,8 @@ export async function generateAndPublish(
           copyright: `© ${facts.businessName}`,
         },
         facts,
-        draft_theme: site.theme,
-        published_theme: publish ? site.theme : null,
+        draft_theme: themeWithDna,
+        published_theme: publish ? themeWithDna : null,
         vertical: vertical.id,
       },
       { onConflict: "host" },

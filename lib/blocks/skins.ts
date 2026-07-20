@@ -56,10 +56,12 @@ export function skinsFor(type: BlockType): SkinOption[] {
   return blockSkins[type] ?? [];
 }
 
-/** Random skin id for generation-time variety (different sites look different). */
-export function randomSkin(type: BlockType): string | undefined {
+/** Random skin id for generation-time variety (different sites look different).
+ *  `rng` injection (design-DNA wave 1): seeded callers pass their PRNG so the
+ *  draw is reproducible per tenantId+nonce; default stays Math.random. */
+export function randomSkin(type: BlockType, rng: () => number = Math.random): string | undefined {
   const options = (blockSkins[type] ?? []).filter((o) => o.lottery !== false);
   if (options.length === 0) return undefined;
-  const pick = options[Math.floor(Math.random() * options.length)];
+  const pick = options[Math.floor(rng() * options.length)];
   return pick.id || undefined; // default stays as absent
 }

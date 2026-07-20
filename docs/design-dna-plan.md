@@ -24,7 +24,7 @@
       (bundleId?, presetId, fontPairId, radius, skinOverrides, motionId, decorId?, designNonce),
       персист optional-полями theme-JSON у `draft_theme` (Publish копіює draft→published як зараз).
       Пресети отримують метадані СІМʼЇ (тепла/холодна/нейтральна/землиста/контрастна).
-- [ ] **DNA1.4. Seeded lottery** — `randomSkin`/`randomPack` приймають `rng: () => number`
+- [x] **DNA1.4. Seeded lottery** — `randomSkin`/`randomPack` приймають `rng: () => number`
       (UWAGA: `lib/blocks/skins.ts` — ownership-зона паралельної сесії, git status перед правкою);
       generate/assemble використовують seeded rng з DNA; `lottery:false` поважається.
 - [ ] **DNA1.5. Re-roll механіка** — server action «перегенерувати дизайн»: інкремент

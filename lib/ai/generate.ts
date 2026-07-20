@@ -226,6 +226,9 @@ export async function generateSite(
   // onboarding forwards the design the chat agent picked, wave B4).
   // When it resolves, the template path wins and packs are ignored entirely.
   templateId?: string,
+  // Seeded PRNG from the caller's design-DNA (wave DNA-1): makes the pack
+  // fallback reproducible per tenant+nonce. Absent → Math.random as before.
+  rng?: () => number,
 ): Promise<GeneratedSite> {
   const client = getAnthropic();
   const vertical = getVertical(verticalId);
@@ -312,7 +315,7 @@ ${JSON.stringify(facts, null, 2)}
       const pack =
         (packId ? getPack(packId) : undefined) ??
         compatible.find((p) => p.id === parsed.data.designPackId) ??
-        randomPack(vertical.id);
+        randomPack(vertical.id, rng);
       return {
         theme: resolveTheme(pack.themePresetId),
         themePresetId: pack.themePresetId,

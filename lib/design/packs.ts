@@ -153,8 +153,9 @@ export function packsFor(verticalId?: string): DesignPack[] {
   return matched.length > 0 ? matched : designPacks;
 }
 
-/** A random pack compatible with the vertical — the fallback when the model doesn't pick a valid one. */
-export function randomPack(verticalId?: string): DesignPack {
+/** A random pack compatible with the vertical — the fallback when the model doesn't pick a valid one.
+ *  `rng` injection (design-DNA wave 1): seeded callers make the draw reproducible. */
+export function randomPack(verticalId?: string, rng: () => number = Math.random): DesignPack {
   const options = packsFor(verticalId);
-  return options[Math.floor(Math.random() * options.length)];
+  return options[Math.floor(rng() * options.length)];
 }
