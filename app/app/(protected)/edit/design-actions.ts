@@ -3,6 +3,8 @@
 import { getServiceClient } from "@/lib/supabase/server";
 import { requireMember } from "@/lib/tenant/membership";
 import { resolveTheme } from "@/lib/theme/presets";
+import { designDnaSchema } from "@/lib/theme/dna";
+import { rollDna } from "@/lib/theme/dna-roll";
 import { getPack } from "@/lib/design/packs";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import type { Theme } from "@/lib/theme/tokens";
@@ -16,6 +18,50 @@ import type { PageSeo } from "@/lib/tenant/types";
  * a secondary recolor. Draft-only: NO cache purge here — «Опублікувати» does
  * that (see saveDraftBlocks §5.5).
  */
+/**
+ * Design re-roll (wave DNA-1): bump designNonce → draw a new DNA with the
+ * full phase-1 distinctness guarantee (different palette FAMILY + different
+ * font pair vs the current one) and rewrite the DRAFT theme from it. Content
+ * untouched; draft-only — no cache purge (invariant №6, publish is human).
+ */
+export async function rerollDesignAction(
+  host: string,
+): Promise<{ ok: boolean; theme?: Theme; error?: string }> {
+  try {
+    const gate = await requireMember({ host }); // §3.1
+    if (!gate.ok) return { ok: false, error: gate.error };
+
+    const sb = getServiceClient();
+    const { data: t } = await sb
+      .from("tenants")
+      .select("id, draft_theme")
+      .eq("host", host)
+      .maybeSingle();
+    if (!t) return { ok: false, error: "tenant not found" };
+
+    const prevTheme = (t.draft_theme ?? {}) as Theme & { dna?: unknown };
+    const prevParsed = designDnaSchema.safeParse(prevTheme.dna);
+    const previous = prevParsed.success ? prevParsed.data : null;
+
+    const dna = rollDna({
+      tenantId: host,
+      nonce: previous ? previous.designNonce + 1 : 1,
+      previous,
+    });
+    const theme: Theme = {
+      ...resolveTheme(dna.presetId),
+      fontPairId: dna.fontPairId,
+      dna,
+    };
+
+    const { error } = await sb.from("tenants").update({ draft_theme: theme }).eq("id", t.id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, theme };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "reroll failed" };
+  }
+}
+
 export async function switchDesignPack(
   host: string,
   packId: string,

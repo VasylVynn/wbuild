@@ -27,7 +27,7 @@
 - [x] **DNA1.4. Seeded lottery** — `randomSkin`/`randomPack` приймають `rng: () => number`
       (UWAGA: `lib/blocks/skins.ts` — ownership-зона паралельної сесії, git status перед правкою);
       generate/assemble використовують seeded rng з DNA; `lottery:false` поважається.
-- [ ] **DNA1.5. Re-roll механіка** — server action «перегенерувати дизайн»: інкремент
+- [x] **DNA1.5. Re-roll механіка** — server action «перегенерувати дизайн»: інкремент
       designNonce → новий DNA, гарантія розбіжності Фази 1 (сімʼя палітри + шрифтова пара;
       hero-архетипи додадуться в DNA-2), draft-only (інваріант №6). UI-кнопка в редакторі —
       ЯКЩО EditorShell вільний від чужих правок; інакше — самодостатня панель + гачок,
