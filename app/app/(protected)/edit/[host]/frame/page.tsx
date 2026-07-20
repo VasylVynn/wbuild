@@ -4,6 +4,7 @@ import { getTemplate } from "@/lib/templates/registry";
 import { buildTemplateBrand } from "@/lib/templates/brand";
 import { themeToCssVars } from "@/lib/theme/tokens";
 import { TENANT_FONT_CLASSES } from "@/lib/theme/fonts";
+import { resolveFontPair } from "@/lib/theme/font-pairs";
 import { PageRenderer } from "@/components/PageRenderer";
 
 /**
@@ -32,8 +33,16 @@ export default async function EditorFramePage({
 
   const template = getTemplate(data.templateId);
   if (template) {
+    // DNA-2b: mirror the public shell — the rolled pair reaches the template
+    // font indirections; absent pair leaves the template untouched.
+    const pair = resolveFontPair((data.theme as { fontPairId?: string }).fontPairId);
     return (
-      <div className={TENANT_FONT_CLASSES}>
+      <div
+        className={TENANT_FONT_CLASSES}
+        {...(pair && {
+          style: { "--font-heading": pair.heading, "--font-body": pair.body } as React.CSSProperties,
+        })}
+      >
         <PageRenderer
           blocks={data.blocks}
           templateId={data.templateId}

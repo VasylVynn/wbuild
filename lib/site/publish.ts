@@ -7,7 +7,8 @@ import { adaptLogoForTemplate } from "@/lib/media/logo-adapt";
 import { getVertical } from "@/lib/verticals/registry";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import type { SiteMedia } from "@/lib/media/media";
-import { designDnaSchema, dnaSeed, mulberry32 } from "@/lib/theme/dna";
+import { designDnaSchema, dnaSeed, mulberry32, pick } from "@/lib/theme/dna";
+import { getTemplate } from "@/lib/templates/registry";
 import { rollBundleDna } from "@/lib/theme/dna-roll";
 import { resolveTheme } from "@/lib/theme/presets";
 import type { StoredBlock } from "@/lib/blocks/schema";
@@ -108,12 +109,26 @@ export async function generateAndPublish(
     }
     site.blocks = shuffleMiddles(site.blocks, rng);
   }
+  // Template sites (DNA-2b): the pair comes from the TEMPLATE's identity
+  // allowlist, not the bundle — seeded, different from the previous roll.
+  // A template without an allowlist gets no override (renders as authored).
+  const tplPairs = getTemplate(site.templateId)?.dnaFontPairs ?? [];
+  const tplPairPool = previous
+    ? tplPairs.filter((id) => id !== previous.fontPairId)
+    : tplPairs;
+  const tplPair = tplPairs.length
+    ? (pick(rng, tplPairPool.length ? tplPairPool : tplPairs) ?? tplPairs[0])
+    : undefined;
   const themeWithDna = isClassic
     ? { ...resolveTheme(dna.presetId), fontPairId: dna.fontPairId, dna }
     : {
         ...site.theme,
-        fontPairId: dna.fontPairId,
-        dna: { ...dna, presetId: site.themePresetId ?? dna.presetId },
+        ...(tplPair && { fontPairId: tplPair }),
+        dna: {
+          ...dna,
+          presetId: site.themePresetId ?? dna.presetId,
+          ...(tplPair && { fontPairId: tplPair }),
+        },
       };
 
   // No owner photos → generate ONE atmospheric hero background (§4.8). Runs

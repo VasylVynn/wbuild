@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { resolveFontPair } from "@/lib/theme/font-pairs";
 import { notFound } from "next/navigation";
 import { getTenantByHost, getNav } from "@/lib/tenant/data";
 import { themeToCssVars } from "@/lib/theme/tokens";
@@ -32,11 +33,20 @@ export default async function TenantLayout({
 
   // Font variables ride on BOTH branches (design-DNA wave 1): the classic
   // shell resolves --font-heading/--font-body against them now; template
-  // bundles will reference them in DNA wave 2. preload:false → a tenant
-  // downloads only the families its applied CSS actually uses.
+  // font indirections read the same two vars with their own defaults as
+  // fallback (DNA-2b). preload:false → a tenant downloads only the families
+  // its applied CSS actually uses.
   if (isTemplate) {
+    // Pair override only when the DNA rolled one from the template's own
+    // allowlist — no pair, no vars, the template renders exactly as before.
+    const pair = resolveFontPair(tenant.theme.fontPairId);
     return (
-      <div className={`flex min-h-screen flex-col ${TENANT_FONT_CLASSES}`}>
+      <div
+        className={`flex min-h-screen flex-col ${TENANT_FONT_CLASSES}`}
+        {...(pair && {
+          style: { "--font-heading": pair.heading, "--font-body": pair.body } as CSSProperties,
+        })}
+      >
         <main className="flex-1">{children}</main>
         <Beacon />
       </div>

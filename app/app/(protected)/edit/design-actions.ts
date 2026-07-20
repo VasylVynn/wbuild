@@ -3,7 +3,8 @@
 import { getServiceClient } from "@/lib/supabase/server";
 import { requireMember } from "@/lib/tenant/membership";
 import { resolveTheme } from "@/lib/theme/presets";
-import { designDnaSchema, carryDnaFields, dnaSeed, mulberry32 } from "@/lib/theme/dna";
+import { designDnaSchema, carryDnaFields, dnaSeed, mulberry32, pick } from "@/lib/theme/dna";
+import { getTemplate } from "@/lib/templates/registry";
 import { rollBundleDna } from "@/lib/theme/dna-roll";
 import { shuffleMiddles } from "@/lib/site/publish";
 import { getPack } from "@/lib/design/packs";
@@ -46,9 +47,29 @@ export async function rerollDesignAction(
     const previous = prevParsed.success ? prevParsed.data : null;
     const brand = (t.brand ?? {}) as { photos?: string[]; templateId?: string };
 
-    // Template sites: the template owns the look — bundles reach them in a
-    // later DNA-2 subwave; re-roll stays a no-op there rather than lying.
-    if (brand.templateId) return { ok: false, error: "template sites re-roll in DNA-2b" };
+    // Template sites (DNA-2b): pair-only re-roll from the template's identity
+    // allowlist — theme colors/blocks untouched (the template owns them).
+    if (brand.templateId) {
+      const tplPairs = getTemplate(brand.templateId)?.dnaFontPairs ?? [];
+      if (!tplPairs.length) return { ok: false, error: "цей шаблон ще без dna-пар" };
+      const nonce = previous ? previous.designNonce + 1 : 1;
+      const rng = mulberry32(dnaSeed(host, nonce));
+      const pool = previous ? tplPairs.filter((id) => id !== previous.fontPairId) : tplPairs;
+      const fontPairId = pick(rng, pool.length ? pool : tplPairs) ?? tplPairs[0];
+      const theme = {
+        ...prevTheme,
+        fontPairId,
+        dna: {
+          presetId: previous?.presetId ?? "rose-classic",
+          fontPairId,
+          motionId: previous?.motionId ?? "none",
+          designNonce: nonce,
+        },
+      };
+      const { error } = await sb.from("tenants").update({ draft_theme: theme }).eq("id", t.id);
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, theme: theme as Theme };
+    }
 
     const { dna } = rollBundleDna({
       tenantId: host,

@@ -149,13 +149,23 @@
 > шрифтів); палітри/data-theme шаблонів = 2c (зміна інтерфейсу врапперів, координація
 > з паралельною сесією шаблонів).
 
-- [ ] **B1. Registry allowlists** — `dnaFontPairs` на кожному шаблоні (пари, що не ламають
+- [x] **B1. Registry allowlists** — `dnaFontPairs` на кожному шаблоні (пари, що не ламають
       ідентичність: salon serif-люкс, studio модерн, ferri преміум, restaurant тепло).
-- [ ] **B2. Shell wiring** — template-гілка TenantLayout і frame: інлайн `--font-heading/--font-body`
+- [x] **B2. Shell wiring** — template-гілка TenantLayout і frame: інлайн `--font-heading/--font-body`
       з `resolveFontPair(theme.fontPairId)` (нема пари → шаблонні дефолти, нуль змін).
-- [ ] **B3. CSS де-фонтінг** — font-індирекції 4 шаблонів у globals.css отримують
+- [x] **B3. CSS де-фонтінг** — font-індирекції 4 шаблонів у globals.css отримують
       `var(--font-heading|--font-body, <шаблонний дефолт>)` fallback-ланцюги.
-- [ ] **B4. Publish** — шаблонна гілка: пара з allowlist шаблону (seeded, ≠попередня).
-- [ ] **B5. Re-roll** — дозволити шаблонним сайтам pair-only re-roll (draft-only).
-- [ ] **B6. Живий доказ** — wave-dna-smoke (salon): два роли → різні пари в computed h1;
+- [x] **B4. Publish** — шаблонна гілка: пара з allowlist шаблону (seeded, ≠попередня).
+- [x] **B5. Re-roll** — дозволити шаблонним сайтам pair-only re-roll (draft-only).
+- [x] **B6. Живий доказ** — wave-dna-smoke (salon): два роли → різні пари в computed h1;
       без fontPairId — рендер untouched (регресія нуль).
+
+> **Нотатка DNA-2b (2026-07-20):** вісь пари доведена на шаблонному шляху наживо:
+> дві реальні генерації salon-тенанта → у БД `cormorant-manrope`, у DOM body=Manrope,
+> heading=Cormorant Garamond; старий шаблонний тенант БЕЗ пари — Poppins, байт-у-байт
+> як раніше (регресія нуль). Борги: (а) ferri де-фонтінг відкладений — секції читають
+> `font-[family-name:var(--font-cormorant)]` напряму, без центральної індирекції
+> (потрібна коордінація з template-сесією); (б) portfolio/aisaas/nextly/react2021 —
+> без allowlist (без оверрайду свідомо); (в) палітри/data-theme шаблонів = DNA-2c
+> (зміна інтерфейсу врапперів); (г) dev-гочас: едіт globals.css під запущеним
+> Turbopack може не примінитись — перезапускати dev перед замірами шрифтів.

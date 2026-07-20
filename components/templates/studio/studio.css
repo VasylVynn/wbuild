@@ -25,7 +25,9 @@
   --color-text: #fafafa;
   --color-text-muted: #71717a;
   --color-text-subtle: #52525b;
-  --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-body, var(--font-inter), "Inter", system-ui, -apple-system, sans-serif);
+  /* DNA-2b: headings follow the rolled pair when present. */
+  --font-heading-resolved: var(--font-heading, var(--font-inter), "Inter", system-ui, sans-serif);
 
   position: relative;
   font-family: var(--font-sans);
@@ -264,3 +266,6 @@
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* DNA-2b: template headings read the rolled pair, defaulting to Inter. */
+.tpl-studio h1, .tpl-studio h2, .tpl-studio h3 { font-family: var(--font-heading-resolved); }

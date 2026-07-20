@@ -73,6 +73,12 @@ export interface SiteTemplate {
    */
   themes: string[];
   defaultTheme: string;
+  /**
+   * DNA-2b: font pairs (lib/theme/font-pairs.ts ids) that PRESERVE this
+   * template's identity. The DNA rolls the pair for template sites from this
+   * list; absent/empty → the template's own hardcoded fonts (no override).
+   */
+  dnaFontPairs?: string[];
 }
 
 export const siteTemplates: Record<string, SiteTemplate> = {
@@ -86,6 +92,7 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: studioMeta.wrapper,
     themes: ["dark"],
     defaultTheme: "dark",
+    dnaFontPairs: ["unbounded-inter", "manrope-inter", "montserrat-rubik"],
   },
   ferri: {
     id: ferriMeta.id,
@@ -97,6 +104,7 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: ferriMeta.wrapper,
     themes: ["dark", "light"],
     defaultTheme: "dark",
+    dnaFontPairs: ["literata-inter", "playfair-jost", "lora-source"],
   },
   salon: {
     id: salonMeta.id,
@@ -108,6 +116,7 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: salonMeta.wrapper,
     themes: ["light", "dark"],
     defaultTheme: "light",
+    dnaFontPairs: ["cormorant-manrope", "playfair-jost", "lora-source"],
   },
   portfolio: {
     id: portfolioMeta.id,
@@ -163,6 +172,7 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: restaurantMeta.wrapper,
     themes: ["light"],
     defaultTheme: "light",
+    dnaFontPairs: ["lora-source", "nunito-duo", "montserrat-rubik"],
   },
 };
 
