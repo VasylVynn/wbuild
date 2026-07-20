@@ -14,6 +14,7 @@ import {
   templateDisplayName,
   TEMPLATE_IDS,
 } from "@/lib/templates/registry";
+import { isApifyConfigured } from "@/lib/ig/apify";
 
 /**
  * Onboarding agent (brief §4.9 + owner feedback). The chat is only the
@@ -141,6 +142,23 @@ function buildDesignCatalog(vertical: VerticalConfig): string {
     .join("\n");
 }
 
+/**
+ * E8: Instagram-first rules, present ONLY when the Apify import is configured
+ * (no token → the feature must never be mentioned anywhere). The IMPORT itself
+ * is run by the client (link detection → /api/ig-import) — the agent's job is
+ * the handle fact and not re-asking what the import already filled.
+ */
+function igImportBlock(): string {
+  if (!isApifyConfigured()) return "";
+  return `INSTAGRAM (імпорт увімкнено):
+- Початок розмови без посилання: у першому питанні мʼяко нагадай, що можна просто надіслати посилання на Instagram-сторінку — тоді більшість відповідей зʼявиться сама.
+- Користувач каже, що має Instagram, але не дав хендл → попроси надіслати посилання на профіль (одним коротким питанням).
+- Користувач згадав хендл чи посилання текстом → збережи у factsPatch.instagram сам хендл (без https:// і без @).
+- Після імпорту (факти й фото з Instagram уже в даних) — НЕ перепитуй те, що вже є; питай про ВІДСУТНЄ, по одному: телефон → години → адреса. Витягнуте можна коротко підтвердити відлунням, але не влаштовуй повторний допит.
+
+`;
+}
+
 function buildSystem(vertical: VerticalConfig, issueNotes: string[]): string {
   const issuesBlock = issueNotes.length
     ? `\n\nПЕРЕВІР непевні дані (постав МАКСИМУМ ОДНЕ м'яке підтверджувальне питання за хід, природним відлунням, без жаргону):\n${issueNotes.map((n) => `- ${n}`).join("\n")}`
@@ -168,7 +186,7 @@ ${buildDesignCatalog(vertical)}
 - Поки триває збір (status "collecting"), КОЖНА відповідь закінчується ОДНИМ конкретним питанням до користувача. Ніколи не пиши мета-фрази («зберігаю дані», «питаю далі», «продовжимо») замість питання — одразу став саме питання.
 - ПІСЛЯ тексту ЗАВЖДИ виклич інструмент save_facts зі структурованими даними (verticalId, factsPatch, status).
 
-ПРАВИЛА РОЗМОВИ:
+${igImportBlock()}ПРАВИЛА РОЗМОВИ:
 - Тривіальне групуй ("назва, місто і телефон — одним повідомленням"). Складні питання — строго ПО ОДНОМУ.
 - ПРОСТОТА: кожне питання — одна проста думка, побутовою мовою, без термінів. Ніколи не став два складні питання в одному повідомленні.
 - ТЕМП КОРИСТУВАЧА: короткі чи нетерплячі відповіді, або «просто згенеруй» — не тягни, одразу веди до status "ready". Твої питання — можливість для користувача, не обовʼязок.
