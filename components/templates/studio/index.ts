@@ -14,6 +14,10 @@ import ContactsSection from "./ContactsSection";
 import StudioHeroAlt from "./StudioHeroAlt";
 import StudioHeroAlt2 from "./StudioHeroAlt2";
 import StudioFeaturesAlt from "./StudioFeaturesAlt";
+import StudioMarquee from "./StudioMarquee";
+import StudioTimeline from "./StudioTimeline";
+import StudioTestimonials from "./StudioTestimonials";
+import StudioTestimonialsAlt from "./StudioTestimonialsAlt";
 
 /**
  * A single section of the studio template.
@@ -48,6 +52,13 @@ export const studioSections: Record<string, TemplateSectionDef> = {
     component: HeroSection,
     variants: { split: StudioHeroAlt, minimal: StudioHeroAlt2 },
   },
+  marquee: {
+    block: "marquee",
+    label: "Біжучий рядок",
+    description:
+      "Горизонтальна стрічка з короткими ключовими словами (напрями, спеціалізації, переваги), що плавно прокручується. Лише окремі слова чи короткі фрази — не речення; мінімум три.",
+    component: StudioMarquee,
+  },
   features: {
     block: "services",
     label: "Переваги",
@@ -73,12 +84,27 @@ export const studioSections: Record<string, TemplateSectionDef> = {
     description: "Смуга з числовими показниками та підписами (лише реальні цифри).",
     component: StatsSection,
   },
+  timeline: {
+    block: "timeline",
+    label: "Хронологія",
+    description:
+      "Вертикальна стрічка етапів розвитку бізнесу чи процесу: період (рік), назва етапу, короткий опис. Лише реальні дати та події — не вигадуй хронологію.",
+    component: StudioTimeline,
+  },
   team: {
     block: "team",
     label: "Команда",
     description:
       "Картки команди — фото або ініціали, ім'я, роль (+ короткий опис). Лише реальні люди бізнесу.",
     component: StudioTeam,
+  },
+  testimonials: {
+    block: "testimonials",
+    label: "Відгуки",
+    description:
+      "Сітка карток з реальними відгуками клієнтів: цитата, ім'я автора, опційно роль. Цитати не вигадуються. Варіант «spotlight» — одна центрована колонка великих цитат.",
+    component: StudioTestimonials,
+    variants: { spotlight: StudioTestimonialsAlt },
   },
   banner: {
     block: "cta",
@@ -116,11 +142,14 @@ export const studioMeta: {
   verticalIds: ["generic", "lawyer", "autoservice"],
   order: [
     "hero",
+    "marquee",
     "features",
     "howitworks",
     "gallery",
     "stats",
+    "timeline",
     "team",
+    "testimonials",
     "banner",
     "lead_form",
     "contacts",

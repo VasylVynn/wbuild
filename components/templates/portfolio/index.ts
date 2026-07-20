@@ -5,8 +5,11 @@ import PortfolioWrapper from "./PortfolioWrapper";
 import PortfolioHero from "./PortfolioHero";
 import PortfolioMarquee from "./PortfolioMarquee";
 import PortfolioAbout from "./PortfolioAbout";
+import PortfolioSwitchback from "./PortfolioSwitchback";
 import PortfolioGallery from "./PortfolioGallery";
+import PortfolioPublications from "./PortfolioPublications";
 import PortfolioTimeline from "./PortfolioTimeline";
+import PortfolioTeam from "./PortfolioTeam";
 import PortfolioBanner from "./PortfolioBanner";
 import PortfolioTestimonials from "./PortfolioTestimonials";
 import PortfolioLeadForm from "./PortfolioLeadForm";
@@ -38,17 +41,38 @@ export const portfolioSections: Record<string, TemplateSectionDef> = {
     description: "Заголовок і текст; рядки з «- » стають списком.",
     component: PortfolioAbout,
   },
+  switchback: {
+    block: "switchback",
+    label: "Історія у деталях",
+    description:
+      "Чергування фото + текст «зиґзаґом»: широкі ряди, у яких зображення міняє бік, а поруч — serif-заголовок, короткий текст і опційне посилання-стрілка. Без фото ряд стає центрованим текстом.",
+    component: PortfolioSwitchback,
+  },
   gallery: {
     block: "gallery",
     label: "Роботи",
     description: "Сітка проєктів/робіт із підписом (назва/категорія) на наведенні.",
     component: PortfolioGallery,
   },
+  publications: {
+    block: "publications",
+    label: "Праці та згадки",
+    description:
+      "Індекс робіт / публікацій / кейсів: рядки з порядковим номером, назвою (serif), підзаголовком і роком + джерелом праворуч. Тонкі лінії-роздільники, без фото. Лише реальні праці.",
+    component: PortfolioPublications,
+  },
   timeline: {
     block: "timeline",
     label: "Досвід / шлях",
     description: "Хронологія досвіду чи процесу — період, етап, опис. Лише реальні дати й етапи.",
     component: PortfolioTimeline,
+  },
+  team: {
+    block: "team",
+    label: "Команда",
+    description:
+      "Реальні люди бізнесу: центровані скляні картки з круглим портретом (або монограмою у teal-кружку без фото), serif-імʼям, роллю (teal) та коротким описом.",
+    component: PortfolioTeam,
   },
   banner: {
     block: "cta",
@@ -94,8 +118,11 @@ export const portfolioMeta: {
     "hero",
     "marquee",
     "about",
+    "switchback",
     "gallery",
+    "publications",
     "timeline",
+    "team",
     "banner",
     "testimonials",
     "lead_form",

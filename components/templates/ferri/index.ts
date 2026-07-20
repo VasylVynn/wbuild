@@ -15,6 +15,10 @@ import FerriHeroAlt2 from "./FerriHeroAlt2";
 import FerriServicesAlt from "./FerriServicesAlt";
 import FerriAboutAlt from "./FerriAboutAlt";
 import FerriGalleryAlt from "./FerriGalleryAlt";
+import FerriTimeline from "./FerriTimeline";
+import FerriTeam from "./FerriTeam";
+import FerriTeamAlt from "./FerriTeamAlt";
+import FerriMarquee from "./FerriMarquee";
 
 /**
  * Ferri — an elegant dark-navy + gold, serif (Cormorant) editorial look ported
@@ -39,6 +43,13 @@ export const ferriSections: Record<string, TemplateSectionDef> = {
     component: FerriAbout,
     variants: { statement: FerriAboutAlt },
   },
+  timeline: {
+    block: "timeline",
+    label: "Шлях",
+    description:
+      "Вертикальна хронологія досвіду/розвитку: рік або період, назва етапу, підзаголовок і опис — з’єднані золотою лінією з вузлами. Лише реальні дати й події, без вигаданих.",
+    component: FerriTimeline,
+  },
   banner: {
     block: "cta",
     label: "Смуга-твердження",
@@ -53,11 +64,26 @@ export const ferriSections: Record<string, TemplateSectionDef> = {
     component: FerriServices,
     variants: { numbered: FerriServicesAlt },
   },
+  team: {
+    block: "team",
+    label: "Команда",
+    description:
+      "Реальні люди бізнесу (партнери, майстри, експерти): фото або монограма з ініціалів, ім’я, роль і короткий опис. Центровані картки; варіант «list» — стриманий список-реєстр. Лише справжні особи.",
+    component: FerriTeam,
+    variants: { list: FerriTeamAlt },
+  },
   publications: {
     block: "publications",
     label: "Праці",
     description: "Бібліографія праць/книг/статей — назва, рік, джерело. Лише реальні.",
     component: FerriPublications,
+  },
+  marquee: {
+    block: "marquee",
+    label: "Стрічка",
+    description:
+      "Рухома горизонтальна стрічка коротких ключових слів (напрямки, цінності, переваги) серифом із золотими ромбами-розділювачами. Мінімум 3 слова, лише реальні.",
+    component: FerriMarquee,
   },
   gallery: {
     block: "gallery",
@@ -96,9 +122,12 @@ export const ferriMeta: {
   order: [
     "hero",
     "about",
+    "timeline",
     "banner",
     "services",
+    "team",
     "publications",
+    "marquee",
     "gallery",
     "lead_form",
     "contacts",

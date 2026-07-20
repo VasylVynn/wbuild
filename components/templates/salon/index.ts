@@ -16,6 +16,9 @@ import SalonHeroAlt2 from "./SalonHeroAlt2";
 import SalonServicesAlt from "./SalonServicesAlt";
 import SalonGalleryAlt from "./SalonGalleryAlt";
 import SalonTestimonialsAlt from "./SalonTestimonialsAlt";
+import SalonSwitchback from "./SalonSwitchback";
+import SalonMarquee from "./SalonMarquee";
+import SalonPublications from "./SalonPublications";
 
 /**
  * Salon ("luxe-salon") — a LIGHT luxury look (soft rounded glass cards, gold +
@@ -39,6 +42,13 @@ export const salonSections: Record<string, TemplateSectionDef> = {
     component: SalonServices,
     variants: { rows: SalonServicesAlt },
   },
+  story: {
+    block: "switchback",
+    label: "Історія",
+    description:
+      "Чергування великого фото й тексту (зиг-заг, рядки дзеркаляться): розповідь про майстерню, підхід чи трансформації «до/після». Фото беруться лише з props; без фото рядок стає центрованим текстовим блоком.",
+    component: SalonSwitchback,
+  },
   process: {
     block: "timeline",
     label: "Як відбувається візит",
@@ -53,11 +63,25 @@ export const salonSections: Record<string, TemplateSectionDef> = {
     component: SalonGallery,
     variants: { grid: SalonGalleryAlt },
   },
+  values: {
+    block: "marquee",
+    label: "Переваги",
+    description:
+      "Рухомий рядок коротких ключових слів (цінності, переваги) із золотими роздільниками — ритмічна пауза-акцент між секціями, без зображень.",
+    component: SalonMarquee,
+  },
   team: {
     block: "team",
     label: "Команда",
     description: "Майстри салону — фото або ініціали, ім'я, роль. Лише реальні люди.",
     component: SalonTeam,
+  },
+  press: {
+    block: "publications",
+    label: "Преса",
+    description:
+      "Скляна рамка-реєстр згадок у пресі, нагород чи публікацій: назва, рік, джерело — по рядку. Спокійний перелік для довіри, лише реальні факти.",
+    component: SalonPublications,
   },
   testimonials: {
     block: "testimonials",
@@ -102,9 +126,12 @@ export const salonMeta: {
   order: [
     "hero",
     "services",
+    "story",
     "process",
     "gallery",
+    "values",
     "team",
+    "press",
     "testimonials",
     "faq",
     "lead_form",

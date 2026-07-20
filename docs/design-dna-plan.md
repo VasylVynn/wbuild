@@ -231,3 +231,12 @@
 > repo, порядок записів закриває реальний ризик); flash dnaTheme→stored у відвідувача з
 > власним тумблером (прийнятна ціна, зафіксовано); позиційні #anchor-и повторів —
 > задокументоване обмеження (стабільні block-id — окремий рефакторинг).
+
+> **Нотатка: +15 секцій у 5 шаблонів (2026-07-20, 5 паралельних агентів, наказ власника
+> «секції на 90% однакові»):** studio (marquee, testimonials+variant, timeline), ferri
+> (timeline, team+variant, marquee), salon (3 нові), restaurant (marquee+variant,
+> switchback+variant, publications+variant), portfolio (3 нові). Всі — існуючі block-типи
+> реєстру (one-registry), українські label/description для моделі, §4.8 по фото, стиль
+> строго рідного шаблону, частина з layout-варіантами (додатковий матеріал для
+> жонглювання DNA-2c). Адмін-превʼю /admin/templates/[id] підхоплює автоматично
+> (fixture ітерує sections map). tsc/build/eslint зелені. Дифи ревʼюнуті інтегратором.
