@@ -188,6 +188,13 @@ async function generateAdaptedLogo(
     }
     const outBuf = Buffer.from(data, "base64");
     if (outBuf.byteLength === 0 || outBuf.byteLength > MAX_LOGO_BYTES) return null;
+    // Geometry sanity vs the ORIGINAL (owner bug ×2: gemini occasionally
+    // returns a whole page MOCKUP — 896×1152 canvas with the logo in a corner
+    // and a painted checkerboard — instead of an adapted logo). An adaptation
+    // must keep roughly the source shape; anything else is garbage we must
+    // not persist. Validation unavailable ⇒ REJECT (keeping the original is
+    // always safe; storing unvalidated output is not).
+    if (!(await adaptedGeometryOk(Buffer.from(b64, "base64"), outBuf))) return null;
     const ext = outMime.includes("webp") ? "webp" : outMime.includes("jpeg") ? "jpg" : "png";
 
     const sb = getServiceClient();
@@ -205,6 +212,30 @@ async function generateAdaptedLogo(
     return null;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * Geometry gate for gemini output (owner bug ×2): an ADAPTATION keeps roughly
+ * the source shape. Reject when the aspect drifts >25%, the canvas balloons
+ * past 4× the source area, or the longer side exceeds 1024px (page-mockup
+ * canvases like 896×1152). sharp unavailable ⇒ reject — an unvalidated output
+ * is never stored; the original logo is always the safe render.
+ */
+async function adaptedGeometryOk(src: Buffer, out: Buffer): Promise<boolean> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const [a, b] = await Promise.all([sharp(src).metadata(), sharp(out).metadata()]);
+    if (!a.width || !a.height || !b.width || !b.height) return false;
+    const arIn = a.width / a.height;
+    const arOut = b.width / b.height;
+    if (Math.abs(arOut / arIn - 1) > 0.25) return false;
+    if (b.width * b.height > 4 * a.width * a.height) return false;
+    if (Math.max(b.width, b.height) > 1024) return false;
+    return true;
+  } catch (e) {
+    console.warn(`[logo-adapt] geometry check unavailable: ${e instanceof Error ? e.message : e}`);
+    return false;
   }
 }
 
