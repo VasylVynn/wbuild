@@ -267,5 +267,6 @@
   outline-offset: 2px;
 }
 
-/* DNA-2b: template headings read the rolled pair, defaulting to Inter. */
-.tpl-studio h1, .tpl-studio h2, .tpl-studio h3 { font-family: var(--font-heading-resolved); }
+/* DNA-2b: heading override applies ONLY under a shell-injected pair —
+   a blanket rule would stomp legacy per-element font utilities (review). */
+[data-dna-pair] .tpl-studio h1, [data-dna-pair] .tpl-studio h2, [data-dna-pair] .tpl-studio h3 { font-family: var(--font-heading-resolved); }

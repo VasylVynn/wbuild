@@ -169,3 +169,17 @@
 > без allowlist (без оверрайду свідомо); (в) палітри/data-theme шаблонів = DNA-2c
 > (зміна інтерфейсу врапперів); (г) dev-гочас: едіт globals.css під запущеним
 > Turbopack може не примінитись — перезапускати dev перед замірами шрифтів.
+
+> **Нотатка DNA-2b (adversarial review, виправлено):** 3 must-fix: (1) ferri рекламував
+> пари, які його рендер не читає (re-roll = візуальний no-op) — allowlist знятий до
+> де-фонтінгу ferri; (2) blanket-правило заголовків studio перекривало legacy
+> font-утиліти БЕЗ пари — оверрайд тепер лише під shell-маркером `data-dna-pair`;
+> (3) шаблони без allowlist більше не персистять чужу бандл-пару в DNA — чесне `""`.
+> Should-fix: presetId у template-reroll більше не фабрикується ("" замість
+> rose-classic); repeat-avoidance враховує top-level fontPairId при непарсабельній DNA;
+> restaurant-allowlist звужений до warm-serif ідентичності (Lora/Literata/Playfair).
+> Відхилено/відкладено: типізація dnaFontPairs літералами (FONT_PAIRS без as const —
+> рефакторинг окремо; валідація реєстру — кандидат у тест DNA-2c). Рев'ювер підтвердив:
+> nested-var() валідний, salon dark неторкнутий, portfolio не ловить salon-ребайндинг,
+> draft-only межа reroll збережена. Живий пост-фікс чек: salon-смоук рендерить пару
+> (data-dna-pair=cormorant-manrope, body Manrope, heading Cormorant) — без регресій.

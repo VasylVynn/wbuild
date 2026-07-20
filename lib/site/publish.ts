@@ -113,9 +113,12 @@ export async function generateAndPublish(
   // allowlist, not the bundle — seeded, different from the previous roll.
   // A template without an allowlist gets no override (renders as authored).
   const tplPairs = getTemplate(site.templateId)?.dnaFontPairs ?? [];
-  const tplPairPool = previous
-    ? tplPairs.filter((id) => id !== previous.fontPairId)
-    : tplPairs;
+  // Repeat-avoidance falls back to the top-level fontPairId when stored DNA
+  // didn't parse (partially migrated themes — review).
+  const prevPairId =
+    previous?.fontPairId ??
+    (prevRow?.draft_theme as { fontPairId?: string } | null)?.fontPairId;
+  const tplPairPool = prevPairId ? tplPairs.filter((id) => id !== prevPairId) : tplPairs;
   const tplPair = tplPairs.length
     ? (pick(rng, tplPairPool.length ? tplPairPool : tplPairs) ?? tplPairs[0])
     : undefined;
@@ -127,7 +130,9 @@ export async function generateAndPublish(
         dna: {
           ...dna,
           presetId: site.themePresetId ?? dna.presetId,
-          ...(tplPair && { fontPairId: tplPair }),
+          // "" = honestly no pair (template without an allowlist) — never the
+          // bundle's pair that this render ignores (review).
+          fontPairId: tplPair ?? "",
         },
       };
 

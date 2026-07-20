@@ -104,7 +104,9 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: ferriMeta.wrapper,
     themes: ["dark", "light"],
     defaultTheme: "dark",
-    dnaFontPairs: ["literata-inter", "playfair-jost", "lora-source"],
+    // DNA-2b review: ferri sections read --font-cormorant DIRECTLY (no central
+    // indirection) — advertising pairs here would make re-roll a visual no-op.
+    // Restore once ferri is de-fonted (coordinate with the template session).
   },
   salon: {
     id: salonMeta.id,
@@ -172,7 +174,7 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: restaurantMeta.wrapper,
     themes: ["light"],
     defaultTheme: "light",
-    dnaFontPairs: ["lora-source", "nunito-duo", "montserrat-rubik"],
+    dnaFontPairs: ["lora-source", "literata-inter", "playfair-jost"],
   },
 };
 

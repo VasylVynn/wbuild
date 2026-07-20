@@ -44,6 +44,7 @@ export default async function TenantLayout({
       <div
         className={`flex min-h-screen flex-col ${TENANT_FONT_CLASSES}`}
         {...(pair && {
+          "data-dna-pair": pair.id,
           style: { "--font-heading": pair.heading, "--font-body": pair.body } as CSSProperties,
         })}
       >

@@ -54,13 +54,15 @@ export async function rerollDesignAction(
       if (!tplPairs.length) return { ok: false, error: "цей шаблон ще без dna-пар" };
       const nonce = previous ? previous.designNonce + 1 : 1;
       const rng = mulberry32(dnaSeed(host, nonce));
-      const pool = previous ? tplPairs.filter((id) => id !== previous.fontPairId) : tplPairs;
+      const prevPairId = previous?.fontPairId ?? prevTheme.fontPairId;
+      const pool = prevPairId ? tplPairs.filter((id) => id !== prevPairId) : tplPairs;
       const fontPairId = pick(rng, pool.length ? pool : tplPairs) ?? tplPairs[0];
       const theme = {
         ...prevTheme,
         fontPairId,
         dna: {
-          presetId: previous?.presetId ?? "rose-classic",
+          // "" = unknown provenance — never a fabricated palette id (review).
+          presetId: previous?.presetId ?? "",
           fontPairId,
           motionId: previous?.motionId ?? "none",
           designNonce: nonce,

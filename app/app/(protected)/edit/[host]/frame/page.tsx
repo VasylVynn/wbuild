@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { notFound } from "next/navigation";
 import { getEditorData } from "@/app/app/(protected)/edit/actions";
 import { getTemplate } from "@/lib/templates/registry";
@@ -40,7 +41,8 @@ export default async function EditorFramePage({
       <div
         className={TENANT_FONT_CLASSES}
         {...(pair && {
-          style: { "--font-heading": pair.heading, "--font-body": pair.body } as React.CSSProperties,
+          "data-dna-pair": pair.id,
+          style: { "--font-heading": pair.heading, "--font-body": pair.body } as CSSProperties,
         })}
       >
         <PageRenderer
