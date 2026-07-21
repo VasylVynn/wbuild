@@ -45,6 +45,9 @@ const NAV_SURFACES: Record<string, string> = {
   nextly: "a white light navigation bar with dark text and blue accents",
   react2021: "a white light navigation bar with dark text",
   restaurant: "a warm cream navigation bar with dark brown text and terracotta accents",
+  spark: "a clean light navigation bar with dark text and a single bold accent",
+  beleza: "a soft rose-tinted light navigation bar with dark text",
+  launch: "a near-black dark navigation bar with a warm orange glow accent",
 };
 
 function navSurface(templateId: string): string {

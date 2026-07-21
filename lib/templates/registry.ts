@@ -11,6 +11,9 @@ import { aisaasMeta, aisaasSections } from "@/components/templates/aisaas";
 import { nextlyMeta, nextlySections } from "@/components/templates/nextly";
 import { react2021Meta, react2021Sections } from "@/components/templates/react2021";
 import { restaurantMeta, restaurantSections } from "@/components/templates/restaurant";
+import { sparkMeta, sparkSections } from "@/components/templates/spark";
+import { belezaMeta, belezaSections } from "@/components/templates/beleza";
+import { launchMeta, launchSections } from "@/components/templates/launch";
 
 /**
  * Site templates — the owner mandate (2026-07): a generated site must BE a
@@ -165,6 +168,42 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: react2021Meta.wrapper,
     themes: ["light"],
     defaultTheme: "light",
+  },
+  spark: {
+    id: sparkMeta.id,
+    label: sparkMeta.label,
+    description: sparkMeta.description,
+    verticalIds: sparkMeta.verticalIds,
+    order: sparkMeta.order,
+    sections: sparkSections,
+    wrapper: sparkMeta.wrapper,
+    themes: ["light", "dark"],
+    defaultTheme: "light",
+    dnaFontPairs: ["manrope-inter", "montserrat-rubik", "onest"],
+  },
+  beleza: {
+    id: belezaMeta.id,
+    label: belezaMeta.label,
+    description: belezaMeta.description,
+    verticalIds: belezaMeta.verticalIds,
+    order: belezaMeta.order,
+    sections: belezaSections,
+    wrapper: belezaMeta.wrapper,
+    themes: ["light"],
+    defaultTheme: "light",
+    dnaFontPairs: ["cormorant-manrope", "playfair-jost", "nunito-duo"],
+  },
+  launch: {
+    id: launchMeta.id,
+    label: launchMeta.label,
+    description: launchMeta.description,
+    verticalIds: launchMeta.verticalIds,
+    order: launchMeta.order,
+    sections: launchSections,
+    wrapper: launchMeta.wrapper,
+    themes: ["dark", "light"],
+    defaultTheme: "dark",
+    dnaFontPairs: ["unbounded-inter", "montserrat-rubik", "manrope-inter"],
   },
   restaurant: {
     id: restaurantMeta.id,

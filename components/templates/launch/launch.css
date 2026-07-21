@@ -1,0 +1,285 @@
+/*
+ * Launch template ("launch" / «Лонч») — a faithful port of the Launch UI kit
+ * (template_sources/launch-ui-main, MIT): a bold modern startup look built on a
+ * warm-orange brand, radial GLOW, gradient headline text, glass surfaces and a
+ * soft "appear" reveal. Adapted to a LOCAL-BUSINESS one-pager, so the SaaS
+ * tropes (app-store badges, product mockups-as-hero) are dropped — the glow and
+ * gradient identity stay.
+ *
+ * Everything is namespaced under `.tpl-launch` so it never leaks into the
+ * product UI / tenant shell. The source ships LIGHT + DARK; here both live as
+ * CSS-var value-sets flipped by `data-theme` on the root (set by LaunchWrapper),
+ * so no dependency on a Tailwind `dark:` custom variant / globals.css. The
+ * brand orange stays constant across themes (buttons/glow read the same); only
+ * the surface/text tokens flip. Self-contained: imported by LaunchWrapper.
+ *
+ * Fonts are DE-FONTED indirections — the DNA shell's --font-heading/--font-body
+ * win; otherwise the wrapper's next/font loaders (--font-launch-display /
+ * --font-launch-body); otherwise a literal fallback stack.
+ */
+
+.tpl-launch {
+  /* Fonts (DE-FONTED): DNA override → wrapper loader → literal. */
+  --launch-display: var(--font-heading, var(--font-launch-display), "Manrope", system-ui, sans-serif);
+  --launch-body: var(--font-body, var(--font-launch-body), "Inter", system-ui, sans-serif);
+
+  /* Brand — constant across themes (the glow/CTA identity). */
+  --launch-brand: oklch(66.5% 0.1804 47.04);
+  --launch-brand-strong: oklch(75.77% 0.159 55.91);
+  --launch-radius: 0.625rem;
+
+  /* Dark is the default identity (glow reads best on near-black). */
+  --launch-bg: oklch(0.141 0.005 285.823);
+  --launch-bg-2: oklch(0.185 0.006 286);
+  --launch-fg: oklch(0.985 0 0);
+  --launch-muted: oklch(0.705 0.015 286.067);
+  --launch-card: oklch(1 0 0 / 0.04);
+  --launch-card-2: oklch(1 0 0 / 0.02);
+  --launch-border: oklch(1 0 0 / 0.1);
+  --launch-input: oklch(1 0 0 / 0.05);
+  --launch-shadow: 0 24px 60px -20px oklch(0% 0 0 / 0.7);
+
+  position: relative;
+  font-family: var(--launch-body);
+  background: var(--launch-bg);
+  color: var(--launch-fg);
+  color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tpl-launch[data-theme="light"] {
+  --launch-bg: oklch(97.65% 0.001 17.18);
+  --launch-bg-2: oklch(1 0 0);
+  --launch-fg: oklch(0.141 0.005 285.823);
+  --launch-muted: oklch(0.552 0.016 285.938);
+  --launch-card: oklch(1 0 0 / 0.7);
+  --launch-card-2: oklch(1 0 0 / 0.4);
+  --launch-border: oklch(0.141 0.005 285 / 0.1);
+  --launch-input: oklch(1 0 0);
+  --launch-shadow: 0 24px 60px -24px oklch(0% 0 0 / 0.18);
+  color-scheme: light;
+}
+
+.tpl-launch h1,
+.tpl-launch h2,
+.tpl-launch h3 {
+  font-family: var(--launch-display);
+  letter-spacing: -0.02em;
+}
+
+.tpl-launch ::selection {
+  background: var(--launch-brand);
+  color: #fff;
+}
+
+.tpl-launch :focus-visible {
+  outline: 2px solid var(--launch-brand);
+  outline-offset: 2px;
+}
+
+/* ===== Radial glow — the signature. ===== */
+.launch-glow {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  width: min(80rem, 120%);
+  height: 40rem;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: radial-gradient(
+    ellipse 50% 50% at 50% 50%,
+    oklch(75.77% 0.159 55.91 / 0.28),
+    transparent 72%
+  );
+  filter: blur(2px);
+}
+.launch-glow--top {
+  top: -14rem;
+}
+.launch-glow--center {
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.launch-glow--bottom {
+  bottom: -16rem;
+}
+
+/* ===== Glass surfaces ===== */
+.launch-glass {
+  background: linear-gradient(to bottom, var(--launch-card), var(--launch-card-2));
+  border: 1px solid var(--launch-border);
+  backdrop-filter: blur(12px);
+}
+
+/* ===== Gradient headline text ===== */
+.launch-gradient-text {
+  background: linear-gradient(to right, var(--launch-fg) 35%, var(--launch-brand-strong));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ===== Badge pill ===== */
+.launch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--launch-border);
+  background: var(--launch-card);
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--launch-muted);
+  backdrop-filter: blur(8px);
+}
+.launch-badge--brand {
+  border-color: color-mix(in oklch, var(--launch-brand) 35%, transparent);
+  color: var(--launch-brand);
+}
+
+/* ===== Buttons ===== */
+.launch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: calc(var(--launch-radius) + 2px);
+  padding: 0.75rem 1.5rem;
+  font-family: var(--launch-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease,
+    border-color 0.2s ease, color 0.2s ease;
+}
+.launch-btn--primary {
+  background: var(--launch-brand);
+  color: #fff;
+  box-shadow: 0 8px 30px -8px color-mix(in oklch, var(--launch-brand) 60%, transparent);
+}
+.launch-btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 36px -8px color-mix(in oklch, var(--launch-brand) 75%, transparent);
+}
+.launch-btn--glow {
+  background: var(--launch-card);
+  color: var(--launch-fg);
+  border-color: color-mix(in oklch, var(--launch-brand) 40%, transparent);
+  box-shadow: 0 0 0 0 color-mix(in oklch, var(--launch-brand) 40%, transparent);
+}
+.launch-btn--glow:hover {
+  transform: translateY(-1px);
+  border-color: var(--launch-brand);
+  box-shadow: 0 0 28px -4px color-mix(in oklch, var(--launch-brand) 55%, transparent);
+}
+.launch-btn--outline {
+  background: transparent;
+  color: var(--launch-fg);
+  border-color: var(--launch-border);
+}
+.launch-btn--outline:hover {
+  border-color: var(--launch-brand);
+  color: var(--launch-brand);
+}
+
+/* ===== Reveal animation ===== */
+@keyframes launch-appear {
+  0% {
+    opacity: 0;
+    transform: translateY(1rem);
+    filter: blur(0.5rem);
+  }
+  50% {
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+.launch-appear {
+  animation: launch-appear 0.6s ease-out both;
+}
+.launch-appear-2 {
+  animation: launch-appear 0.6s ease-out 0.12s both;
+}
+.launch-appear-3 {
+  animation: launch-appear 0.6s ease-out 0.24s both;
+}
+
+/* ===== Marquee ===== */
+@keyframes launch-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.launch-marquee {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+}
+.launch-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: launch-marquee 32s linear infinite;
+}
+.launch-marquee:hover .launch-marquee-track {
+  animation-play-state: paused;
+}
+
+/* ===== FAQ (native details, no JS needed) ===== */
+.launch-faq-item {
+  border-bottom: 1px solid var(--launch-border);
+}
+.launch-faq-item summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 0.25rem;
+  font-family: var(--launch-display);
+  font-weight: 600;
+  font-size: 1.0625rem;
+  color: var(--launch-fg);
+}
+.launch-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+.launch-faq-chevron {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+  color: var(--launch-brand);
+}
+.launch-faq-item[open] .launch-faq-chevron {
+  transform: rotate(45deg);
+}
+/* Card form (grid variant): same summary/chevron behaviour, no divider line. */
+.launch-faq-item.launch-faq-card {
+  border-bottom: 0;
+}
+.launch-faq-item.launch-faq-card > summary {
+  padding: 1.125rem 0;
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .launch-appear,
+  .launch-appear-2,
+  .launch-appear-3 {
+    animation: none;
+  }
+  .launch-marquee-track {
+    animation: none;
+  }
+}

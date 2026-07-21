@@ -316,12 +316,12 @@
 
 ## Хвиля TPL-3 — міграція трьох нових джерел (гілка wave-TPL3, 6 агентів)
 
-- [ ] **T1. Порт ×3 (паралельно):** spark ← landing-pages-main, launch ← launch-ui-main,
+- [x] **T1. Порт ×3 (паралельно):** spark ← landing-pages-main, launch ← launch-ui-main,
       beleza ← espaco-embelezar-main. Кожен: scoped wrapper (де-фонтовані індирекції з
       першого дня), Nav/Footer (чесні соцлінки, компакт-бренд, CTA в межах), 9–12 секцій
       на існуючих block-типах з UA-мітками/navLabel і ВАРІАНТАМИ (hero ≥2, services ≥2,
       switchback обовʼязково), обидві теми де є, §4.8.
-- [ ] **T2. Інтеграція (я):** registry (3 записи + dnaFontPairs під характер), NAV_SURFACES,
+- [x] **T2. Інтеграція (я):** registry (3 записи + dnaFontPairs під характер), NAV_SURFACES,
       tsc/build, admin-фікстура.
 - [ ] **T3. Parity-агент:** аудит варіантності нових шаблонів проти наших, докидання секцій.
 - [ ] **T4. QA-visual (агент):** Playwright по fixture-превʼю всіх нових секцій в обох
