@@ -3,13 +3,13 @@ import type { TemplateBrand } from "@/lib/templates/registry";
 import type { TemplateSectionDef } from "@/components/templates/studio";
 
 import SparkWrapper from "./SparkWrapper";
-import SparkHero, { SparkHeroCentered } from "./SparkHero";
+import SparkHero, { SparkHeroCentered, SparkHeroSplit } from "./SparkHero";
 import SparkAbout from "./SparkAbout";
 import SparkServices, { SparkServicesList } from "./SparkServices";
-import SparkSwitchback from "./SparkSwitchback";
+import SparkSwitchback, { SparkSwitchbackCards } from "./SparkSwitchback";
 import SparkMarquee from "./SparkMarquee";
-import SparkStats from "./SparkStats";
-import SparkGallery from "./SparkGallery";
+import SparkStats, { SparkStatsCards } from "./SparkStats";
+import SparkGallery, { SparkGalleryMasonry } from "./SparkGallery";
 import SparkTimeline from "./SparkTimeline";
 import SparkTestimonials, { SparkTestimonialsQuote } from "./SparkTestimonials";
 import SparkFAQ, { SparkFAQAccordion } from "./SparkFAQ";
@@ -31,9 +31,9 @@ export const sparkSections: Record<string, TemplateSectionDef> = {
     block: "hero",
     label: "Головний екран",
     description:
-      "Чистий вступ: моноширинний eyebrow великими літерами, заголовок середньої жирності з акцентним хвостом (titleAccent), підзаголовок і дві кнопки; праворуч фото (imageUrl) у рамці або декоративна панель-сітка. Варіант centered — усе по центру, широке фото знизу.",
+      "Чистий вступ: моноширинний eyebrow великими літерами, заголовок середньої жирності з акцентним хвостом (titleAccent), підзаголовок і дві кнопки; праворуч фото (imageUrl) у рамці або декоративна панель-сітка. Варіант centered — усе по центру, широке фото знизу; варіант split — асиметрична розкладка з високим фото ліворуч і ширшою колонкою тексту праворуч.",
     component: SparkHero,
-    variants: { centered: SparkHeroCentered },
+    variants: { centered: SparkHeroCentered, split: SparkHeroSplit },
   },
   about: {
     block: "richText",
@@ -55,8 +55,9 @@ export const sparkSections: Record<string, TemplateSectionDef> = {
     label: "Історія у деталях",
     navLabel: "Історія",
     description:
-      "Почергові рядки «фото + текст» (зиґзаґ): заголовок, розповідь і опційне посилання-стрілка. Фото беруться з props; без фото — тиха декоративна панель-сітка.",
+      "Почергові рядки «фото + текст» (зиґзаґ): заголовок, розповідь і опційне посилання-стрілка. Фото беруться з props; без фото — тиха декоративна панель-сітка. Варіант cards — кроки як окремі картки в сітці з моноширинною нумерацією.",
     component: SparkSwitchback,
+    variants: { cards: SparkSwitchbackCards },
   },
   marquee: {
     block: "marquee",
@@ -69,15 +70,19 @@ export const sparkSections: Record<string, TemplateSectionDef> = {
   stats: {
     block: "stats",
     label: "Показники",
-    description: "Тиха смуга показників: великі числа над дрібними підписами. Лише реальні цифри.",
+    description:
+      "Тиха смуга показників: великі числа над дрібними підписами. Лише реальні цифри. Варіант cards — кожен показник в окремій рамці-картці.",
     component: SparkStats,
+    variants: { cards: SparkStatsCards },
   },
   gallery: {
     block: "gallery",
     label: "Галерея робіт",
     navLabel: "Роботи",
-    description: "Чиста сітка фото у рамці з підписом (назва/категорія), що зʼявляється на наведенні.",
+    description:
+      "Чиста сітка фото у рамці з підписом (назва/категорія), що зʼявляється на наведенні. Варіант masonry — мозаїка різної висоти.",
     component: SparkGallery,
+    variants: { masonry: SparkGalleryMasonry },
   },
   timeline: {
     block: "timeline",

@@ -5,13 +5,13 @@ import type { TemplateSectionDef } from "@/components/templates/studio";
 import LaunchWrapper from "./LaunchWrapper";
 import LaunchHero, { LaunchHeroSplit } from "./LaunchHero";
 import LaunchServices, { LaunchServicesList } from "./LaunchServices";
-import LaunchSwitchback from "./LaunchSwitchback";
-import LaunchStats from "./LaunchStats";
-import LaunchGallery from "./LaunchGallery";
+import LaunchSwitchback, { LaunchSwitchbackCards } from "./LaunchSwitchback";
+import LaunchStats, { LaunchStatsCards } from "./LaunchStats";
+import LaunchGallery, { LaunchGalleryMasonry } from "./LaunchGallery";
 import LaunchTestimonials, { LaunchTestimonialsSpotlight } from "./LaunchTestimonials";
 import LaunchMarquee from "./LaunchMarquee";
 import LaunchFAQ, { LaunchFAQGrid } from "./LaunchFAQ";
-import LaunchCTA from "./LaunchCTA";
+import LaunchCTA, { LaunchCTASplit } from "./LaunchCTA";
 import LaunchLeadForm from "./LaunchLeadForm";
 import LaunchContacts from "./LaunchContacts";
 
@@ -46,20 +46,25 @@ export const launchSections: Record<string, TemplateSectionDef> = {
     label: "Як це працює",
     navLabel: "Як це працює",
     description:
-      "Почергові рядки «фото + текст» (зиґзаґ): заголовок, розповідь і опційне посилання-стрілка — процес, підхід, переваги. Фото беруться з props; без фото — скляна панель зі сяйвом.",
+      "Почергові рядки «фото + текст» (зиґзаґ): заголовок, розповідь і опційне посилання-стрілка — процес, підхід, переваги. Фото беруться з props; без фото — скляна панель зі сяйвом. Варіант cards — кроки як картки в сітці.",
     component: LaunchSwitchback,
+    variants: { cards: LaunchSwitchbackCards },
   },
   stats: {
     block: "stats",
     label: "Показники",
-    description: "Смуга великих градієнтних цифр із підписами (роки, клієнти, проєкти) — лише реальні числа, не вигадувати.",
+    description:
+      "Смуга великих градієнтних цифр із підписами (роки, клієнти, проєкти) — лише реальні числа, не вигадувати. Варіант cards — кожен показник у скляній картці.",
     component: LaunchStats,
+    variants: { cards: LaunchStatsCards },
   },
   gallery: {
     block: "gallery",
     label: "Галерея",
-    description: "Сітка реальних фото робіт/місця; підпис (назва/категорія) зʼявляється на наведенні.",
+    description:
+      "Сітка реальних фото робіт/місця; підпис (назва/категорія) зʼявляється на наведенні. Варіант masonry — мозаїка різної висоти.",
     component: LaunchGallery,
+    variants: { masonry: LaunchGalleryMasonry },
   },
   testimonials: {
     block: "testimonials",
@@ -88,8 +93,10 @@ export const launchSections: Record<string, TemplateSectionDef> = {
   cta: {
     block: "cta",
     label: "Заклик до дії",
-    description: "Центрована скляна смуга-заклик над сяйвом: заголовок, підзаголовок і кнопка (зазвичай до #lead_form).",
+    description:
+      "Центрована скляна смуга-заклик над сяйвом: заголовок, підзаголовок і кнопка (зазвичай до #lead_form). Варіант split — текст ліворуч, кнопка праворуч.",
     component: LaunchCTA,
+    variants: { split: LaunchCTASplit },
   },
   lead_form: {
     block: "lead_form",

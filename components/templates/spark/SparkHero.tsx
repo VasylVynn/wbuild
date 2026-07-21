@@ -107,3 +107,40 @@ export function SparkHeroCentered({ data }: { data: unknown }) {
     </section>
   );
 }
+
+/*
+ * Variant "split" — an asymmetric editorial split: a tall framed image on the
+ * LEFT (a quiet grid panel when no photo is fed, §4.8) and a wider copy column
+ * on the RIGHT, opened by a hairline rule. Reads more magazine-like than the
+ * even image-right default and distinct from "centered".
+ */
+export function SparkHeroSplit({ data }: { data: unknown }) {
+  const d = data as BlockProps["hero"];
+
+  return (
+    <section className="w-full bg-[var(--spark-bg)] px-4 py-16 sm:px-6 md:py-24 lg:px-8">
+      <div className="mx-auto grid max-w-6xl items-stretch gap-10 lg:grid-cols-[5fr_7fr] lg:gap-16">
+        {d.imageUrl ? (
+          <div className="overflow-hidden rounded-[var(--spark-radius)] border border-[var(--spark-border)] bg-[var(--spark-card)]">
+            <img src={d.imageUrl} alt={d.imageAlt ?? d.title} className="h-full min-h-[320px] w-full object-cover" />
+          </div>
+        ) : (
+          <DecorPanel />
+        )}
+        <div className="flex flex-col justify-center border-t border-[var(--spark-border)] pt-8 lg:border-l lg:border-t-0 lg:pl-14 lg:pt-0">
+          {d.eyebrow && <p className="spark-eyebrow mb-4">{d.eyebrow}</p>}
+          <h1 className="text-3xl leading-[1.1] text-[var(--spark-fg)] md:text-4xl lg:text-5xl">
+            {d.title}
+            {d.titleAccent && <span className="text-[var(--spark-muted-fg)]"> {d.titleAccent}</span>}
+          </h1>
+          {d.subtitle && (
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-[var(--spark-muted-fg)]">{d.subtitle}</p>
+          )}
+          <div className="mt-8">
+            <Ctas d={d} />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

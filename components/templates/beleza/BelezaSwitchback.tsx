@@ -59,3 +59,49 @@ export default function BelezaSwitchback({ data }: { data: unknown }) {
     </section>
   );
 }
+
+/*
+ * Variant "cards" — the same stories as soft rounded cards in a grid (no
+ * zig-zag): each card stacks a rounded photo (or rose fallback, §4.8) over a
+ * heading, muted body and an optional rose arrow link.
+ */
+export function BelezaSwitchbackCards({ data }: { data: unknown }) {
+  const d = data as SwitchbackData;
+
+  return (
+    <section id="switchback" className="beleza-section">
+      <div className="beleza-container">
+        {d.title && (
+          <Reveal className="mb-12 md:mb-16">
+            <h2 className="beleza-kicker">
+              <strong>{d.title}</strong> Кожна історія — про турботу, увагу до деталей і результат, яким хочеться ділитися.
+            </h2>
+          </Reveal>
+        )}
+
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {d.items.map((item, i) => (
+            <Reveal key={i} delay={i * 0.05}>
+              <article className="beleza-card h-full overflow-hidden !p-0">
+                <SwitchbackMedia item={item} className="aspect-[4/3]" />
+                <div className="flex flex-1 flex-col p-6">
+                  <h3 className="beleza-ink text-xl font-semibold">{item.heading}</h3>
+                  <p className="beleza-muted mt-3 flex-1 leading-relaxed">{item.body}</p>
+                  {item.buttonLabel && (
+                    <a
+                      href={item.buttonHref ?? "#lead_form"}
+                      className="beleza-accent mt-5 inline-flex items-center gap-2 font-semibold transition-opacity hover:opacity-80"
+                    >
+                      {item.buttonLabel}
+                      <ArrowIcon className="h-[18px] w-[18px]" />
+                    </a>
+                  )}
+                </div>
+              </article>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}

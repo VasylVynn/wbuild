@@ -25,3 +25,32 @@ export default function SparkStats({ data }: { data: unknown }) {
     </section>
   );
 }
+
+/*
+ * Variant "cards" — the same grounded numbers as individual hairline cards in a
+ * grid (instead of one band): each card holds a big number over a mono label.
+ */
+export function SparkStatsCards({ data }: { data: unknown }) {
+  const d = data as BlockProps["stats"];
+
+  return (
+    <section className="bg-[var(--spark-bg)] px-4 py-16 sm:px-6 md:py-20 lg:px-8">
+      <div className="mx-auto max-w-6xl">
+        {d.title && (
+          <h2 className="mb-10 text-center text-2xl text-[var(--spark-fg)] md:text-3xl">{d.title}</h2>
+        )}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {d.items.map((item, i) => (
+            <div
+              key={i}
+              className="rounded-[var(--spark-radius)] border border-[var(--spark-border)] bg-[var(--spark-card)] px-4 py-8 text-center"
+            >
+              <p className="text-3xl text-[var(--spark-fg)] md:text-4xl">{item.value}</p>
+              <p className="spark-mono mt-3 text-xs uppercase tracking-wide text-[var(--spark-muted-fg)]">{item.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}

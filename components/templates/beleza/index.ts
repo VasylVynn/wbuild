@@ -5,13 +5,13 @@ import type { TemplateSectionDef } from "@/lib/templates/registry";
 import BelezaWrapper from "./BelezaWrapper";
 import BelezaHero, { BelezaHeroSplit, BelezaHeroCenter } from "./BelezaHero";
 import BelezaServices, { BelezaServicesList, BelezaServicesRows } from "./BelezaServices";
-import BelezaSwitchback from "./BelezaSwitchback";
+import BelezaSwitchback, { BelezaSwitchbackCards } from "./BelezaSwitchback";
 import BelezaTimeline from "./BelezaTimeline";
 import BelezaGallery, { BelezaGalleryMasonry } from "./BelezaGallery";
-import BelezaTeam from "./BelezaTeam";
+import BelezaTeam, { BelezaTeamRows } from "./BelezaTeam";
 import BelezaTestimonials, { BelezaTestimonialsGrid } from "./BelezaTestimonials";
 import BelezaFAQ, { BelezaFAQBoxed } from "./BelezaFAQ";
-import BelezaCTA from "./BelezaCTA";
+import BelezaCTA, { BelezaCTASplit } from "./BelezaCTA";
 import BelezaLeadForm from "./BelezaLeadForm";
 import BelezaContacts from "./BelezaContacts";
 
@@ -48,8 +48,9 @@ export const belezaSections: Record<string, TemplateSectionDef> = {
     label: "Історія простору",
     navLabel: "Історія",
     description:
-      "Почергові рядки «фото + текст» (зиґзаґ) — про простір, підхід, трансформації «до/після»: округлий заголовок, розповідь і опційне посилання-стрілка. Фото лише з props; без фото — мʼяка рожева панель.",
+      "Почергові рядки «фото + текст» (зиґзаґ) — про простір, підхід, трансформації «до/після»: округлий заголовок, розповідь і опційне посилання-стрілка. Фото лише з props; без фото — мʼяка рожева панель. Варіант cards — історії як мʼякі картки в сітці.",
     component: BelezaSwitchback,
+    variants: { cards: BelezaSwitchbackCards },
   },
   timeline: {
     block: "timeline",
@@ -71,8 +72,9 @@ export const belezaSections: Record<string, TemplateSectionDef> = {
     block: "team",
     label: "Майстрині",
     description:
-      "Картки майстринь простору — фото або рожевий медальйон з ініціалами, імʼя, роль, короткий опис. Лише реальні люди.",
+      "Картки майстринь простору — фото або рожевий медальйон з ініціалами, імʼя, роль, короткий опис. Лише реальні люди. Варіант rows — горизонтальні картки (фото ліворуч, текст праворуч), просторіше для довших описів.",
     component: BelezaTeam,
+    variants: { rows: BelezaTeamRows },
   },
   testimonials: {
     block: "testimonials",
@@ -94,8 +96,10 @@ export const belezaSections: Record<string, TemplateSectionDef> = {
   cta: {
     block: "cta",
     label: "Заклик до дії",
-    description: "Мʼяка рожева смуга-заклик (напр. «Запишіться на візит»): округлий заголовок, підзаголовок, світла кнопка.",
+    description:
+      "Мʼяка рожева смуга-заклик (напр. «Запишіться на візит»): округлий заголовок, підзаголовок, світла кнопка. Варіант split — текст ліворуч, кнопка праворуч.",
     component: BelezaCTA,
+    variants: { split: BelezaCTASplit },
   },
   lead_form: {
     block: "lead_form",

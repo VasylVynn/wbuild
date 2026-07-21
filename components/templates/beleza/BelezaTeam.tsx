@@ -60,3 +60,46 @@ export default function BelezaTeam({ data }: { data: unknown }) {
     </section>
   );
 }
+
+/*
+ * Variant "rows" — the same masters as horizontal cards (portrait left, copy
+ * right) in a two-column stack instead of the 4-up grid; roomier for longer
+ * bios. Photo comes only from props (§4.8); a missing one degrades to the rose
+ * initials medallion via the shared Portrait.
+ */
+export function BelezaTeamRows({ data }: { data: unknown }) {
+  const d = data as TeamData;
+
+  return (
+    <section id="team" className="beleza-section">
+      <div className="beleza-container">
+        {d.title && (
+          <Reveal className="mb-12 md:mb-16">
+            <h2 className="beleza-kicker">
+              <strong>{d.title}</strong> Майстрині, яким можна довіритися.
+            </h2>
+          </Reveal>
+        )}
+        <div className="grid gap-5 md:grid-cols-2">
+          {d.items.map((member, i) => (
+            <Reveal key={i} delay={i * 0.05}>
+              <article
+                className="flex items-center gap-4 rounded-[var(--beleza-radius)] border p-4 sm:gap-5"
+                style={{ borderColor: "var(--beleza-border)", background: "var(--beleza-card)" }}
+              >
+                <div className="w-24 shrink-0 sm:w-28">
+                  <Portrait member={member} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="beleza-ink text-base font-semibold">{member.name}</h3>
+                  {member.role && <p className="beleza-accent text-sm font-medium">{member.role}</p>}
+                  {member.bio && <p className="beleza-muted mt-1.5 text-sm leading-relaxed">{member.bio}</p>}
+                </div>
+              </article>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
