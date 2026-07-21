@@ -107,3 +107,102 @@ export default function AiSaasLeadForm({ data }: { data: unknown }) {
     </section>
   );
 }
+
+const SPLIT_BENEFITS = ["Відповідь того ж дня", "Без передоплати", "Передзвонимо у зручний час"];
+
+/*
+ * `split` variant — the SAME funnel contract (name/phone/message + website
+ * honeypot, POST /api/leads), only the SHELL is restructured: a two-column
+ * layout with a heading + reassurance-bullet rail on the left and the lavender
+ * form card on the right. Distinct from the base single centred card: split
+ * axis, an added benefits list and left-aligned rather than centred.
+ */
+export function AiSaasLeadFormSplit({ data }: { data: unknown }) {
+  const d = data as BlockProps["lead_form"];
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState("");
+  const [website, setWebsite] = useState(""); // honeypot — humans never see it
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (state === "sending") return;
+    if (!phone.trim() && !name.trim()) return;
+    setState("sending");
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, phone, message, website }),
+      });
+      setState(res.ok ? "sent" : "error");
+    } catch {
+      setState("error");
+    }
+  };
+
+  const inputClass =
+    "w-full rounded-2xl bg-white border border-[#2F4550]/10 px-4 py-3 text-sm text-[#2F4550] placeholder-[#2F4550]/40 transition-colors focus:outline-none focus:border-[#E07A5F]";
+
+  return (
+    <section className="py-12 md:py-16" aria-labelledby="lead-form-title">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6">
+        <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
+          <div className="relative">
+            <h2 id="lead-form-title" className="text-3xl font-bold text-[#2F4550] md:text-4xl">
+              {d.title ?? "Залишити заявку"}
+            </h2>
+            {d.subtitle && <p className="mt-3 text-base text-[#2F4550]/70">{d.subtitle}</p>}
+            <ul className="mt-8 flex flex-col gap-4">
+              {SPLIT_BENEFITS.map((item) => (
+                <li key={item} className="flex items-center gap-3 text-[#2F4550]">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E07A5F] text-white">
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </span>
+                  <span className="text-sm md:text-base">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rounded-3xl bg-[#F1F0FB] p-8">
+            {state === "sent" ? (
+              <p className="text-lg font-medium text-[#E07A5F]">
+                ✅ Дякуємо! Ми звʼяжемось з вами найближчим часом.
+              </p>
+            ) : (
+              <form onSubmit={submit} className="flex flex-col gap-3">
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ваше імʼя" className={inputClass} />
+                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Телефон" required className={inputClass} />
+                <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Що вас цікавить? (необовʼязково)" rows={3} className={`${inputClass} resize-none`} />
+                {/* Honeypot: hidden from humans, tempting for bots */}
+                <input
+                  type="text"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  tabIndex={-1}
+                  autoComplete="off"
+                  aria-hidden="true"
+                  style={{ position: "absolute", left: "-9999px", height: 0, width: 0, opacity: 0 }}
+                />
+                <button
+                  type="submit"
+                  disabled={state === "sending"}
+                  className="mt-2 w-full rounded-full bg-[#E07A5F] px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {state === "sending" ? "Надсилаємо…" : (d.buttonLabel ?? "Надіслати заявку")}
+                </button>
+                {state === "error" && (
+                  <p className="text-sm text-[#2F4550]/60">Не вдалося надіслати. Спробуйте ще раз або зателефонуйте нам.</p>
+                )}
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

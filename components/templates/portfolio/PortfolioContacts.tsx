@@ -141,3 +141,109 @@ function MailIcon() {
     </svg>
   );
 }
+
+/*
+ * Variant "split" — a full-width two-column band instead of the base's single
+ * centered glass card. The left column leads with the glowing serif heading and
+ * the messenger buttons; the right column lists the contact facts as a
+ * hairline-divided vertical index inside glass. Reorders the base (buttons rise
+ * beside the heading) and swaps the 2-col fact grid for a single divided column.
+ */
+export function PortfolioContactsSplit({ data }: { data: unknown }) {
+  const d = data as BlockProps["contacts"];
+  const { title, phone, address, hours, email, viber, telegram } = d;
+
+  const viberUrl = viberHref(viber);
+  const telegramUrl = telegramHref(telegram);
+  const hasButtons = Boolean(phone || viberUrl || telegramUrl);
+
+  const facts: { label: string; value: React.ReactNode; icon: React.ReactNode }[] = [];
+  if (phone) {
+    facts.push({
+      label: "Телефон",
+      value: (
+        <a href={`tel:${phone.replace(/\s/g, "")}`} className="hover:text-primary transition-colors">
+          {phone}
+        </a>
+      ),
+      icon: <PhoneIcon />,
+    });
+  }
+  if (address) facts.push({ label: "Адреса", value: address, icon: <MapPinIcon /> });
+  if (hours) facts.push({ label: "Графік роботи", value: hours, icon: <ClockIcon /> });
+  if (email) {
+    facts.push({
+      label: "Email",
+      value: (
+        <a href={`mailto:${email}`} className="hover:text-primary transition-colors">
+          {email}
+        </a>
+      ),
+      icon: <MailIcon />,
+    });
+  }
+
+  return (
+    <section className="py-16 md:py-24" aria-labelledby={title ? "contacts-split-title" : undefined}>
+      <div className="container mx-auto px-4 sm:px-6">
+        <div className="grid items-start gap-8 lg:grid-cols-2">
+          <div className="animate-fade-in">
+            {title && (
+              <h2 id="contacts-split-title" className="font-serif glow-text text-3xl text-foreground sm:text-4xl">
+                {title}
+              </h2>
+            )}
+            {hasButtons && (
+              <div className="mt-8 flex flex-col flex-wrap gap-3 sm:flex-row">
+                {phone && (
+                  <a
+                    href={`tel:${phone.replace(/\s/g, "")}`}
+                    className="rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 px-6 py-3 text-sm font-medium text-center"
+                  >
+                    Подзвонити
+                  </a>
+                )}
+                {viberUrl && (
+                  <a
+                    href={viberUrl}
+                    className="rounded-full border border-border px-6 py-3 text-sm font-medium text-center hover:border-primary hover:text-primary transition-colors"
+                  >
+                    Viber
+                  </a>
+                )}
+                {telegramUrl && (
+                  <a
+                    href={telegramUrl}
+                    target="_blank"
+                    rel="noopener"
+                    className="rounded-full border border-border px-6 py-3 text-sm font-medium text-center hover:border-primary hover:text-primary transition-colors"
+                  >
+                    Telegram
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+
+          {facts.length > 0 && (
+            <dl className="glass animate-fade-in divide-y divide-border rounded-3xl px-6 py-2">
+              {facts.map((fact, i) => (
+                <div key={i} className="flex items-start gap-3 py-5">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    {fact.icon}
+                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    <dt className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                      {fact.label}
+                    </dt>
+                    <dd className="text-base text-foreground">{fact.value}</dd>
+                  </div>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}

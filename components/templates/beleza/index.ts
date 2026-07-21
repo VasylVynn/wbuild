@@ -9,11 +9,11 @@ import BelezaSwitchback, { BelezaSwitchbackCards } from "./BelezaSwitchback";
 import BelezaTimeline from "./BelezaTimeline";
 import BelezaGallery, { BelezaGalleryMasonry } from "./BelezaGallery";
 import BelezaTeam, { BelezaTeamRows } from "./BelezaTeam";
-import BelezaTestimonials, { BelezaTestimonialsGrid } from "./BelezaTestimonials";
+import BelezaTestimonials, { BelezaTestimonialsGrid, BelezaTestimonialsRail } from "./BelezaTestimonials";
 import BelezaFAQ, { BelezaFAQBoxed } from "./BelezaFAQ";
 import BelezaCTA, { BelezaCTASplit } from "./BelezaCTA";
-import BelezaLeadForm from "./BelezaLeadForm";
-import BelezaContacts from "./BelezaContacts";
+import BelezaLeadForm, { BelezaLeadFormInline } from "./BelezaLeadForm";
+import BelezaContacts, { BelezaContactsBand } from "./BelezaContacts";
 
 /**
  * Beleza ("beleza") — «Белеза», a soft beauty-aesthetic look, our SECOND beauty
@@ -80,9 +80,9 @@ export const belezaSections: Record<string, TemplateSectionDef> = {
     block: "testimonials",
     label: "Відгуки",
     description:
-      "Реальні відгуки клієнток — цитата, аватар з ініціалами, імʼя, роль. Типово — картки з рядком зірок; варіант grid — редакційна дві-колонка з великою рожевою лапкою.",
+      "Реальні відгуки клієнток — цитата, аватар з ініціалами, імʼя, роль. Типово — картки з рядком зірок; варіант grid — редакційна дві-колонка з великою рожевою лапкою; варіант rail — «стрічка цитат»: один стовпчик, нумерація 01, 02… і пунктирно-рожеві розділювачі.",
     component: BelezaTestimonials,
-    variants: { grid: BelezaTestimonialsGrid },
+    variants: { grid: BelezaTestimonialsGrid, rail: BelezaTestimonialsRail },
   },
   faq: {
     block: "faq",
@@ -104,15 +104,18 @@ export const belezaSections: Record<string, TemplateSectionDef> = {
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
-    description: "Форма збору заявок — надсилає лід власнику в Telegram. Ліворуч — переконливі пункти, праворуч — картка з полями.",
+    description:
+      "Форма збору заявок — надсилає лід власнику в Telegram. Ліворуч — переконливі пункти, праворуч — картка з полями. Варіант inline — центрована рожева смуга з полями в один рядок (імʼя · телефон · кнопка).",
     component: BelezaLeadForm,
+    variants: { inline: BelezaLeadFormInline },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
     description:
-      "Контактні дані з акцентом на ГОДИНАХ РОБОТИ (окремий блок), адреса, телефон, email і кнопки месенджерів (дзвінок / Viber / Telegram).",
+      "Контактні дані з акцентом на ГОДИНАХ РОБОТИ (окремий блок), адреса, телефон, email і кнопки месенджерів (дзвінок / Viber / Telegram). Варіант band — повноширинна рожева смуга у три колонки: графік+заголовок, контакти списком, кнопки окремим стовпчиком.",
     component: BelezaContacts,
+    variants: { band: BelezaContactsBand },
   },
 };
 

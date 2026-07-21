@@ -75,6 +75,49 @@ export default function BelezaTestimonials({ data }: { data: unknown }) {
   );
 }
 
+/*
+ * `rail` variant — a single-column «стрічка цитат»: each testimonial is a row
+ * on a continuous vertical rail, led by a big index number (01, 02…) and a
+ * dashed rose rule (the beleza signature). Distinct from the base card grid:
+ * one column instead of three, a ruled-list density instead of cards, and
+ * left-aligned large quotes.
+ */
+export function BelezaTestimonialsRail({ data }: { data: unknown }) {
+  const d = data as TestimonialsData;
+
+  return (
+    <section id="testimonials" className="beleza-section">
+      <div className="beleza-container max-w-3xl">
+        <Header title={d.title} />
+        <ol className="mt-4 flex flex-col">
+          {d.items.map((item, i) => (
+            <li
+              key={i}
+              className="grid gap-4 border-dashed py-8 first:border-t-0 sm:grid-cols-[auto_1fr] sm:gap-6"
+              style={{ borderTop: i === 0 ? undefined : "1px dashed var(--beleza-brand-1-strong)" }}
+            >
+              <span
+                className="beleza-accent text-3xl font-bold leading-none sm:text-4xl"
+                style={{ fontFamily: "var(--beleza-display)" }}
+                aria-hidden="true"
+              >
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <div className="min-w-0">
+                <blockquote className="beleza-ink text-lg leading-relaxed sm:text-xl">“{item.quote}”</blockquote>
+                <footer className="beleza-muted mt-3 text-sm">
+                  <span className="beleza-ink font-semibold">{item.author}</span>
+                  {item.role && <span> · {item.role}</span>}
+                </footer>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
 export function BelezaTestimonialsGrid({ data }: { data: unknown }) {
   const d = data as TestimonialsData;
 

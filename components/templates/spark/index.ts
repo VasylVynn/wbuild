@@ -5,7 +5,7 @@ import type { TemplateSectionDef } from "@/components/templates/studio";
 import SparkWrapper from "./SparkWrapper";
 import SparkHero, { SparkHeroCentered, SparkHeroSplit } from "./SparkHero";
 import SparkAbout from "./SparkAbout";
-import SparkServices, { SparkServicesList } from "./SparkServices";
+import SparkServices, { SparkServicesList, SparkServicesBento } from "./SparkServices";
 import SparkSwitchback, { SparkSwitchbackCards } from "./SparkSwitchback";
 import SparkMarquee from "./SparkMarquee";
 import SparkStats, { SparkStatsCards } from "./SparkStats";
@@ -14,8 +14,8 @@ import SparkTimeline from "./SparkTimeline";
 import SparkTestimonials, { SparkTestimonialsQuote } from "./SparkTestimonials";
 import SparkFAQ, { SparkFAQAccordion } from "./SparkFAQ";
 import SparkCTA from "./SparkCTA";
-import SparkLeadForm from "./SparkLeadForm";
-import SparkContacts from "./SparkContacts";
+import SparkLeadForm, { SparkLeadFormSplit } from "./SparkLeadForm";
+import SparkContacts, { SparkContactsBand } from "./SparkContacts";
 
 /**
  * Spark ("spark") — a clean universal-modern look ported from
@@ -46,9 +46,9 @@ export const sparkSections: Record<string, TemplateSectionDef> = {
     block: "services",
     label: "Послуги",
     description:
-      "Сітка карток послуг: назва, опис, ЦІНА моноширинним акцентом і опційний бейдж. Варіант list — стосований прайс-лист з ціною праворуч.",
+      "Сітка карток послуг: назва, опис, ЦІНА моноширинним акцентом і опційний бейдж. Варіант list — стосований прайс-лист з ціною праворуч. Варіант bento — асиметрична мозаїка з великою першою карткою (2×2).",
     component: SparkServices,
-    variants: { list: SparkServicesList },
+    variants: { list: SparkServicesList, bento: SparkServicesBento },
   },
   switchback: {
     block: "switchback",
@@ -117,15 +117,18 @@ export const sparkSections: Record<string, TemplateSectionDef> = {
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
-    description: "Форма збору заявок — надсилає лід власнику в Telegram.",
+    description:
+      "Форма збору заявок — надсилає лід власнику в Telegram. Варіант split — приглушена decor-панель із заголовком ліворуч, форма праворуч.",
     component: SparkLeadForm,
+    variants: { split: SparkLeadFormSplit },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
     description:
-      "Контактні дані у картці: телефон, адреса, графік, email моноширинними мітками та кнопки месенджерів (дзвінок / Viber / Telegram).",
+      "Контактні дані у картці: телефон, адреса, графік, email моноширинними мітками та кнопки месенджерів (дзвінок / Viber / Telegram). Варіант band — дві колонки: перелік фактів рядками ліворуч, картка з кнопками праворуч.",
     component: SparkContacts,
+    variants: { band: SparkContactsBand },
   },
 };
 

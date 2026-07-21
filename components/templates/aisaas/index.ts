@@ -9,12 +9,12 @@ import AiSaasMarquee from "./AiSaasMarquee";
 import AiSaasProcess from "./AiSaasProcess";
 import AiSaasStats from "./AiSaasStats";
 import AiSaasPublications, { AiSaasPublicationsList } from "./AiSaasPublications";
-import AiSaasTestimonials from "./AiSaasTestimonials";
+import AiSaasTestimonials, { AiSaasTestimonialsFeature } from "./AiSaasTestimonials";
 import AiSaasTeam from "./AiSaasTeam";
 import AiSaasFAQ from "./AiSaasFAQ";
 import AiSaasCTA from "./AiSaasCTA";
-import AiSaasLeadForm from "./AiSaasLeadForm";
-import AiSaasContacts from "./AiSaasContacts";
+import AiSaasLeadForm, { AiSaasLeadFormSplit } from "./AiSaasLeadForm";
+import AiSaasContacts, { AiSaasContactsSplit } from "./AiSaasContacts";
 
 /**
  * AI-SaaS ("ai-saas-landing") — a light, soft-pastel SaaS look (lavender canvas,
@@ -79,8 +79,10 @@ export const aisaasSections: Record<string, TemplateSectionDef> = {
   testimonials: {
     block: "testimonials",
     label: "Відгуки",
-    description: "М'які картки відгуків — цитата, автор, роль.",
+    description:
+      "М'які картки відгуків — цитата, автор, роль. Варіант feature — один відгук великим планом на пастельній панелі ліворуч, решта компактним списком праворуч.",
     component: AiSaasTestimonials,
+    variants: { feature: AiSaasTestimonialsFeature },
   },
   team: {
     block: "team",
@@ -105,14 +107,18 @@ export const aisaasSections: Record<string, TemplateSectionDef> = {
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
-    description: "Форма збору заявок — надсилає лід власнику в Telegram.",
+    description:
+      "Форма збору заявок — надсилає лід власнику в Telegram. Варіант split — дві колонки: заголовок і переваги-переконання ліворуч, картка форми праворуч.",
     component: AiSaasLeadForm,
+    variants: { split: AiSaasLeadFormSplit },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
-    description: "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram).",
+    description:
+      "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram). Варіант split — дві колонки: декоративна пастельна панель із кнопками ліворуч, контакти списком праворуч.",
     component: AiSaasContacts,
+    variants: { split: AiSaasContactsSplit },
   },
 };
 

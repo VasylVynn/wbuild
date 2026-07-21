@@ -11,9 +11,9 @@ import PortfolioPublications from "./PortfolioPublications";
 import PortfolioTimeline from "./PortfolioTimeline";
 import PortfolioTeam from "./PortfolioTeam";
 import PortfolioBanner from "./PortfolioBanner";
-import PortfolioTestimonials from "./PortfolioTestimonials";
-import PortfolioLeadForm from "./PortfolioLeadForm";
-import PortfolioContacts from "./PortfolioContacts";
+import PortfolioTestimonials, { PortfolioTestimonialsStrip } from "./PortfolioTestimonials";
+import PortfolioLeadForm, { PortfolioLeadFormSplit } from "./PortfolioLeadForm";
+import PortfolioContacts, { PortfolioContactsSplit } from "./PortfolioContacts";
 
 /**
  * Portfolio ("portfolio-ui-6") — a dark tech look — near-black teal-accented
@@ -88,20 +88,26 @@ export const portfolioSections: Record<string, TemplateSectionDef> = {
   testimonials: {
     block: "testimonials",
     label: "Відгуки",
-    description: "Скляні картки відгуків — цитата, автор, роль.",
+    description:
+      "Скляні картки відгуків — цитата, автор, роль. Варіант strip — центрована стрічка великих цитат у стовпчик, без карток.",
     component: PortfolioTestimonials,
+    variants: { strip: PortfolioTestimonialsStrip },
   },
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
-    description: "Форма збору заявок — надсилає лід власнику в Telegram.",
+    description:
+      "Форма збору заявок — надсилає лід власнику в Telegram. Варіант split — скляна decor-панель із заголовком ліворуч, форма праворуч.",
     component: PortfolioLeadForm,
+    variants: { split: PortfolioLeadFormSplit },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
-    description: "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram).",
+    description:
+      "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram). Варіант split — повноширинна смуга у дві колонки: заголовок і кнопки ліворуч, перелік фактів у скляному стовпчику праворуч.",
     component: PortfolioContacts,
+    variants: { split: PortfolioContactsSplit },
   },
 };
 

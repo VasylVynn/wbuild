@@ -5,7 +5,7 @@ import type { TemplateSectionDef } from "@/components/templates/studio";
 import RestaurantWrapper from "./RestaurantWrapper";
 import RestaurantHero from "./RestaurantHero";
 import RestaurantAbout from "./RestaurantAbout";
-import RestaurantServices from "./RestaurantServices";
+import RestaurantServices, { RestaurantServicesBoard } from "./RestaurantServices";
 import RestaurantMarquee, { RestaurantMarqueeBand } from "./RestaurantMarquee";
 import RestaurantSwitchback, { RestaurantSwitchbackStacked } from "./RestaurantSwitchback";
 import RestaurantStats from "./RestaurantStats";
@@ -15,8 +15,8 @@ import RestaurantPublications, { RestaurantPublicationsCards } from "./Restauran
 import RestaurantTestimonials from "./RestaurantTestimonials";
 import RestaurantFAQ from "./RestaurantFAQ";
 import RestaurantCTA from "./RestaurantCTA";
-import RestaurantLeadForm from "./RestaurantLeadForm";
-import RestaurantContacts from "./RestaurantContacts";
+import RestaurantLeadForm, { RestaurantLeadFormSplit } from "./RestaurantLeadForm";
+import RestaurantContacts, { RestaurantContactsSidebar } from "./RestaurantContacts";
 
 /**
  * Restaurant ("restaurant") — a warm hospitality look (Lora display serif + Inter
@@ -45,8 +45,9 @@ export const restaurantSections: Record<string, TemplateSectionDef> = {
     block: "services",
     label: "Меню",
     description:
-      "Меню страв у стилі ресторанного переліку: назва серифом, опис, ЦІНА золотом; опційний бейдж (напр. «хіт»).",
+      "Меню страв у стилі ресторанного переліку: назва серифом, опис, ЦІНА золотом; опційний бейдж (напр. «хіт»). Варіант board — меню як сітка карток-плиток замість переліку з крапками.",
     component: RestaurantServices,
+    variants: { board: RestaurantServicesBoard },
   },
   marquee: {
     block: "marquee",
@@ -114,15 +115,18 @@ export const restaurantSections: Record<string, TemplateSectionDef> = {
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
-    description: "Форма збору заявок — надсилає лід власнику в Telegram.",
+    description:
+      "Форма збору заявок — надсилає лід власнику в Telegram. Варіант split — форма праворуч, теракотова decor-панель із заголовком ліворуч.",
     component: RestaurantLeadForm,
+    variants: { split: RestaurantLeadFormSplit },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
     description:
-      "Контактні дані з акцентом на ГОДИНИ РОБОТИ, адреса, телефон і кнопки месенджерів (дзвінок / Viber / Telegram).",
+      "Контактні дані з акцентом на ГОДИНИ РОБОТИ, адреса, телефон і кнопки месенджерів (дзвінок / Viber / Telegram). Варіант sidebar — довідка у дві колонки: перелік фактів ліворуч, сайдбар із годинами й кнопками праворуч.",
     component: RestaurantContacts,
+    variants: { sidebar: RestaurantContactsSidebar },
   },
 };
 

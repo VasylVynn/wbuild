@@ -18,6 +18,9 @@ import StudioMarquee from "./StudioMarquee";
 import StudioTimeline from "./StudioTimeline";
 import StudioTestimonials from "./StudioTestimonials";
 import StudioTestimonialsAlt from "./StudioTestimonialsAlt";
+import StudioTestimonialsFeatured from "./StudioTestimonialsFeatured";
+import StudioContactsSplit from "./StudioContactsSplit";
+import StudioLeadFormBand from "./StudioLeadFormBand";
 
 /**
  * A single section of the studio template.
@@ -105,9 +108,9 @@ export const studioSections: Record<string, TemplateSectionDef> = {
     block: "testimonials",
     label: "Відгуки",
     description:
-      "Сітка карток з реальними відгуками клієнтів: цитата, ім'я автора, опційно роль. Цитати не вигадуються. Варіант «spotlight» — одна центрована колонка великих цитат.",
+      "Сітка карток з реальними відгуками клієнтів: цитата, ім'я автора, опційно роль. Цитати не вигадуються. Варіант «spotlight» — одна центрована колонка великих цитат; варіант «featured» — одна велика цитата плюс компактний список решти.",
     component: StudioTestimonials,
-    variants: { spotlight: StudioTestimonialsAlt },
+    variants: { spotlight: StudioTestimonialsAlt, featured: StudioTestimonialsFeatured },
   },
   banner: {
     block: "cta",
@@ -120,14 +123,18 @@ export const studioSections: Record<string, TemplateSectionDef> = {
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
-    description: "Форма збору заявок — надсилає лід власнику в Telegram.",
+    description:
+      "Форма збору заявок — надсилає лід власнику в Telegram. Варіант «band» — широка смуга з інлайн-полями (імʼя й телефон поруч).",
     component: LeadFormSection,
+    variants: { band: StudioLeadFormBand },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
-    description: "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram).",
+    description:
+      "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram). Варіант «split» — інфо-сайдбар ліворуч і акцентна панель дій праворуч.",
     component: ContactsSection,
+    variants: { split: StudioContactsSplit },
   },
 };
 

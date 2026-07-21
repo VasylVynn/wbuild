@@ -14,6 +14,9 @@ import React2021Publications from "./React2021Publications";
 import React2021CTA from "./React2021CTA";
 import React2021LeadForm from "./React2021LeadForm";
 import React2021Contacts from "./React2021Contacts";
+import React2021ServicesBento from "./React2021ServicesBento";
+import React2021LeadFormBand from "./React2021LeadFormBand";
+import React2021ContactsBand from "./React2021ContactsBand";
 
 /**
  * React-2021 ("react2021") — an energetic, coral-accented landing look (Rubik,
@@ -43,6 +46,7 @@ export const react2021Sections: Record<string, TemplateSectionDef> = {
     description:
       "Сітка послуг у стилі «features»: квадратні іконки з кораловою рамкою, назва, опис, ціна.",
     component: React2021Services,
+    variants: { bento: React2021ServicesBento },
   },
   story: {
     block: "switchback",
@@ -89,12 +93,14 @@ export const react2021Sections: Record<string, TemplateSectionDef> = {
     label: "Форма заявки",
     description: "Форма збору заявок — надсилає лід власнику в Telegram.",
     component: React2021LeadForm,
+    variants: { band: React2021LeadFormBand },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
     description: "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram).",
     component: React2021Contacts,
+    variants: { band: React2021ContactsBand },
   },
 };
 

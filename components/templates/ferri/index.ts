@@ -22,6 +22,9 @@ import FerriMarquee from "./FerriMarquee";
 import FerriPrinciples from "./FerriPrinciples";
 import FerriStats from "./FerriStats";
 import FerriSwitchback from "./FerriSwitchback";
+import FerriServicesBento from "./FerriServicesBento";
+import FerriContactsBand from "./FerriContactsBand";
+import FerriLeadFormSplit from "./FerriLeadFormSplit";
 
 /**
  * Ferri — an elegant dark-navy + gold, serif (Cormorant) editorial look ported
@@ -79,9 +82,10 @@ export const ferriSections: Record<string, TemplateSectionDef> = {
   services: {
     block: "services",
     label: "Напрямки",
-    description: "Сітка карток напрямків/послуг з іконками — назва, опис, опційна ціна.",
+    description:
+      "Сітка карток напрямків/послуг з іконками — назва, опис, опційна ціна. Варіант «numbered» — нумерований редакційний список; варіант «bento» — одна велика картка плюс сітка менших.",
     component: FerriServices,
-    variants: { numbered: FerriServicesAlt },
+    variants: { numbered: FerriServicesAlt, bento: FerriServicesBento },
   },
   story: {
     block: "switchback",
@@ -121,14 +125,18 @@ export const ferriSections: Record<string, TemplateSectionDef> = {
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
-    description: "Форма збору заявок — надсилає лід власнику в Telegram.",
+    description:
+      "Форма збору заявок — надсилає лід власнику в Telegram. Варіант «split» — заголовок ліворуч, форма праворуч.",
     component: FerriLeadForm,
+    variants: { split: FerriLeadFormSplit },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
-    description: "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram).",
+    description:
+      "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram). Варіант «band» — повноширинна смуга з колонками реквізитів.",
     component: FerriContacts,
+    variants: { band: FerriContactsBand },
   },
 };
 

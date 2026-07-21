@@ -130,3 +130,106 @@ export default function AiSaasContacts({ data }: { data: unknown }) {
     </section>
   );
 }
+
+/*
+ * `split` variant — a two-column card: a decorative pastel panel (dot grid +
+ * gradient blob, the hero's motif — no image) carrying the title and the
+ * messenger buttons on the left, and the facts as a vertical divided LIST on
+ * the right. Distinct from the base single centred card: split axis, an added
+ * decor panel and a list rather than a 2-up fact grid.
+ */
+export function AiSaasContactsSplit({ data }: { data: unknown }) {
+  const d = data as BlockProps["contacts"];
+  const { title, phone, address, hours, email, viber, telegram } = d;
+
+  const viberUrl = viberHref(viber);
+  const telegramUrl = telegramHref(telegram);
+  const hasButtons = Boolean(phone || viberUrl || telegramUrl);
+
+  const facts: { label: string; icon: React.ReactNode; value: React.ReactNode }[] = [];
+  if (phone) {
+    facts.push({
+      label: "Телефон",
+      icon: <PhoneIcon />,
+      value: (
+        <a href={`tel:${phone.replace(/\s/g, "")}`} className="text-[#2F4550] hover:text-[#E07A5F] transition-colors">
+          {phone}
+        </a>
+      ),
+    });
+  }
+  if (address) facts.push({ label: "Адреса", icon: <MapPinIcon />, value: address });
+  if (hours) facts.push({ label: "Графік роботи", icon: <ClockIcon />, value: hours });
+  if (email) facts.push({ label: "Email", icon: <MailIcon />, value: email });
+
+  return (
+    <section className="py-12 md:py-16" aria-labelledby={title ? "contacts-title" : undefined}>
+      <div className="mx-auto max-w-5xl px-4 sm:px-6">
+        <div className="grid overflow-hidden rounded-3xl lg:grid-cols-12">
+          <div className="relative overflow-hidden bg-[#F1F0FB] p-8 md:p-10 lg:col-span-5">
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-size-[24px_24px]" aria-hidden="true" />
+            <div className="absolute -bottom-[20%] -left-[15%] h-64 w-64 rounded-full bg-purple-400/25 blur-[80px] filter" aria-hidden="true" />
+            <div className="relative flex h-full flex-col">
+              {title && (
+                <h2 id="contacts-title" className="text-2xl font-bold text-[#2F4550]">
+                  {title}
+                </h2>
+              )}
+              <p className="mt-3 text-sm leading-relaxed text-[#2F4550]/70">
+                Напишіть нам у зручний месенджер або зателефонуйте — відповімо якнайшвидше.
+              </p>
+              {hasButtons && (
+                <div className="mt-auto flex flex-col flex-wrap gap-3 pt-8 sm:flex-row">
+                  {phone && (
+                    <a
+                      href={`tel:${phone.replace(/\s/g, "")}`}
+                      className="rounded-full bg-[#E07A5F] px-6 py-2.5 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                    >
+                      Подзвонити
+                    </a>
+                  )}
+                  {viberUrl && (
+                    <a
+                      href={viberUrl}
+                      className="rounded-full border border-[#2F4550]/15 bg-white px-6 py-2.5 text-center text-sm font-semibold text-[#2F4550] transition-colors hover:border-[#E07A5F]"
+                    >
+                      Viber
+                    </a>
+                  )}
+                  {telegramUrl && (
+                    <a
+                      href={telegramUrl}
+                      target="_blank"
+                      rel="noopener"
+                      className="rounded-full border border-[#2F4550]/15 bg-white px-6 py-2.5 text-center text-sm font-semibold text-[#2F4550] transition-colors hover:border-[#E07A5F]"
+                    >
+                      Telegram
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white p-8 md:p-10 lg:col-span-7">
+            {facts.length > 0 && (
+              <dl className="flex flex-col divide-y divide-[#2F4550]/10">
+                {facts.map((fact, i) => (
+                  <div key={i} className="flex items-start gap-3 py-4 first:pt-0 last:pb-0">
+                    <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F1F0FB] text-[#3D8690]">
+                      {fact.icon}
+                    </span>
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <dt className="text-xs font-medium uppercase tracking-widest text-[#2F4550]/50">{fact.label}</dt>
+                      <dd className="text-base text-[#2F4550]">{fact.value}</dd>
+                    </div>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

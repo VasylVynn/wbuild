@@ -8,12 +8,12 @@ import LaunchServices, { LaunchServicesList } from "./LaunchServices";
 import LaunchSwitchback, { LaunchSwitchbackCards } from "./LaunchSwitchback";
 import LaunchStats, { LaunchStatsCards } from "./LaunchStats";
 import LaunchGallery, { LaunchGalleryMasonry } from "./LaunchGallery";
-import LaunchTestimonials, { LaunchTestimonialsSpotlight } from "./LaunchTestimonials";
+import LaunchTestimonials, { LaunchTestimonialsSpotlight, LaunchTestimonialsLedger } from "./LaunchTestimonials";
 import LaunchMarquee from "./LaunchMarquee";
 import LaunchFAQ, { LaunchFAQGrid } from "./LaunchFAQ";
 import LaunchCTA, { LaunchCTASplit } from "./LaunchCTA";
-import LaunchLeadForm from "./LaunchLeadForm";
-import LaunchContacts from "./LaunchContacts";
+import LaunchLeadForm, { LaunchLeadFormSplit } from "./LaunchLeadForm";
+import LaunchContacts, { LaunchContactsAside } from "./LaunchContacts";
 
 /**
  * Launch ("launch" / «Лонч») — a faithful port of the Launch UI kit
@@ -70,9 +70,9 @@ export const launchSections: Record<string, TemplateSectionDef> = {
     block: "testimonials",
     label: "Відгуки",
     description:
-      "Скляні картки відгуків — цитата, ініціали, імʼя, роль. Лише справжні слова клієнтів. Варіант spotlight — великі центровані цитати над сяйвом.",
+      "Скляні картки відгуків — цитата, ініціали, імʼя, роль. Лише справжні слова клієнтів. Варіант spotlight — великі центровані цитати над сяйвом; варіант ledger — «зведення+цитати»: липкий заголовок із лічильником ліворуч, відгуки рядками праворуч.",
     component: LaunchTestimonials,
-    variants: { spotlight: LaunchTestimonialsSpotlight },
+    variants: { spotlight: LaunchTestimonialsSpotlight, ledger: LaunchTestimonialsLedger },
   },
   marquee: {
     block: "marquee",
@@ -101,15 +101,18 @@ export const launchSections: Record<string, TemplateSectionDef> = {
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
-    description: "Форма збору заявок у скляній картці — надсилає лід власнику в Telegram.",
+    description:
+      "Форма збору заявок у скляній картці — надсилає лід власнику в Telegram. Варіант split — дві колонки: переваги-переконання ліворуч над сяйвом, картка форми праворуч.",
     component: LaunchLeadForm,
+    variants: { split: LaunchLeadFormSplit },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
     description:
-      "Контактні дані (телефон, адреса, графік, email) у скляній картці та кнопки месенджерів (дзвінок / Viber / Telegram / Instagram) — лише за наявності.",
+      "Контактні дані (телефон, адреса, графік, email) у скляній картці та кнопки месенджерів (дзвінок / Viber / Telegram / Instagram) — лише за наявності. Варіант aside — сайдбар-довідка: контакти списком у картці ліворуч, декоративна панель зі сяйвом праворуч.",
     component: LaunchContacts,
+    variants: { aside: LaunchContactsAside },
   },
 };
 

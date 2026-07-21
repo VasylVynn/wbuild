@@ -44,3 +44,40 @@ export default function PortfolioTestimonials({ data }: { data: unknown }) {
     </section>
   );
 }
+
+/*
+ * Variant "strip" — a centered single-column quote STRIP rather than the base's
+ * three-column glass card grid: each testimonial is a large centered blockquote
+ * separated by hairline dividers, with no card panels at all. Trades the tiled
+ * grid (3 cols, boxed) for a vertical centered read (1 col, panel-less).
+ */
+export function PortfolioTestimonialsStrip({ data }: { data: unknown }) {
+  const d = data as BlockProps["testimonials"];
+
+  return (
+    <section className="py-16 sm:py-24">
+      <div className="container mx-auto px-6">
+        {d.title && (
+          <h2 className="font-serif mb-12 text-center text-3xl text-foreground sm:text-4xl">
+            {d.title}
+          </h2>
+        )}
+
+        <div className="mx-auto max-w-3xl divide-y divide-border">
+          {d.items.map((item, i) => (
+            <figure key={i} className="animate-fade-in py-10 text-center first:pt-0 last:pb-0">
+              <QuoteIcon className="mx-auto h-8 w-8 text-primary" />
+              <blockquote className="font-serif mt-6 text-xl leading-relaxed text-foreground/90 sm:text-2xl">
+                &ldquo;{item.quote}&rdquo;
+              </blockquote>
+              <figcaption className="mt-6">
+                <span className="font-semibold text-foreground">{item.author}</span>
+                {item.role && <span className="text-sm text-primary"> · {item.role}</span>}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}

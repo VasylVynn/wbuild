@@ -15,6 +15,9 @@ import NextlyMarquee from "./NextlyMarquee";
 import NextlyCTA from "./NextlyCTA";
 import NextlyLeadForm from "./NextlyLeadForm";
 import NextlyContacts from "./NextlyContacts";
+import NextlyTestimonialsStrip from "./NextlyTestimonialsStrip";
+import NextlyLeadFormSplit from "./NextlyLeadFormSplit";
+import NextlyContactsSidebar from "./NextlyContactsSidebar";
 
 /**
  * Nextly ("nextly") — a clean, indigo-accented marketing look (Inter, generous
@@ -72,6 +75,7 @@ export const nextlySections: Record<string, TemplateSectionDef> = {
     label: "Відгуки",
     description: "Сірі округлі картки відгуків — цитата, аватар/ініціали, ім'я, роль.",
     component: NextlyTestimonials,
+    variants: { strip: NextlyTestimonialsStrip },
   },
   team: {
     block: "team",
@@ -97,12 +101,14 @@ export const nextlySections: Record<string, TemplateSectionDef> = {
     label: "Форма заявки",
     description: "Форма збору заявок — надсилає лід власнику в Telegram.",
     component: NextlyLeadForm,
+    variants: { split: NextlyLeadFormSplit },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
     description: "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram).",
     component: NextlyContacts,
+    variants: { sidebar: NextlyContactsSidebar },
   },
 };
 

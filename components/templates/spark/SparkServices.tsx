@@ -83,3 +83,43 @@ export function SparkServicesList({ data }: { data: unknown }) {
     </section>
   );
 }
+
+/*
+ * Variant "bento" — an asymmetric mosaic instead of the base's uniform card
+ * grid: the first service becomes a large featured cell (2×2 from sm up) with
+ * the remaining services as standard 1×1 cells around it. Same hairline-card
+ * idiom, but a mixed-span rhythm and a promoted lead item — not equal tiles.
+ */
+export function SparkServicesBento({ data }: { data: unknown }) {
+  const d = data as BlockProps["services"];
+
+  return (
+    <section id="services" className="bg-[var(--spark-bg)] px-4 py-16 sm:px-6 md:py-24 lg:px-8">
+      <div className="mx-auto max-w-6xl">
+        <SectionHead title={d.title} />
+        <div className="grid auto-rows-[minmax(11rem,1fr)] grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {d.items.map((item, i) => {
+            const featured = i === 0;
+            return (
+              <div
+                key={i}
+                className={`spark-card flex flex-col p-6 ${featured ? "sm:col-span-2 sm:row-span-2 md:p-8" : ""}`}
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <h3 className={featured ? "text-2xl text-[var(--spark-fg)]" : "text-lg text-[var(--spark-fg)]"}>
+                    {item.name}
+                  </h3>
+                  <Badge label={item.badge} />
+                </div>
+                {item.description && (
+                  <p className="flex-1 text-sm leading-relaxed text-[var(--spark-muted-fg)]">{item.description}</p>
+                )}
+                {item.price && <p className="spark-mono mt-4 text-sm text-[var(--spark-fg)]">{item.price}</p>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}

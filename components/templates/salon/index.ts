@@ -19,6 +19,9 @@ import SalonTestimonialsAlt from "./SalonTestimonialsAlt";
 import SalonSwitchback from "./SalonSwitchback";
 import SalonMarquee from "./SalonMarquee";
 import SalonPublications from "./SalonPublications";
+import SalonServicesMenu from "./SalonServicesMenu";
+import SalonContactsStrip from "./SalonContactsStrip";
+import SalonLeadFormSplit from "./SalonLeadFormSplit";
 
 /**
  * Salon ("luxe-salon") — a LIGHT luxury look (soft rounded glass cards, gold +
@@ -38,9 +41,10 @@ export const salonSections: Record<string, TemplateSectionDef> = {
   services: {
     block: "services",
     label: "Послуги",
-    description: "Сітка карток послуг з іконками — назва, опис, ціна.",
+    description:
+      "Сітка карток послуг з іконками — назва, опис, ціна. Варіант «rows» — широкі рядки з іконками; варіант «menu» — прайс-меню з крапковими лідерами (назва … ціна).",
     component: SalonServices,
-    variants: { rows: SalonServicesAlt },
+    variants: { rows: SalonServicesAlt, menu: SalonServicesMenu },
   },
   story: {
     block: "switchback",
@@ -101,14 +105,18 @@ export const salonSections: Record<string, TemplateSectionDef> = {
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
-    description: "Форма збору заявок — надсилає лід власнику в Telegram.",
+    description:
+      "Форма збору заявок — надсилає лід власнику в Telegram. Варіант «split» — форма поруч із decor-панеллю.",
     component: SalonLeadForm,
+    variants: { split: SalonLeadFormSplit },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
-    description: "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram).",
+    description:
+      "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram). Варіант «strip» — мінімальна стрічка-рядок реквізитів.",
     component: SalonContacts,
+    variants: { strip: SalonContactsStrip },
   },
 };
 
