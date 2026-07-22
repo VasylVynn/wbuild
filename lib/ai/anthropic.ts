@@ -13,6 +13,10 @@ import Anthropic from "@anthropic-ai/sdk";
  */
 export const GEN_MODEL = "claude-sonnet-4-6"; // site generation (Phase 2)
 export const CHAT_MODEL = "claude-sonnet-4-6"; // onboarding agent (Phase 3)
+// Photo classification/alt/OCR is a bounded task — Haiku is 3-4x cheaper and
+// ~2x faster than Sonnet with no practical quality loss here: OCR results
+// always pass through a human confirmation card before becoming facts.
+export const VISION_MODEL = "claude-haiku-4-5-20251001"; // photo intelligence (wave G)
 
 let cached: Anthropic | null = null;
 

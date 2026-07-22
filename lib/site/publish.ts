@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 import { getServiceClient } from "@/lib/supabase/server";
 import { revalidateTenant } from "@/lib/cache";
 import { generateSite } from "@/lib/ai/generate";
@@ -220,17 +221,6 @@ export async function generateAndPublish(
     }
   }
 
-  // H1: owner has a logo + a template site → vision-check it against the
-  // template's nav surface and adapt when it clashes. Fail-open: null keeps
-  // the original only; the adapted variant sits ALONGSIDE it, never replaces.
-  let logoAdaptedUrl: string | null = null;
-  if (media?.logoUrl && site.templateId) {
-    logoAdaptedUrl = await adaptLogoForTemplate({
-      logoUrl: media.logoUrl,
-      templateId: site.templateId,
-    });
-  }
-
   const sb = getServiceClient();
 
   const { data: tenant, error: tErr } = await sb
@@ -248,7 +238,6 @@ export async function generateAndPublish(
           ...(site.packId && { packId: site.packId }),
           ...(site.templateId && { templateId: site.templateId }),
           ...(media?.logoUrl && { logoUrl: media.logoUrl }),
-          ...(logoAdaptedUrl && { logoAdaptedUrl }),
           ...(media?.photos?.length && { photos: media.photos }),
           ...(media?.generatedHero && { generatedHero: media.generatedHero }),
         },
@@ -269,6 +258,28 @@ export async function generateAndPublish(
     .single();
 
   if (tErr || !tenant) throw new Error(`tenant upsert failed: ${tErr?.message ?? "no row"}`);
+
+  // H1 logo adaptation moved OFF the critical path (live 504: generation
+  // retry + vision gate + gemini pushed finalize past its time budget).
+  // after() runs post-response: adapt → re-read brand fresh (lost-update
+  // lesson) → patch → purge. Fail-open: no adaptation, original renders.
+  if (media?.logoUrl && site.templateId) {
+    const logoUrl = media.logoUrl;
+    const tplForLogo = site.templateId;
+    const tenantId = tenant.id as string;
+    after(async () => {
+      try {
+        const adapted = await adaptLogoForTemplate({ logoUrl, templateId: tplForLogo });
+        if (!adapted) return;
+        const { data: t2 } = await sb.from("tenants").select("brand").eq("id", tenantId).maybeSingle();
+        const brand2 = { ...((t2?.brand ?? {}) as Record<string, unknown>), logoAdaptedUrl: adapted };
+        await sb.from("tenants").update({ brand: brand2 }).eq("id", tenantId);
+        await revalidateTenant(host);
+      } catch (e) {
+        console.warn(`[publish] deferred logo adapt failed: ${e instanceof Error ? e.message : e}`);
+      }
+    });
+  }
 
   const { error: pErr } = await sb.from("pages").upsert(
     {
