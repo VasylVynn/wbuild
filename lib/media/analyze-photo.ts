@@ -1,5 +1,5 @@
 import "server-only";
-import { getAnthropic, isAnthropicConfigured, GEN_MODEL } from "@/lib/ai/anthropic";
+import { getAnthropic, isAnthropicConfigured, VISION_MODEL } from "@/lib/ai/anthropic";
 import { isStorageUrl, PHOTO_KINDS, type PhotoKind } from "./media";
 
 /**
@@ -56,7 +56,19 @@ async function fetchImageBytes(
     if (Number.isFinite(declared) && declared > MAX_BYTES) return null;
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.byteLength === 0 || buf.byteLength > MAX_BYTES) return null;
-    return { buf, b64: buf.toString("base64"), mime: mime as SupportedMime };
+    // Downscale before base64: the API bills vision by image size, and 7-class
+    // classification + alt needs nowhere near an 8MB original. Sharp is native
+    // → lazy + fail-open to the original bytes (same contract as qualityPass).
+    let sendBuf = buf;
+    let sendMime: SupportedMime = mime as SupportedMime;
+    try {
+      const sharp = (await import("sharp")).default;
+      sendBuf = await sharp(buf).resize(1024, 1024, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
+      sendMime = "image/jpeg";
+    } catch {
+      /* keep originals */
+    }
+    return { buf, b64: sendBuf.toString("base64"), mime: sendMime };
   } catch {
     return null;
   } finally {
@@ -134,7 +146,7 @@ export async function analyzePhoto(url: string): Promise<PhotoAnalysis | null> {
     const client = getAnthropic();
     const res = await client.messages.create(
       {
-        model: GEN_MODEL,
+        model: VISION_MODEL,
         max_tokens: 700,
         messages: [
           {
