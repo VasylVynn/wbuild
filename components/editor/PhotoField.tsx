@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Button } from "@/components/ui";
 
 /**
  * Photo field for the editor bottom-sheet (§4.8). The client re-encodes the
@@ -126,15 +125,30 @@ export default function PhotoField({
             </div>
           </div>
         ) : value ? (
-          <div className={`relative border border-line bg-sunken ${tile}`}>
+          <div className={`group relative border border-line bg-sunken ${tile}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={value} alt="" className="h-full w-full object-cover" />
+            {/* Replace: a full-tile overlay (hidden until hover/focus, always
+                tappable on touch), sitting UNDER the remove badge so both work. */}
+            <button
+              type="button"
+              onClick={pick}
+              aria-label="Замінити фото"
+              title="Замінити фото"
+              className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-white opacity-0 transition-all hover:bg-ink/55 hover:opacity-100 focus-visible:bg-ink/55 focus-visible:opacity-100 focus:outline-none"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              <span className="text-[12px] font-bold">Замінити</span>
+            </button>
             <button
               type="button"
               onClick={clear}
               aria-label="Прибрати фото"
               title="Прибрати фото"
-              className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-ink/55 text-[16px] text-white transition-colors hover:bg-ink"
+              className="absolute right-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-ink/60 text-[15px] text-white transition-colors hover:bg-ink"
             >
               ×
             </button>
@@ -148,12 +162,6 @@ export default function PhotoField({
             <span aria-hidden className="text-[26px] leading-none text-brand">+</span>
             <span className="px-2 text-[12px] font-bold text-ink-muted">Завантажити фото</span>
           </button>
-        )}
-
-        {value && !busy && (
-          <Button variant="secondary" size="md" onClick={pick}>
-            Замінити фото
-          </Button>
         )}
       </div>
 

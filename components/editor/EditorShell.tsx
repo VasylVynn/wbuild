@@ -15,7 +15,7 @@ import { switchDesignPack } from "@/app/app/(protected)/edit/design-actions";
 import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-actions";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
-import { getTemplate, type SiteTemplate } from "@/lib/templates/registry";
+import { getTemplate, type SiteTemplate, type TemplateBrand } from "@/lib/templates/registry";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { themeToCssVars, type Theme } from "@/lib/theme/tokens";
 import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/components/ui";
@@ -369,6 +369,36 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   // published site. Pack/legacy sites keep the theme-vars framed preview.
   const template = getTemplate(initial.templateId);
   const TemplateWrapper = template?.wrapper;
+  // Feed the template chrome (Nav/Footer) the REAL business identity — same rule
+  // as the published site (app/s/[host]) — so the editor preview shows the real
+  // brand, nav and contacts instead of the template's demo defaults. Recomputed
+  // from the LIVE blocks so nav/contacts track edits.
+  const brand: TemplateBrand | undefined = (() => {
+    if (!template) return undefined;
+    const name = (initial.businessName ?? "").trim();
+    const words = name.split(/\s+/).filter(Boolean);
+    const NAV_SKIP = new Set(["hero", "stats", "cta", "lead_form", "contacts"]);
+    const seen = new Set<string>();
+    const navLinks: { href: string; label: string }[] = [];
+    for (const b of blocks) {
+      const s = b.section;
+      if (!s || b.hidden || NAV_SKIP.has(s) || seen.has(s)) continue;
+      const label = template.sections[s]?.label;
+      if (!label) continue;
+      seen.add(s);
+      navLinks.push({ href: `#${s}`, label });
+    }
+    const contact = blocks.find((b) => b.type === "contacts")?.props as
+      | { phone?: string; address?: string; hours?: string; email?: string; telegram?: string; viber?: string }
+      | undefined;
+    return {
+      brandName: words.length > 1 ? words.slice(0, -1).join(" ") + " " : name,
+      brandAccent: words.length > 1 ? words[words.length - 1] : "",
+      navLinks,
+      ctaHref: "#lead_form",
+      contact,
+    };
+  })();
   const sectionEls = blocks.map((block, index) => (
     <EditableSection
       key={index}
@@ -530,7 +560,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
                   Тут поки порожньо. Натисніть «Перегенерувати», щоб зібрати сайт із ваших даних.
                 </div>
               ) : TemplateWrapper ? (
-                <TemplateWrapper>{sectionEls}</TemplateWrapper>
+                <TemplateWrapper brand={brand}>{sectionEls}</TemplateWrapper>
               ) : (
                 <div style={previewStyle}>{sectionEls}</div>
               )}
