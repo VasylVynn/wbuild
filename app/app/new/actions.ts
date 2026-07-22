@@ -10,7 +10,8 @@ import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limi
 import { getServiceClient } from "@/lib/supabase/server";
 import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
 import { sanitizeMedia, type SiteMedia } from "@/lib/media/media";
-import type { BusinessFacts } from "@/lib/verticals/schema";
+import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
+import { getTemplate, templateDisplayName } from "@/lib/templates/registry";
 
 /**
  * Hard cap on conversation length (messages, both roles). An honest onboarding
@@ -27,15 +28,26 @@ export async function onboardAction(
   history: ChatMsg[],
   facts: Partial<BusinessFacts>,
   verticalId?: string,
+  templateId?: string,
+  // Client-held flags, echoed back on refusals only (codex review): a
+  // rate-limited fallback turn must not wipe ready/confirmed/template state.
+  current?: { ready?: boolean; confirmed?: boolean },
+  // G4: uploaded media feeds the prompt's photo inventory (untrusted client
+  // input — sanitized below; only ever informs the system prompt).
+  media?: unknown,
 ): Promise<OnboardTurnResult> {
   // Both checks run BEFORE the Anthropic call — a limited turn costs no tokens.
   // Limited turns come back as a normal assistant message, so the chat UI
   // degrades gracefully instead of crashing.
+  const cleanTemplateId = getTemplate(templateId) ? templateId : undefined;
   const refuse = (message: string): OnboardTurnResult => ({
     message,
     facts,
     verticalId: verticalId ?? "generic",
-    ready: false,
+    ready: current?.ready ?? false,
+    confirmed: current?.confirmed ?? false,
+    templateId: cleanTemplateId,
+    templateLabel: templateDisplayName(cleanTemplateId),
     quickReplies: [],
     progress: [],
   });
@@ -49,7 +61,7 @@ export async function onboardAction(
   const limit = await checkRateLimit("chat_turn", ipFromHeaders(await headers()));
   if (!limit.ok) return refuse(rateLimitMessage(limit.retryAfterSec));
 
-  return onboardTurn(history, facts, verticalId);
+  return onboardTurn(history, facts, verticalId, templateId, media ? sanitizeMedia(media) : undefined);
 }
 
 export type FinalizeResult =
@@ -69,10 +81,26 @@ export async function finalizeAction(
   verticalId?: string,
   media?: SiteMedia,
   conversationId?: string,
+  templateId?: string,
 ): Promise<FinalizeResult> {
   // Re-validate media server-side (client input is untrusted): bad/foreign URLs
   // or an over-long list collapse to no media rather than reaching the site.
   const cleanMedia = sanitizeMedia(media);
+  // Server-side backstop (adversarial review): the chat ready-gate normally
+  // guarantees the required trio, but this is a public server action — a
+  // bypassed client must not reach generation with a hollow facts object.
+  const parsedFacts = businessFactsSchema.safeParse(facts);
+  if (
+    !parsedFacts.success ||
+    !parsedFacts.data.businessName.trim() ||
+    !parsedFacts.data.city.trim() ||
+    !parsedFacts.data.phone.trim()
+  ) {
+    return {
+      ok: false,
+      error: "Бракує обовʼязкових даних — назви, міста або телефону. Поверніться до розмови й додайте їх.",
+    };
+  }
   // Generation requires a signed-in user (§3.1 invariant, journal #43): the
   // tenant gets its owner at creation; no anonymous generation, no claim flow.
   let ownerId: string | null = null;
@@ -88,16 +116,26 @@ export async function finalizeAction(
   const limit = await checkRateLimit("finalize", ipFromHeaders(await headers()));
   if (!limit.ok) return { ok: false, error: rateLimitMessage(limit.retryAfterSec) };
 
+  // hasLogo/hasPhotos are onboarding-flow flags (plan A5), not business facts —
+  // strip them so they never reach generation or tenants.facts. Building from
+  // the zod-parsed value also drops any unknown junk keys a client could send.
+  const bizFacts: BusinessFacts = { ...parsedFacts.data };
+  delete bizFacts.hasLogo;
+  delete bizFacts.hasPhotos;
+
   try {
     const vId =
       verticalId ??
       classifyVertical(
-        [facts.businessName, facts.about, ...(facts.services?.map((s) => s.name) ?? [])]
+        [bizFacts.businessName, bizFacts.about, ...(bizFacts.services?.map((s) => s.name) ?? [])]
           .filter(Boolean)
           .join(" "),
       );
-    const host = await uniqueSubdomain(facts.businessName);
-    await generateAndPublish(facts, host, vId, true, cleanMedia);
+    const host = await uniqueSubdomain(bizFacts.businessName);
+    // B4: the chat-picked design (untrusted client input — resolve against the
+    // registry; unknown ids collapse to undefined = model picks at generation).
+    const cleanTemplateId = getTemplate(templateId) ? templateId : undefined;
+    await generateAndPublish(bizFacts, host, vId, true, cleanMedia, cleanTemplateId);
     const isProd = process.env.NODE_ENV === "production";
     const port = ROOT_DOMAIN.includes(":") ? `:${ROOT_DOMAIN.split(":")[1]}` : "";
     const url = `${isProd ? "https" : "http"}://${host}${isProd ? "" : port}`;

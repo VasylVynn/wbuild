@@ -32,7 +32,7 @@ export default function FerriGalleryAlt({ data }: { data: unknown }) {
                 {(feature.title || feature.category) && (
                   <div className="absolute inset-x-0 bottom-0 bg-navy-950/80 p-5 backdrop-blur-sm">
                     {feature.title && (
-                      <p className="font-[family-name:var(--font-cormorant)] text-xl text-cream-100">
+                      <p className="font-[family-name:var(--ferri-display)] text-xl text-cream-100">
                         {feature.title}
                       </p>
                     )}
@@ -57,7 +57,7 @@ export default function FerriGalleryAlt({ data }: { data: unknown }) {
                       {(img.title || img.category) && (
                         <div className="absolute inset-x-0 bottom-0 bg-navy-950/80 p-3 backdrop-blur-sm">
                           {img.title && (
-                            <p className="font-[family-name:var(--font-cormorant)] text-sm text-cream-100">
+                            <p className="font-[family-name:var(--ferri-display)] text-sm text-cream-100">
                               {img.title}
                             </p>
                           )}

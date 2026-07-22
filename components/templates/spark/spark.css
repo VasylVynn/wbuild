@@ -1,0 +1,189 @@
+/*
+ * Spark ("spark") — a clean universal-modern landing look, ported from
+ * template_sources/landing-pages-main (a config-driven landing-blocks system:
+ * MIT). The source is a shadcn "neutral" design system — near-black primary on a
+ * white canvas, medium (not bold) headings with tight tracking, generous
+ * whitespace, hairline borders, a signature monospace-uppercase eyebrow, and
+ * quiet card hovers. Everything is namespaced under `.tpl-spark` so it never
+ * leaks into the product UI or the tenant shell.
+ *
+ * Themes: LIGHT (default) + DARK. Colours are CSS vars flipped by the wrapper's
+ * `data-theme` attribute (SalonWrapper mechanics). Every colour in the sections
+ * flows through these `--spark-*` tokens (via `var(--spark-…)` arbitrary values)
+ * — no raw tailwind palette classes leak the platform look.
+ *
+ * Fonts are DE-FONTED: display/body read `--spark-display` / `--spark-body`,
+ * which prefer a shell-injected DNA pair (`--font-heading` / `--font-body`) and
+ * fall back to the wrapper's own next/font Inter (`--font-spark-sans`). The mono
+ * accent (eyebrows, timeline numbers) is the template's own signature and stays
+ * fixed on `--font-spark-mono`.
+ */
+
+.tpl-spark {
+  /* === LIGHT (default) === */
+  --spark-bg: oklch(1 0 0);
+  --spark-fg: oklch(0.145 0 0);
+  --spark-card: oklch(1 0 0);
+  --spark-muted: oklch(0.97 0 0);
+  --spark-muted-fg: oklch(0.556 0 0);
+  --spark-primary: oklch(0.205 0 0);
+  --spark-primary-fg: oklch(0.985 0 0);
+  --spark-border: oklch(0.922 0 0);
+  --spark-ring: oklch(0.708 0 0);
+  --spark-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(0, 0, 0, 0.12);
+  --spark-radius: 0.625rem;
+
+  --spark-display: var(--font-heading, var(--font-spark-sans, "Inter", ui-sans-serif, system-ui, sans-serif));
+  --spark-body: var(--font-body, var(--font-spark-sans, "Inter", ui-sans-serif, system-ui, sans-serif));
+  --spark-mono: var(--font-spark-mono, ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace);
+
+  position: relative;
+  font-family: var(--spark-body);
+  background: var(--spark-bg);
+  color: var(--spark-fg);
+  color-scheme: light;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tpl-spark[data-theme="dark"] {
+  /* === DARK === */
+  --spark-bg: oklch(0.145 0 0);
+  --spark-fg: oklch(0.985 0 0);
+  --spark-card: oklch(0.185 0 0);
+  --spark-muted: oklch(0.245 0 0);
+  --spark-muted-fg: oklch(0.708 0 0);
+  --spark-primary: oklch(0.985 0 0);
+  --spark-primary-fg: oklch(0.205 0 0);
+  --spark-border: oklch(0.269 0 0);
+  --spark-ring: oklch(0.439 0 0);
+  --spark-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+.tpl-spark ::selection {
+  background: var(--spark-fg);
+  color: var(--spark-bg);
+}
+
+/* Headings follow the display face; medium weight + tight tracking is the look. */
+.tpl-spark h1,
+.tpl-spark h2,
+.tpl-spark h3,
+.tpl-spark h4 {
+  font-family: var(--spark-display);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+/* ===== Signature monospace-uppercase eyebrow ===== */
+.tpl-spark .spark-eyebrow {
+  font-family: var(--spark-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--spark-primary);
+}
+.tpl-spark[data-theme="dark"] .spark-eyebrow {
+  color: var(--spark-fg);
+}
+.tpl-spark .spark-mono {
+  font-family: var(--spark-mono);
+}
+
+/* ===== Buttons — sharp, quiet, never overflow ===== */
+.tpl-spark .spark-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--spark-radius);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
+}
+.tpl-spark .spark-btn-primary {
+  background: var(--spark-primary);
+  color: var(--spark-primary-fg);
+  border: 1px solid var(--spark-primary);
+}
+.tpl-spark .spark-btn-primary:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+.tpl-spark .spark-btn-outline {
+  background: transparent;
+  color: var(--spark-fg);
+  border: 1px solid var(--spark-border);
+}
+.tpl-spark .spark-btn-outline:hover {
+  background: var(--spark-muted);
+  border-color: var(--spark-fg);
+}
+
+/* ===== Card ===== */
+.tpl-spark .spark-card {
+  background: var(--spark-card);
+  border: 1px solid var(--spark-border);
+  border-radius: var(--spark-radius);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.tpl-spark .spark-card:hover {
+  border-color: color-mix(in oklab, var(--spark-primary) 45%, var(--spark-border));
+}
+
+/* ===== FAQ accordion chevron (native <details>, no JS) ===== */
+.tpl-spark details[open] .spark-chevron {
+  transform: rotate(180deg);
+}
+
+/* ===== Focus ===== */
+.tpl-spark :focus-visible {
+  outline: 2px solid var(--spark-ring);
+  outline-offset: 2px;
+}
+
+/* ===== Scrollbar (scoped to internal scroll containers) ===== */
+.tpl-spark ::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.tpl-spark ::-webkit-scrollbar-thumb {
+  background: var(--spark-border);
+  border-radius: 3px;
+}
+
+/* ===== Marquee (keyword strip) — scoped keyframes ===== */
+.tpl-spark .spark-marquee-track {
+  display: inline-flex;
+  align-items: center;
+  animation: spark-scroll 32s linear infinite;
+}
+@keyframes spark-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tpl-spark {
+    scroll-behavior: auto;
+  }
+  .tpl-spark .spark-marquee-track {
+    animation: none;
+  }
+  .tpl-spark *,
+  .tpl-spark *::before,
+  .tpl-spark *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

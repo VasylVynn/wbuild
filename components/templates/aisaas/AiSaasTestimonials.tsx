@@ -47,3 +47,57 @@ export default function AiSaasTestimonials({ data }: { data: unknown }) {
     </section>
   );
 }
+
+/*
+ * `feature` variant — one testimonial promoted to a large pastel panel on the
+ * left, the rest as a compact divided LIST on the right. Distinct from the
+ * base uniform grid: an asymmetric featured+list density, a split axis and a
+ * reordered emphasis (first item promoted).
+ */
+export function AiSaasTestimonialsFeature({ data }: { data: unknown }) {
+  const d = data as BlockProps["testimonials"];
+  const [featured, ...rest] = d.items;
+
+  if (!featured) return null;
+
+  return (
+    <section className="py-16">
+      <div className="mx-auto max-w-6xl px-4">
+        <div className="mx-auto mb-12 max-w-2xl text-center">
+          <h2 className="text-3xl font-bold text-[#2F4550] md:text-4xl">
+            {d.title ?? "Що кажуть клієнти"}
+          </h2>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
+          <figure className="flex flex-col rounded-3xl bg-[#F1F0FB] p-8 md:p-10 lg:col-span-5">
+            <svg className="h-10 w-10 text-[#E07A5F]" fill="currentColor" viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M10 8c-3.3 0-6 2.7-6 6v10h10V14H8c0-1.1.9-2 2-2V8Zm14 0c-3.3 0-6 2.7-6 6v10h10V14h-6c0-1.1.9-2 2-2V8Z" />
+            </svg>
+            <blockquote className="mt-4 text-xl font-medium leading-relaxed text-[#2F4550] md:text-2xl">
+              {featured.quote}
+            </blockquote>
+            <figcaption className="mt-6">
+              <p className="font-semibold text-[#2F4550]">{featured.author}</p>
+              {featured.role && <p className="text-sm text-[#2F4550]/60">{featured.role}</p>}
+            </figcaption>
+          </figure>
+
+          {rest.length > 0 && (
+            <div className="flex flex-col divide-y divide-[#2F4550]/10 lg:col-span-7">
+              {rest.map((item, i) => (
+                <figure key={i} className="py-6 first:pt-0 last:pb-0">
+                  <blockquote className="leading-relaxed text-[#2F4550]/90">“{item.quote}”</blockquote>
+                  <figcaption className="mt-3">
+                    <span className="font-semibold text-[#2F4550]">{item.author}</span>
+                    {item.role && <span className="text-sm text-[#2F4550]/60"> · {item.role}</span>}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}

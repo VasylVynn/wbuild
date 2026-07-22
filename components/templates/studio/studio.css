@@ -25,7 +25,9 @@
   --color-text: #fafafa;
   --color-text-muted: #71717a;
   --color-text-subtle: #52525b;
-  --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-body, var(--font-inter), "Inter", system-ui, -apple-system, sans-serif);
+  /* DNA-2b: headings follow the rolled pair when present. */
+  --font-heading-resolved: var(--font-heading, var(--font-inter), "Inter", system-ui, sans-serif);
 
   position: relative;
   font-family: var(--font-sans);
@@ -264,3 +266,7 @@
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* DNA-2b: heading override applies ONLY under a shell-injected pair —
+   a blanket rule would stomp legacy per-element font utilities (review). */
+[data-dna-pair] .tpl-studio h1, [data-dna-pair] .tpl-studio h2, [data-dna-pair] .tpl-studio h3 { font-family: var(--font-heading-resolved); }

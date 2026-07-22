@@ -5,12 +5,11 @@ import type { BlockProps } from "@/lib/blocks/schema";
 import { ScrollReveal } from "./ScrollReveal";
 
 /*
- * SalonHeroAlt2 — alternate hero: an editorial-magazine split instead of the
- * default's centred full-viewport hero with layered background animations.
- * A tall rounded image (or a gradient stand-in when there's no `imageUrl`)
- * fills most of the section on one side; a glass text card overlaps it from
- * the other side, carrying eyebrow, gradient serif title + accent, subtitle
- * and CTAs — airier and more asymmetric than the default.
+ * SalonHeroAlt2 — alternate hero: an editorial-magazine split. Text card LEFT,
+ * rounded photo RIGHT (H10 re-layout: the original 7+6-of-12 grid summed to 13
+ * columns, wrapping the card under the photo on desktop). Photo height is
+ * capped — portrait reel covers must not fill the viewport; no `imageUrl` →
+ * a gradient stand-in panel.
  */
 export default function SalonHeroAlt2({ data }: { data: unknown }) {
   const d = data as BlockProps["hero"];
@@ -20,22 +19,22 @@ export default function SalonHeroAlt2({ data }: { data: unknown }) {
       <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/30 to-background dark:from-black dark:via-zinc-900 dark:to-zinc-950" />
 
       <div className="relative z-10 section-container">
-        <div className="grid lg:grid-cols-12 gap-6 lg:gap-0 items-center">
+        <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1, delay: 0.2 }}
-            className="lg:col-span-7 relative rounded-[2.5rem] overflow-hidden h-[60vh] lg:h-[78vh] shadow-elegant"
+            className="relative order-first h-[320px] overflow-hidden rounded-[2.5rem] shadow-elegant sm:h-[400px] lg:order-last lg:h-[560px]"
           >
             {d.imageUrl ? (
-              <img src={d.imageUrl} alt={d.title} className="h-full w-full object-cover" />
+              <img src={d.imageUrl} alt={d.imageAlt ?? d.title} className="h-full w-full object-cover" />
             ) : (
               <div className="h-full w-full bg-gradient-to-tr from-accent via-beauty-pink to-gold-light" />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-background/40 via-transparent to-transparent dark:from-black/50" />
           </motion.div>
 
-          <div className="lg:col-span-6 lg:-ml-24 relative z-10">
+          <div className="relative z-10">
             <ScrollReveal direction="right">
               <div className="glass-card p-8 sm:p-12">
                 {d.eyebrow && <span className="section-tag">{d.eyebrow}</span>}

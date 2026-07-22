@@ -12,6 +12,7 @@ import { aiEditBlock } from "@/lib/ai/edit-block";
 import {
   getEditorData,
   saveDraftBlocks,
+  saveDraftSeo,
   switchTheme,
 } from "@/app/app/(protected)/edit/actions";
 import { switchDesignPack } from "@/app/app/(protected)/edit/design-actions";
@@ -115,6 +116,7 @@ export async function POST(req: Request): Promise<Response> {
   // Working copy — tools mutate it and persist after each successful call.
   let blocks: StoredBlock[] = site.blocks;
   let theme = site.theme;
+  let seo = site.seo;
   let blocksChanged = false;
   const actions: string[] = [];
 
@@ -213,6 +215,19 @@ export async function POST(req: Request): Promise<Response> {
         actions.push(summary);
         return { ok: true, summary };
       }
+      case "set_seo": {
+        // D5: draft-only like every tool — the meta goes live on publish.
+        const title = a.title as string | undefined;
+        const description = a.description as string | undefined;
+        if (title === undefined && description === undefined)
+          return { ok: false, summary: "Вкажи title і/або description." };
+        const res = await saveDraftSeo(host, { title, description });
+        if (!res.ok) return { ok: false, summary: `Не збереглося: ${res.error ?? "помилка"}` };
+        seo = res.seo;
+        const summary = "Оновив SEO-заголовок і опис сторінки";
+        actions.push(summary);
+        return { ok: true, summary };
+      }
     }
   }
 
@@ -225,6 +240,7 @@ export async function POST(req: Request): Promise<Response> {
     isTemplateSite: Boolean(site.templateId),
     onboardingTranscript: onboarding,
     stats,
+    seo,
   });
 
   const apiMessages: Anthropic.MessageParam[] = [
@@ -256,6 +272,7 @@ export async function POST(req: Request): Promise<Response> {
               isTemplateSite: Boolean(site.templateId),
               onboardingTranscript: onboarding,
               stats,
+              seo,
             }),
             tools: buildTools(),
             messages: apiMessages,
@@ -315,7 +332,7 @@ export async function POST(req: Request): Promise<Response> {
             .then(() => undefined, () => undefined);
         }
 
-        send({ t: "final", message, actions, blocksChanged, blocks, theme });
+        send({ t: "final", message, actions, blocksChanged, blocks, theme, seo });
       } catch {
         send({ t: "error", message: "Щось пішло не так. Спробуйте ще раз." });
       } finally {

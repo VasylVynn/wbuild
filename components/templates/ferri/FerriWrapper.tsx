@@ -17,8 +17,10 @@ import FerriFooter from "./FerriFooter";
  * forces a theme so both can be screenshotted.
  *
  * Client component on purpose (theme state). The ported serif, Cormorant
- * Garamond, is loaded via next/font and exposed as `--font-cormorant`, which the
- * sections read through `font-[family-name:var(--font-cormorant)]`.
+ * Garamond, is loaded via next/font and exposed as `--font-cormorant`. It stays
+ * loaded as the fallback: sections read the display font through the
+ * `--ferri-display` indirection (ferri.css), which prefers a shell-injected
+ * design-DNA pair and falls back to Cormorant when no pair is rolled.
  */
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
@@ -38,11 +40,15 @@ export default function FerriWrapper({
   children: ReactNode;
   brand?: TemplateBrand;
 }) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  // DNA-2c: the seeded site theme is the default; ?theme= and the visitor's
+  // stored toggle still win (same pattern as SalonWrapper).
+  const dnaTheme: Theme | undefined =
+    brand?.dnaTheme === "dark" || brand?.dnaTheme === "light" ? brand.dnaTheme : undefined;
+  const [theme, setTheme] = useState<Theme>(dnaTheme ?? "dark");
 
   useEffect(() => {
     // Precedence: ?theme= (preview/testing) → stored choice → dark default.
-    let next: Theme = "dark";
+    let next: Theme = dnaTheme ?? "dark";
     try {
       const param = new URLSearchParams(window.location.search).get("theme");
       const stored = window.localStorage.getItem(STORE_KEY);
@@ -52,7 +58,7 @@ export default function FerriWrapper({
       /* SSR / blocked storage — stay dark */
     }
     setTheme(next);
-  }, []);
+  }, [dnaTheme]);
 
   const toggle = () =>
     setTheme((t) => {
@@ -70,6 +76,7 @@ export default function FerriWrapper({
       <FerriNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}
+        logoUrl={brand?.logoUrl}
         navLinks={brand?.navLinks}
         ctaHref={brand?.ctaHref}
       />

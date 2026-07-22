@@ -1,7 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { Reveal } from "../shared/reveal";
 
 /*
  * Stats — a standalone number band that reuses the hero's stat-row treatment
@@ -15,31 +15,19 @@ export default function StatsSection({ data }: { data: unknown }) {
     <section className="py-12 md:py-16" aria-labelledby={d.title ? "stats-title" : undefined}>
       <div className="container mx-auto px-4 sm:px-6">
         {d.title && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
+          <Reveal margin="-80px" className="text-center mb-16">
             <h2 id="stats-title" className="section-title">{d.title}</h2>
-          </motion.div>
+          </Reveal>
         )}
 
-        <motion.div
-          className="flex gap-12 md:gap-16 justify-center flex-wrap"
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.8 }}
-        >
+        <Reveal y={0} duration={0.8} margin="-80px" className="flex gap-12 md:gap-16 justify-center flex-wrap">
           {d.items.map((stat, i) => (
             <div key={i} className="text-center">
               <span className="block text-3xl md:text-4xl font-semibold text-white tabular-nums">{stat.value}</span>
               <span className="block text-xs uppercase tracking-widest text-zinc-500 mt-2">{stat.label}</span>
             </div>
           ))}
-        </motion.div>
+        </Reveal>
       </div>
     </section>
   );

@@ -1,12 +1,13 @@
 import type { BlockProps } from "@/lib/blocks/schema";
-import { telegramHref, viberHref } from "@/lib/blocks/contact-links";
+import { instagramHref, telegramHref, viberHref } from "@/lib/blocks/contact-links";
 
 export default function Contacts({ data }: { data: BlockProps["contacts"] }) {
-  const { title, phone, address, hours, email, viber, telegram } = data;
+  const { title, phone, address, hours, email, viber, telegram, instagram } = data;
 
   const viberUrl = viberHref(viber);
   const telegramUrl = telegramHref(telegram);
-  const hasButtons = Boolean(phone || viberUrl || telegramUrl);
+  const instagramUrl = instagramHref(instagram);
+  const hasButtons = Boolean(phone || viberUrl || telegramUrl || instagramUrl);
 
   const buttonClass =
     "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-6 py-3 text-lg font-semibold";
@@ -126,6 +127,17 @@ export default function Contacts({ data }: { data: BlockProps["contacts"] }) {
                 style={buttonStyle}
               >
                 Telegram
+              </a>
+            )}
+            {instagramUrl && (
+              <a
+                href={instagramUrl}
+                target="_blank"
+                rel="noopener"
+                className={buttonClass}
+                style={buttonStyle}
+              >
+                Instagram
               </a>
             )}
           </div>

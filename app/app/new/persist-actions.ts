@@ -4,13 +4,19 @@ import { headers } from "next/headers";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
 import type { ChatMsg } from "@/lib/ai/onboard";
-import { mediaSchema, type SiteMedia } from "@/lib/media/media";
+import { isStorageUrl, MAX_PHOTOS, mediaSchema, type SiteMedia } from "@/lib/media/media";
+import { getTemplate, templateDisplayName } from "@/lib/templates/registry";
 
 // Shape stored inside conversations.facts_state
 type FactsState = {
   facts: unknown;
   verticalId: string | undefined;
   ready: boolean;
+  // A6: the user explicitly confirmed the chat summary. Optional so pre-A6
+  // rows stay valid (absent = not confirmed).
+  confirmed?: boolean;
+  // B3: the design the agent picked in the chat. Optional so pre-B rows stay valid.
+  templateId?: string;
   // Owner-uploaded logo/photos (§4.8). Optional so pre-media rows stay valid.
   media?: SiteMedia;
 };
@@ -20,6 +26,10 @@ export type ConversationData = {
   facts: unknown;
   verticalId: string | undefined;
   ready: boolean;
+  confirmed: boolean;
+  templateId?: string;
+  /** Resolved server-side so the client never bundles the template registry. */
+  templateLabel?: string;
   media: SiteMedia;
 };
 
@@ -68,26 +78,64 @@ export async function saveTurn(
   facts: unknown,
   verticalId: string | undefined,
   ready: boolean,
+  confirmed = false,
+  templateId?: string,
+  // Wave G (codex review): the chat-upload flow persists messages AND media in
+  // this ONE write — two racing read-modify-writes (saveTurn + saveMediaAction)
+  // could lose the just-uploaded photo. Untrusted client input, validated
+  // below; invalid/absent → fall back to preserving what's stored.
+  media?: unknown,
 ): Promise<{ ok: boolean }> {
   if (!isSupabaseConfigured()) return { ok: false };
 
   const db = getServiceClient();
 
+  // Message attachments are client-supplied storage URLs (composer photo
+  // batches). Defense in depth: only our-bucket URLs persist (§4.8).
+  const cleanMessages: ChatMsg[] = messages.map((m) => {
+    const atts = m.attachments?.filter(isStorageUrl).slice(0, MAX_PHOTOS);
+    return { role: m.role, content: m.content, ...(atts?.length && { attachments: atts }) };
+  });
+
+  const mediaParsed = media !== undefined ? mediaSchema.safeParse(media) : null;
+  const cleanMedia: SiteMedia | undefined = mediaParsed?.success
+    ? {
+        ...(mediaParsed.data.logoUrl && { logoUrl: mediaParsed.data.logoUrl }),
+        photos: mediaParsed.data.photos,
+        ...(mediaParsed.data.photoMeta?.length && { photoMeta: mediaParsed.data.photoMeta }),
+      }
+    : undefined;
+
   // Preserve any media saved out-of-band by saveMediaAction: a plain overwrite
   // of facts_state would wipe uploads if the owner keeps chatting after the
-  // media step (e.g. after the login-gate resume).
+  // media step (e.g. after the login-gate resume). The caller-provided media
+  // (validated above) wins over the stored value.
   const { data: prev } = await db
     .from("conversations")
     .select("facts_state")
     .eq("id", conversationId)
     .maybeSingle();
-  const media = (prev?.facts_state as FactsState | null)?.media;
+  const storedMedia = (prev?.facts_state as FactsState | null)?.media;
+  const mediaFinal = cleanMedia ?? storedMedia;
 
-  const factsState: FactsState = { facts, verticalId, ready, ...(media && { media }) };
+  // Unknown/absent template ids are dropped (registry is the authority); the
+  // stored pick only changes when this turn carries a valid one — a refusal
+  // turn that lost the client-side pick must not wipe the persisted choice.
+  const prevTemplateId = (prev?.facts_state as FactsState | null)?.templateId;
+  const cleanTemplateId = getTemplate(templateId) ? templateId : prevTemplateId;
+
+  const factsState: FactsState = {
+    facts,
+    verticalId,
+    ready,
+    confirmed,
+    ...(cleanTemplateId && { templateId: cleanTemplateId }),
+    ...(mediaFinal && { media: mediaFinal }),
+  };
 
   const { error } = await db
     .from("conversations")
-    .update({ messages, facts_state: factsState, is_complete: ready })
+    .update({ messages: cleanMessages, facts_state: factsState, is_complete: ready })
     .eq("id", conversationId);
 
   return { ok: !error };
@@ -111,6 +159,7 @@ export async function saveMediaAction(
   const clean: SiteMedia = {
     ...(parsed.data.logoUrl && { logoUrl: parsed.data.logoUrl }),
     photos: parsed.data.photos,
+    ...(parsed.data.photoMeta?.length && { photoMeta: parsed.data.photoMeta }),
   };
 
   const db = getServiceClient();
@@ -157,11 +206,15 @@ export async function loadConversation(
 
   const fs = data.facts_state as FactsState | null;
 
+  const templateId = getTemplate(fs?.templateId) ? fs?.templateId : undefined;
+
   return {
     messages: (data.messages as ChatMsg[]) ?? [],
     facts: fs?.facts ?? {},
     verticalId: fs?.verticalId,
     ready: fs?.ready ?? false,
+    confirmed: fs?.confirmed ?? false,
+    ...(templateId && { templateId, templateLabel: templateDisplayName(templateId) }),
     media: fs?.media ?? { photos: [] },
   };
 }

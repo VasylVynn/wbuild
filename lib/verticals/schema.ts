@@ -33,10 +33,19 @@ export const businessFactsSchema = z.object({
   hours: z.string().optional(),
   viber: z.string().optional(), // freeform phone number, any formatting
   telegram: z.string().optional(), // username (with/without "@") or phone number
+  // Instagram handle: bare, with "@", or a full profile URL — normalized at
+  // render/import time (contact-links.ts). Feeds JSON-LD sameAs (D2), the
+  // contacts block link (E7) and the Apify import (E5).
+  instagram: z.string().optional(),
   about: z.string().optional(),
   services: z.array(serviceFactSchema).optional(),
   testimonials: z.array(testimonialFactSchema).optional(),
   socials: z.array(socialFactSchema).optional(),
+  // Onboarding-flow flags (plan A5), not business facts: the agent asks «Чи
+  // маєте логотип?» / «Чи є фото?» and stores the answers here so the media
+  // step and prompts adapt. Stripped in finalizeAction before generation.
+  hasLogo: z.boolean().optional(),
+  hasPhotos: z.boolean().optional(),
 });
 
 export type BusinessFacts = z.infer<typeof businessFactsSchema>;

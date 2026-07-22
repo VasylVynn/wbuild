@@ -49,7 +49,7 @@ export default function FerriHeroAlt({ data }: { data: unknown }) {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className="font-[family-name:var(--font-cormorant)] text-5xl font-light leading-[1.05] text-cream-100 sm:text-6xl md:text-7xl lg:text-8xl"
+          className="font-[family-name:var(--ferri-display)] text-5xl font-light leading-[1.05] text-cream-100 sm:text-6xl md:text-7xl lg:text-8xl"
         >
           {d.title}
           {d.titleAccent && (

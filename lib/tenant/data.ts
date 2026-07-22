@@ -1,4 +1,4 @@
-import type { Tenant, Page, NavItem } from "./types";
+import type { Tenant, Page, NavItem, PageSeo } from "./types";
 import type { Theme } from "@/lib/theme/tokens";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { seedTenants, seedPages } from "./seed";
@@ -33,8 +33,8 @@ interface PageRow {
   title: string;
   show_in_nav: boolean;
   nav_order: number;
-  draft_content: { blocks: StoredBlock[]; pocket?: StoredBlock[] };
-  published_content: { blocks: StoredBlock[] } | null;
+  draft_content: { blocks: StoredBlock[]; pocket?: StoredBlock[]; seo?: PageSeo };
+  published_content: { blocks: StoredBlock[]; seo?: PageSeo } | null;
   is_published: boolean;
 }
 
@@ -63,6 +63,7 @@ function mapPage(row: PageRow): Page {
     showInNav: row.show_in_nav,
     navOrder: row.nav_order,
     blocks: (row.published_content ?? { blocks: [] }).blocks ?? [],
+    seo: row.published_content?.seo,
   };
 }
 
@@ -125,9 +126,20 @@ export async function getNav(host: string): Promise<NavItem[]> {
   if (tenant.navMode === "onepage") {
     const home = await getPublishedPage(host, "");
     if (!home) return [];
+    // C3: a repeated block type (services ×2) must contribute ONE nav entry —
+    // the first instance's anchor wins (template path dedups the same way in
+    // buildTemplateBrand). Identity is the anchor BASE (#services-2 → #services),
+    // not the label: two distinct blocks sharing a label must both survive.
+    const seenAnchors = new Set<string>();
     return home.blocks
       .filter((b) => !b.hidden && b.showInNav && b.anchor)
-      .map((b) => ({ label: b.navLabel ?? b.anchor!.replace(/^#/, ""), href: b.anchor! }));
+      .map((b) => ({ label: b.navLabel ?? b.anchor!.replace(/^#/, ""), href: b.anchor! }))
+      .filter((item) => {
+        const key = item.href.replace(/-\d+$/, "");
+        if (seenAnchors.has(key)) return false;
+        seenAnchors.add(key);
+        return true;
+      });
   }
 
   const pages = await getPublishedPages(host);

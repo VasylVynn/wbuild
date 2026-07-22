@@ -18,11 +18,19 @@ export function fixtureForTemplate(t: SiteTemplate): StoredBlock[] {
   const base = { showInNav: false, hidden: false };
   const ids = [...t.order, ...Object.keys(t.sections).filter((id) => !t.order.includes(id))];
 
+  // Owner order (VAR-1): the preview shows EVERY layout variant, not just the
+  // default — one block per section PLUS one per variant, sequentially, so
+  // the whole design vocabulary is reviewable on one page. PageRenderer
+  // routes each instance by its `variant` field.
   return ids
-    .map((id) => {
+    .flatMap((id) => {
       const def = t.sections[id];
       const content = def ? byType.get(def.block) : undefined;
-      return content ? { ...content, ...base, section: id } : null;
-    })
-    .filter((b) => b !== null) as unknown as StoredBlock[];
+      if (!content) return [];
+      const variantIds = Object.keys(def?.variants ?? {});
+      return [
+        { ...content, ...base, section: id },
+        ...variantIds.map((v) => ({ ...content, ...base, section: id, variant: v })),
+      ];
+    }) as unknown as StoredBlock[];
 }

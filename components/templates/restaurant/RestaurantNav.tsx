@@ -17,6 +17,7 @@ type NavLink = { href: string; label: string };
 export default function RestaurantNav({
   brandName = "Смак",
   brandAccent = "Дому",
+  logoUrl,
   navLinks = [
     { href: "#services", label: "Меню" },
     { href: "#gallery", label: "Галерея" },
@@ -27,6 +28,7 @@ export default function RestaurantNav({
 }: {
   brandName?: string;
   brandAccent?: string;
+  logoUrl?: string;
   navLinks?: NavLink[];
   ctaHref?: string;
 }) {
@@ -39,9 +41,12 @@ export default function RestaurantNav({
       className="sticky top-0 z-50 border-b border-[#E7DCCB] bg-[#FBF6EF]/90 backdrop-blur"
     >
       <div className="mx-auto grid max-w-6xl grid-cols-2 items-center px-4 py-4 sm:px-6 md:grid-cols-3">
-        <a href="/" className="font-display text-xl font-bold tracking-tight text-[#2A2018]">
-          {brandName}
-          <span className="text-[#C0562F]">{brandAccent}</span>
+        <a href="/" className="flex items-center gap-2 font-display text-xl font-bold tracking-tight text-[#2A2018]">
+          {logoUrl && <img src={logoUrl} alt="" className="h-8 w-auto max-w-[160px] shrink-0 object-contain" />}
+          <span className="truncate max-w-[220px] md:max-w-[320px]">
+            {brandName}
+            <span className="text-[#C0562F]">{brandAccent}</span>
+          </span>
         </a>
 
         <div className="hidden items-center justify-center gap-8 md:flex">

@@ -5,20 +5,28 @@ import type { TemplateSectionDef } from "@/components/templates/studio";
 import NextlyWrapper from "./NextlyWrapper";
 import NextlyHero from "./NextlyHero";
 import NextlyAbout from "./NextlyAbout";
+import NextlySwitchback from "./NextlySwitchback";
 import NextlyServices from "./NextlyServices";
 import NextlyStats from "./NextlyStats";
+import NextlyTimeline from "./NextlyTimeline";
 import NextlyTestimonials from "./NextlyTestimonials";
 import NextlyTeam from "./NextlyTeam";
+import NextlyMarquee from "./NextlyMarquee";
 import NextlyCTA from "./NextlyCTA";
 import NextlyLeadForm from "./NextlyLeadForm";
 import NextlyContacts from "./NextlyContacts";
+import NextlyTestimonialsStrip from "./NextlyTestimonialsStrip";
+import NextlyLeadFormSplit from "./NextlyLeadFormSplit";
+import NextlyContactsSidebar from "./NextlyContactsSidebar";
 
 /**
  * Nextly ("nextly") — a clean, indigo-accented marketing look (Inter, generous
  * whitespace, signature indigo icon-chip "benefit" rows, rounded gray cards)
  * ported from template_sources/nextly-template-main. Ships LIGHT (default) +
  * DARK themes via the wrapper's data-theme toggle. Startup-led: benefit rows →
- * social proof (stats/testimonials) → team → cta. No gallery/faq.
+ * social proof (stats/testimonials) → team → cta, with switchback (story rows),
+ * timeline (journey) and marquee (keyword strip) in the same indigo language.
+ * No gallery/faq.
  */
 export const nextlySections: Record<string, TemplateSectionDef> = {
   hero: {
@@ -34,6 +42,14 @@ export const nextlySections: Record<string, TemplateSectionDef> = {
     description: "Чистий текстовий блок «про нас»: заголовок і текст; рядки з «- » стають списком.",
     component: NextlyAbout,
   },
+  switchback: {
+    block: "switchback",
+    label: "Історія (фото + текст)",
+    navLabel: "Історія",
+    description:
+      "Почергові рядки «зигзаг»: велике округле фото поруч із текстом, ліворуч/праворуч по черзі; індиго-акцент і кнопка. Рядок без фото стає центрованим текстовим блоком.",
+    component: NextlySwitchback,
+  },
   services: {
     block: "services",
     label: "Послуги",
@@ -47,17 +63,32 @@ export const nextlySections: Record<string, TemplateSectionDef> = {
     description: "Сітка показників великими індиго-цифрами (лише реальні дані).",
     component: NextlyStats,
   },
+  timeline: {
+    block: "timeline",
+    label: "Хронологія",
+    description:
+      "Вертикальна лінія шляху бізнесу: індиго-вузол на кожен етап — період, назва, підзаголовок і опис (лише реальні дати).",
+    component: NextlyTimeline,
+  },
   testimonials: {
     block: "testimonials",
     label: "Відгуки",
     description: "Сірі округлі картки відгуків — цитата, аватар/ініціали, ім'я, роль.",
     component: NextlyTestimonials,
+    variants: { strip: NextlyTestimonialsStrip },
   },
   team: {
     block: "team",
     label: "Команда",
     description: "Картки команди — фото або індиго-ініціали, ім'я, роль, короткий опис.",
     component: NextlyTeam,
+  },
+  marquee: {
+    block: "marquee",
+    label: "Рядок переваг",
+    description:
+      "Плавний рухомий рядок коротких ключових слів (переваги / напрями) з індиго-крапками-роздільниками на світлому фоні.",
+    component: NextlyMarquee,
   },
   cta: {
     block: "cta",
@@ -70,12 +101,14 @@ export const nextlySections: Record<string, TemplateSectionDef> = {
     label: "Форма заявки",
     description: "Форма збору заявок — надсилає лід власнику в Telegram.",
     component: NextlyLeadForm,
+    variants: { split: NextlyLeadFormSplit },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
     description: "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram).",
     component: NextlyContacts,
+    variants: { sidebar: NextlyContactsSidebar },
   },
 };
 
@@ -95,10 +128,13 @@ export const nextlyMeta: {
   order: [
     "hero",
     "about",
+    "switchback",
     "services",
     "stats",
+    "timeline",
     "testimonials",
     "team",
+    "marquee",
     "cta",
     "lead_form",
     "contacts",

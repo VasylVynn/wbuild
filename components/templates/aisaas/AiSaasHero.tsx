@@ -65,7 +65,7 @@ export default function AiSaasHero({ data }: { data: unknown }) {
 
         {d.imageUrl && (
           <div className="mb-8 overflow-hidden rounded-3xl shadow-xl">
-            <img src={d.imageUrl} alt={d.title} className="h-auto w-full object-cover" />
+            <img src={d.imageUrl} alt={d.imageAlt ?? d.title} className="h-auto w-full object-cover" />
           </div>
         )}
 

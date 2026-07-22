@@ -27,7 +27,7 @@ export function SectionHeading({
           {label}
         </p>
       )}
-      <h2 className="font-[family-name:var(--font-cormorant)] text-2xl font-normal text-cream-100 sm:text-3xl md:text-4xl">
+      <h2 className="font-[family-name:var(--ferri-display)] text-2xl font-normal text-cream-100 sm:text-3xl md:text-4xl">
         {title}
       </h2>
       <div className={`mt-4 h-px w-12 bg-gold-500/40 ${lineMargin}`} />

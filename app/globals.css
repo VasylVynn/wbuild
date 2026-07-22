@@ -131,7 +131,7 @@ body {
   min-height: 100vh;
   background-color: var(--color-background);
   color: var(--color-foreground);
-  font-family: var(--font-poppins), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-body, var(--font-poppins), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif);
   line-height: 1.6;
   color-scheme: light;
   overflow-x: hidden;
@@ -160,8 +160,11 @@ body {
   color-scheme: dark;
 }
 
+/* DNA-2b: the rolled pair (shell-provided --font-heading/--font-body) wins;
+   absent pair -> the template's own fonts, byte-identical to before. */
+.tpl-salon { --font-display: var(--font-heading, var(--font-playfair), "Playfair Display", Georgia, serif); }
 .tpl-salon .font-display { font-family: var(--font-display); }
-.tpl-salon .font-body { font-family: var(--font-poppins), ui-sans-serif, system-ui, sans-serif; }
+.tpl-salon .font-body { font-family: var(--font-body, var(--font-poppins), ui-sans-serif, system-ui, sans-serif); }
 .tpl-salon ::selection {
   background: color-mix(in oklch, var(--color-accent) 30%, transparent);
   color: var(--color-foreground);
@@ -450,13 +453,34 @@ body {
   min-height: 100vh;
   background: #fbf6ef;
   color: #2a2018;
-  font-family: var(--font-restaurant-body), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-body, var(--font-restaurant-body), ui-sans-serif, system-ui, sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 .tpl-restaurant :is(h1, h2, h3) {
-  font-family: var(--font-restaurant-display), Georgia, "Times New Roman", serif;
+  font-family: var(--font-heading, var(--font-restaurant-display), Georgia, "Times New Roman", serif);
 }
 .tpl-restaurant .font-display {
-  font-family: var(--font-restaurant-display), Georgia, serif;
+  font-family: var(--font-heading, var(--font-restaurant-display), Georgia, serif);
+}
+
+/* Design-DNA motion presets (wave DNA-1). Sections render visible by default
+   (no-JS honesty, H5); MotionDriver arms only below-fold sections after
+   hydration. `stagger` adds a small per-sibling delay. */
+[data-motion="fade-up"] main section.mo-armed,
+[data-motion="stagger"] main section.mo-armed {
+  opacity: 0.001;
+  transform: translateY(16px);
+}
+[data-motion="fade-up"] main section,
+[data-motion="stagger"] main section {
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-motion] main section,
+  [data-motion] main section.mo-armed {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }

@@ -41,6 +41,7 @@ const LABELS: Record<string, string> = {
   imageUrl: "Зображення",
   url: "Зображення",
   alt: "Опис зображення",
+  imageAlt: "Опис зображення (alt)",
   name: "Назва",
   description: "Опис",
   price: "Ціна",
@@ -60,6 +61,7 @@ const LABELS: Record<string, string> = {
   email: "Email",
   viber: "Viber (номер)",
   telegram: "Telegram (нік або номер)",
+  instagram: "Instagram (нік або посилання)",
 };
 
 const TEXTAREA_KEYS = new Set(["body", "description", "quote", "answer", "message", "subtitle"]);

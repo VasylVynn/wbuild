@@ -16,6 +16,12 @@ import SalonHeroAlt2 from "./SalonHeroAlt2";
 import SalonServicesAlt from "./SalonServicesAlt";
 import SalonGalleryAlt from "./SalonGalleryAlt";
 import SalonTestimonialsAlt from "./SalonTestimonialsAlt";
+import SalonSwitchback from "./SalonSwitchback";
+import SalonMarquee from "./SalonMarquee";
+import SalonPublications from "./SalonPublications";
+import SalonServicesMenu from "./SalonServicesMenu";
+import SalonContactsStrip from "./SalonContactsStrip";
+import SalonLeadFormSplit from "./SalonLeadFormSplit";
 
 /**
  * Salon ("luxe-salon") — a LIGHT luxury look (soft rounded glass cards, gold +
@@ -35,13 +41,22 @@ export const salonSections: Record<string, TemplateSectionDef> = {
   services: {
     block: "services",
     label: "Послуги",
-    description: "Сітка карток послуг з іконками — назва, опис, ціна.",
+    description:
+      "Сітка карток послуг з іконками — назва, опис, ціна. Варіант «rows» — широкі рядки з іконками; варіант «menu» — прайс-меню з крапковими лідерами (назва … ціна).",
     component: SalonServices,
-    variants: { rows: SalonServicesAlt },
+    variants: { rows: SalonServicesAlt, menu: SalonServicesMenu },
+  },
+  story: {
+    block: "switchback",
+    label: "Історія",
+    description:
+      "Чергування великого фото й тексту (зиг-заг, рядки дзеркаляться): розповідь про майстерню, підхід чи трансформації «до/після». Фото беруться лише з props; без фото рядок стає центрованим текстовим блоком.",
+    component: SalonSwitchback,
   },
   process: {
     block: "timeline",
     label: "Як відбувається візит",
+    navLabel: "Візит",
     description:
       "Пронумеровані кроки візиту (01, 02, 03…) — від запису до результату; етап, короткий опис.",
     component: SalonProcess,
@@ -53,11 +68,25 @@ export const salonSections: Record<string, TemplateSectionDef> = {
     component: SalonGallery,
     variants: { grid: SalonGalleryAlt },
   },
+  values: {
+    block: "marquee",
+    label: "Переваги",
+    description:
+      "Рухомий рядок коротких ключових слів (цінності, переваги) із золотими роздільниками — ритмічна пауза-акцент між секціями, без зображень.",
+    component: SalonMarquee,
+  },
   team: {
     block: "team",
     label: "Команда",
     description: "Майстри салону — фото або ініціали, ім'я, роль. Лише реальні люди.",
     component: SalonTeam,
+  },
+  press: {
+    block: "publications",
+    label: "Преса",
+    description:
+      "Скляна рамка-реєстр згадок у пресі, нагород чи публікацій: назва, рік, джерело — по рядку. Спокійний перелік для довіри, лише реальні факти.",
+    component: SalonPublications,
   },
   testimonials: {
     block: "testimonials",
@@ -69,20 +98,25 @@ export const salonSections: Record<string, TemplateSectionDef> = {
   faq: {
     block: "faq",
     label: "Питання та відповіді",
+    navLabel: "Питання",
     description: "Акордеон із питаннями та відповідями (одне відкрите).",
     component: SalonFAQ,
   },
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
-    description: "Форма збору заявок — надсилає лід власнику в Telegram.",
+    description:
+      "Форма збору заявок — надсилає лід власнику в Telegram. Варіант «split» — форма поруч із decor-панеллю.",
     component: SalonLeadForm,
+    variants: { split: SalonLeadFormSplit },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
-    description: "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram).",
+    description:
+      "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram). Варіант «strip» — мінімальна стрічка-рядок реквізитів.",
     component: SalonContacts,
+    variants: { strip: SalonContactsStrip },
   },
 };
 
@@ -102,9 +136,12 @@ export const salonMeta: {
   order: [
     "hero",
     "services",
+    "story",
     "process",
     "gallery",
+    "values",
     "team",
+    "press",
     "testimonials",
     "faq",
     "lead_form",

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { Reveal } from "../shared/reveal";
 
 /*
  * Lead form — NO source equivalent. The FORM behaviour is copied verbatim from
@@ -43,13 +43,7 @@ export default function LeadFormSection({ data }: { data: unknown }) {
   return (
     <section className="py-12 md:py-16" aria-labelledby="lead-form-title">
       <div className="container mx-auto px-4 sm:px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.6 }}
-          className="card max-w-xl mx-auto"
-        >
+        <Reveal margin="-80px" className="card max-w-xl mx-auto">
           <h2 id="lead-form-title" className="section-title mb-2" style={{ marginBottom: "0.5rem" }}>
             {d.title ?? "Залишити заявку"}
           </h2>
@@ -107,7 +101,7 @@ export default function LeadFormSection({ data }: { data: unknown }) {
               )}
             </form>
           )}
-        </motion.div>
+        </Reveal>
       </div>
     </section>
   );

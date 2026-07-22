@@ -8,14 +8,24 @@ import type { SiteTemplate, TemplateBrand } from "@/lib/templates/registry";
  * real contacts from the grounded contacts block.
  */
 
-const NAV_SKIP = new Set(["hero", "stats", "cta", "lead_form", "contacts"]);
+// banner = a cta-band section id in several templates — a CTA is a target,
+// not a nav destination (integrator decision on the nav-fix agent's flag).
+const NAV_SKIP = new Set(["hero", "stats", "cta", "banner", "lead_form", "contacts"]);
 
 export function buildTemplateBrand(
   businessName: string,
   blocks: StoredBlock[],
   template: SiteTemplate,
+  /** Display logo (storage URL) — the caller resolves original vs adapted. */
+  logoUrl?: string,
+  /** DNA-2c: seeded template data-theme from the tenant's DNA. */
+  dnaTheme?: string,
 ): TemplateBrand {
-  const name = businessName.trim();
+  // Nav real estate is precious: a name like «DIVA | салон краси Самбір»
+  // renders as just «DIVA» — the first segment before a separator. The full
+  // name still lives everywhere else (SEO, footer copyright, facts).
+  const compact = businessName.split(/\s*[|—–·]\s*/)[0].trim() || businessName.trim();
+  const name = compact;
   const words = name.split(/\s+/).filter(Boolean);
 
   const seen = new Set<string>();
@@ -23,21 +33,23 @@ export function buildTemplateBrand(
   for (const b of blocks) {
     const s = b.section;
     if (!s || b.hidden || NAV_SKIP.has(s) || seen.has(s)) continue;
-    const label = template.sections[s]?.label;
-    if (!label) continue;
+    const def = template.sections[s];
+    if (!def?.label) continue;
     seen.add(s);
-    navLinks.push({ href: `#${s}`, label });
+    navLinks.push({ href: `#${s}`, label: def.navLabel ?? def.label });
   }
 
   const contact = blocks.find((b) => b.type === "contacts")?.props as
-    | { phone?: string; address?: string; hours?: string; email?: string; telegram?: string; viber?: string }
+    | { phone?: string; address?: string; hours?: string; email?: string; telegram?: string; viber?: string; instagram?: string }
     | undefined;
 
   return {
     brandName: words.length > 1 ? words.slice(0, -1).join(" ") + " " : name,
     brandAccent: words.length > 1 ? words[words.length - 1] : "",
+    ...(logoUrl ? { logoUrl } : {}),
     navLinks,
     ctaHref: "#lead_form",
+    ...(dnaTheme ? { dnaTheme } : {}),
     contact,
   };
 }

@@ -50,6 +50,7 @@ export default function PhotoField({
   value,
   host,
   conversationId,
+  kind,
   onChange,
   onClear,
 }: {
@@ -58,6 +59,9 @@ export default function PhotoField({
   // before a host exists). Whichever is set is sent as the /api/upload field.
   host?: string;
   conversationId?: string;
+  // "logo" → the server skips the photo quality pass (no brightness/sharpness
+  // warnings, no auto-correction) — heuristics for photos, not graphics.
+  kind?: "logo" | "photo";
   onChange: (url: string) => void;
   onClear: () => void;
 }) {
@@ -82,6 +86,7 @@ export default function PhotoField({
       fd.append("file", blob, `photo.${ext}`);
       if (conversationId) fd.append("conversationId", conversationId);
       else if (host) fd.append("host", host);
+      if (kind) fd.append("kind", kind);
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       const json = (await res.json().catch(() => null)) as
         | { ok?: boolean; url?: string; warnings?: string[] }

@@ -23,11 +23,11 @@ export default function FerriServicesAlt({ data }: { data: unknown }) {
           {d.items.map((item, i) => (
             <RevealItem key={i}>
               <div className="group flex flex-col gap-4 border-b border-gold-500/10 py-8 transition-colors sm:flex-row sm:items-baseline sm:gap-8 sm:py-10">
-                <span className="font-[family-name:var(--font-cormorant)] text-4xl font-light text-gold-500/50 transition-colors group-hover:text-gold-500 sm:w-20 sm:text-5xl">
+                <span className="font-[family-name:var(--ferri-display)] text-4xl font-light text-gold-500/50 transition-colors group-hover:text-gold-500 sm:w-20 sm:text-5xl">
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <div className="flex-1">
-                  <h3 className="font-[family-name:var(--font-cormorant)] text-2xl text-cream-100 sm:text-3xl">
+                  <h3 className="font-[family-name:var(--ferri-display)] text-2xl text-cream-100 sm:text-3xl">
                     {item.name}
                   </h3>
                   {item.description && (

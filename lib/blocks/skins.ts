@@ -17,12 +17,15 @@ export interface SkinOption {
 
 export const blockSkins: Partial<Record<BlockType, SkinOption[]>> = {
   hero: [
-    { id: "", label: "Класичний (по центру)" },
-    { id: "split", label: "Текст ліворуч, акцент праворуч" },
-    { id: "minimal", label: "Мінімальний" },
-    { id: "photo", label: "Фото на весь екран" },
-    { id: "gradient", label: "Градієнт" },
-    { id: "mesh", label: "М'які кольорові плями" },
+    // Legacy band skins removed (owner order, DNA-2c): only the wave-2
+    // archetypes remain — structurally distinct, honest no-photo states
+    // (components/blocks/Hero.tsx; sources in THIRD_PARTY_NOTICES). "" maps
+    // to the dispatcher fallback (editorial / split-light by photo presence).
+    { id: "photo-scrim", label: "Фото на весь екран, текст знизу" },
+    { id: "editorial", label: "Типографічний (без фото)" },
+    { id: "split-light", label: "Світлий спліт: текст + фото" },
+    { id: "card-overlay", label: "Картка поверх фото" },
+    { id: "visit-card", label: "Світла візитівка" },
   ],
   services: [
     { id: "", label: "Картки" },
@@ -56,10 +59,12 @@ export function skinsFor(type: BlockType): SkinOption[] {
   return blockSkins[type] ?? [];
 }
 
-/** Random skin id for generation-time variety (different sites look different). */
-export function randomSkin(type: BlockType): string | undefined {
+/** Random skin id for generation-time variety (different sites look different).
+ *  `rng` injection (design-DNA wave 1): seeded callers pass their PRNG so the
+ *  draw is reproducible per tenantId+nonce; default stays Math.random. */
+export function randomSkin(type: BlockType, rng: () => number = Math.random): string | undefined {
   const options = (blockSkins[type] ?? []).filter((o) => o.lottery !== false);
   if (options.length === 0) return undefined;
-  const pick = options[Math.floor(Math.random() * options.length)];
+  const pick = options[Math.floor(rng() * options.length)];
   return pick.id || undefined; // default stays as absent
 }

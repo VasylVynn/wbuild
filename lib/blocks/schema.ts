@@ -35,6 +35,11 @@ export const heroSchema = z.object({
     ),
   subtitle: z.string().optional(),
   imageUrl: assetUrl.optional(),
+  // Alt text of the hero image (D3). At generation it is ALWAYS assigned
+  // deterministically from facts (the model never sees images — §4.8 — so a
+  // model-written photo description would be fabrication); the owner can edit
+  // it in the form, and wave G's vision analysis will propose better ones.
+  imageAlt: z.string().optional().describe("Alt-текст hero-зображення (заповнюється кодом, не вигадуй опис фото)"),
   ctaLabel: z.string().optional(),
   ctaHref: z.string().optional(), // usually an in-page anchor like "#contacts"
   // Optional second (outline) CTA — template-mining wave 2.
@@ -117,6 +122,8 @@ export const contactsSchema = z.object({
   viber: z.string().optional(),
   // Username (with/without "@") or a phone number — normalized in contact-links.ts.
   telegram: z.string().optional(),
+  // Handle («@name», bare, or a full profile URL) — normalized in contact-links.ts.
+  instagram: z.string().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -386,7 +393,7 @@ export const factPaths: Record<BlockType, string[]> = {
   faq: [], // creative — kept grounded by prompt
   cta: [], // creative marketing copy
   lead_form: [], // labels only; submitted data goes to /api/leads, not props
-  contacts: ["phone", "address", "hours", "email", "viber", "telegram"],
+  contacts: ["phone", "address", "hours", "email", "viber", "telegram", "instagram"],
   team: [], // real people — kept honest by the prompt, not string-compared
   timeline: [], // real dates/steps — kept honest by the prompt
   marquee: [], // short real keywords — kept honest by the prompt

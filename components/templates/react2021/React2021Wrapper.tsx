@@ -30,6 +30,7 @@ export default function React2021Wrapper({
       <React2021Nav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}
+        logoUrl={brand?.logoUrl}
         navLinks={brand?.navLinks}
         ctaHref={brand?.ctaHref}
       />

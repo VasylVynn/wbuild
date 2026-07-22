@@ -39,10 +39,16 @@ export default function SalonWrapper({
   children: ReactNode;
   brand?: TemplateBrand;
 }) {
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<Theme>(
+    brand?.dnaTheme === "dark" ? "dark" : "light",
+  );
 
+  // DNA-2c: the site's seeded data-theme is the DEFAULT; an explicit ?theme=
+  // param or the visitor's own stored toggle still wins.
+  const dnaTheme: Theme | undefined =
+    brand?.dnaTheme === "dark" || brand?.dnaTheme === "light" ? brand.dnaTheme : undefined;
   useEffect(() => {
-    let next: Theme = "light";
+    let next: Theme = dnaTheme ?? "light";
     try {
       const param = new URLSearchParams(window.location.search).get("theme");
       const stored = window.localStorage.getItem(STORE_KEY);
@@ -52,7 +58,7 @@ export default function SalonWrapper({
       /* ignore */
     }
     setTheme(next);
-  }, []);
+  }, [dnaTheme]);
 
   const toggle = () =>
     setTheme((t) => {
@@ -70,6 +76,7 @@ export default function SalonWrapper({
       <SalonNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}
+        logoUrl={brand?.logoUrl}
         navLinks={brand?.navLinks}
         ctaHref={brand?.ctaHref}
       />

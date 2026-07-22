@@ -1,0 +1,281 @@
+/*
+ * Beleza template — a soft beauty-aesthetic look ported from
+ * template_sources/espaco-embelezar-main (a Portuguese beauty-space site).
+ * Everything is namespaced under `.tpl-beleza` so the ported design system
+ * never leaks into the product UI or the tenant shell.
+ *
+ * Fidelity notes:
+ *  - Palette is faithful to the source: a warm off-white canvas, a deep
+ *    rose/mauve branding accent and a pale-rose tint (`brand-1`) used for
+ *    icon chips and quiet section bands.
+ *  - The source is a fully ROUNDED-sans look (OpenRunde). OpenRunde has no
+ *    Cyrillic subset, so the wrapper substitutes Comfortaa (display, rounded)
+ *    + Nunito (body, rounded terminals) — both Cyrillic-capable — bound below
+ *    through the DE-FONTED indirections so a shell-rolled pair still wins.
+ *  - The signature section header (a dashed rose rule on the left of a muted
+ *    line with a bold lead-in) is reproduced as `.beleza-kicker`.
+ *  - Single LIGHT theme (the source is light-only) → no data-theme toggle.
+ */
+
+.tpl-beleza {
+  /* DNA-2b/2c: a shell-rolled pair (--font-heading/--font-body) wins; absent
+     pair -> the wrapper's own next/font vars; absent those -> a system stack. */
+  --beleza-display: var(--font-heading, var(--font-beleza-display), "Comfortaa", ui-rounded, "Segoe UI", system-ui, sans-serif);
+  --beleza-body: var(--font-body, var(--font-beleza-body), "Nunito", ui-sans-serif, system-ui, -apple-system, sans-serif);
+
+  /* Surfaces */
+  --beleza-bg: oklch(0.9789 0.0013 106.42);
+  --beleza-fg: #29241f;
+  --beleza-muted: #6d635b;
+  --beleza-card: #ffffff;
+
+  /* Rose / mauve branding — faithful to the source */
+  --beleza-branding: oklch(0.52 0.18 5);
+  --beleza-branding-strong: oklch(0.45 0.19 6);
+  --beleza-branding-fg: #ffffff;
+  --beleza-brand-1: oklch(0.95 0.04 5);
+  --beleza-brand-1-strong: oklch(0.92 0.055 6);
+
+  /* Lines */
+  --beleza-border: rgba(41, 36, 31, 0.1);
+  --beleza-border-subtle: rgba(41, 36, 31, 0.06);
+  --beleza-radius: 1rem;
+
+  position: relative;
+  background: var(--beleza-bg);
+  color: var(--beleza-fg);
+  font-family: var(--beleza-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.tpl-beleza :is(h1, h2, h3, h4) {
+  font-family: var(--beleza-display);
+  text-wrap: balance;
+}
+.tpl-beleza p {
+  text-wrap: pretty;
+}
+.tpl-beleza ::selection {
+  background: var(--beleza-brand-1-strong);
+  color: var(--beleza-fg);
+}
+
+/* ===== Section rhythm ===== */
+.tpl-beleza .beleza-section {
+  position: relative;
+  isolation: isolate;
+  padding-block: 4rem;
+}
+@media (min-width: 768px) {
+  .tpl-beleza .beleza-section {
+    padding-block: 6rem;
+  }
+}
+.tpl-beleza .beleza-tint {
+  background: var(--beleza-brand-1);
+}
+.tpl-beleza .beleza-container {
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+@media (min-width: 640px) {
+  .tpl-beleza .beleza-container {
+    padding-inline: 1.5rem;
+  }
+}
+
+/* ===== Signature section header — dashed rose rule + muted line ===== */
+.tpl-beleza .beleza-kicker {
+  position: relative;
+  max-width: 46rem;
+  padding-left: 1.5rem;
+  font-family: var(--beleza-display);
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--beleza-muted);
+}
+@media (min-width: 768px) {
+  .tpl-beleza .beleza-kicker {
+    font-size: 1.6rem;
+  }
+}
+.tpl-beleza .beleza-kicker::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 2px;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 4px,
+    var(--beleza-branding) 4px 6px
+  );
+}
+.tpl-beleza .beleza-kicker strong {
+  font-weight: 600;
+  color: var(--beleza-fg);
+}
+
+/* ===== Colour helpers ===== */
+.tpl-beleza .beleza-ink {
+  color: var(--beleza-fg);
+}
+.tpl-beleza .beleza-muted {
+  color: var(--beleza-muted);
+}
+.tpl-beleza .beleza-accent {
+  color: var(--beleza-branding);
+}
+
+/* ===== Cards ===== */
+.tpl-beleza .beleza-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--beleza-card);
+  border: 1px solid var(--beleza-border);
+  border-radius: var(--beleza-radius);
+  padding: 1.25rem;
+  box-shadow: 0 1px 2px rgba(41, 36, 31, 0.04);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.tpl-beleza .beleza-card--hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 40px -24px rgba(41, 36, 31, 0.4);
+}
+
+/* ===== Icon chip ===== */
+.tpl-beleza .beleza-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  background: var(--beleza-brand-1);
+  color: var(--beleza-branding);
+}
+
+/* ===== Badge / pill ===== */
+.tpl-beleza .beleza-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--beleza-border);
+  background: var(--beleza-card);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--beleza-fg);
+}
+.tpl-beleza .beleza-badge--solid {
+  border-color: transparent;
+  background: var(--beleza-branding);
+  color: var(--beleza-branding-fg);
+}
+
+/* ===== Buttons ===== */
+.tpl-beleza .beleza-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.75rem 1.5rem;
+  font-family: var(--beleza-body);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: var(--beleza-branding);
+  color: var(--beleza-branding-fg);
+  transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.tpl-beleza .beleza-btn:hover {
+  background: var(--beleza-branding-strong);
+  transform: translateY(-1px);
+}
+.tpl-beleza .beleza-btn--ghost {
+  background: transparent;
+  color: var(--beleza-fg);
+  border-color: var(--beleza-border);
+}
+.tpl-beleza .beleza-btn--ghost:hover {
+  background: transparent;
+  border-color: var(--beleza-branding);
+  color: var(--beleza-branding);
+  transform: translateY(-1px);
+}
+.tpl-beleza .beleza-btn--block {
+  width: 100%;
+}
+
+/* ===== Inputs ===== */
+.tpl-beleza .beleza-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--beleza-border);
+  background: var(--beleza-card);
+  padding: 0.7rem 0.9rem;
+  font-size: 0.9rem;
+  color: var(--beleza-fg);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.tpl-beleza .beleza-input::placeholder {
+  color: color-mix(in srgb, var(--beleza-muted) 70%, transparent);
+}
+.tpl-beleza .beleza-input:focus {
+  outline: none;
+  border-color: var(--beleza-branding);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--beleza-branding) 22%, transparent);
+}
+
+/* ===== Media fallback panel (§4.8: never a broken <img>) ===== */
+.tpl-beleza .beleza-media-fallback {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(160deg, #ffffff 10%, var(--beleza-brand-1) 100%);
+}
+.tpl-beleza .beleza-media-fallback::before,
+.tpl-beleza .beleza-media-fallback::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(40px);
+}
+.tpl-beleza .beleza-media-fallback::before {
+  top: -3rem;
+  left: -3rem;
+  width: 13rem;
+  height: 13rem;
+  background: color-mix(in srgb, var(--beleza-branding) 22%, transparent);
+}
+.tpl-beleza .beleza-media-fallback::after {
+  bottom: -3rem;
+  right: -2.5rem;
+  width: 15rem;
+  height: 15rem;
+  background: color-mix(in srgb, var(--beleza-branding) 12%, transparent);
+}
+
+/* ===== Focus / motion ===== */
+.tpl-beleza :focus-visible {
+  outline: 2px solid var(--beleza-branding);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tpl-beleza *,
+  .tpl-beleza *::before,
+  .tpl-beleza *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

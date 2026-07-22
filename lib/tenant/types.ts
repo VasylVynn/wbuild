@@ -27,6 +27,12 @@ export interface Tenant {
     businessName: string;
     tagline?: string;
     logoUrl?: string;
+    /** Palette-adapted variant of logoUrl (H1) — generated, lives in our bucket.
+     *  The ORIGINAL upload is never touched; this sits alongside it. */
+    logoAdaptedUrl?: string;
+    /** Owner's pick in the editor «Лого» sheet. Absent = show the adapted
+     *  variant when one exists (fail-open to the original otherwise). */
+    logoDisplay?: "original" | "adapted";
     /** Owner-uploaded photos (§4.8) — the trusted source for hero/gallery imagery. */
     photos?: string[];
     /** Atmospheric hero background generated when the owner has NO photos (§4.8).
@@ -50,6 +56,25 @@ export interface Tenant {
   facts: Record<string, unknown>;
 }
 
+/**
+ * The logo the SITE shows (H1): the adapted variant by default when present,
+ * unless the owner explicitly toggled «Оригінал». Always falls back to the
+ * original upload — adaptation failing can never lose the logo.
+ */
+export function displayLogoUrl(brand: Tenant["brand"]): string | undefined {
+  if (brand.logoDisplay === "original") return brand.logoUrl;
+  return brand.logoAdaptedUrl ?? brand.logoUrl;
+}
+
+/** Page-level SEO meta (wave D1): written by generation, editable by the
+ *  editor agent. Versioned WITH the content — lives in draft_content.seo and
+ *  is promoted to published_content.seo on publish, so AI edits stay in the
+ *  draft until the owner publishes (§5.5 / invariant 6). */
+export interface PageSeo {
+  title?: string;
+  description?: string;
+}
+
 export interface Page {
   id: string;
   tenantId: string;
@@ -62,6 +87,8 @@ export interface Page {
   navOrder: number;
   /** Public render reads the PUBLISHED blocks only (§5.5). */
   blocks: StoredBlock[];
+  /** Published SEO meta (public render); undefined for pre-wave-D sites. */
+  seo?: PageSeo;
 }
 
 /** A nav item projected from data (§5.3) — never edited by hand. */

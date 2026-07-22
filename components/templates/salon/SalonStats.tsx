@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
 import { ScrollReveal } from "./ScrollReveal";
+import { useRevealGate } from "../shared/reveal";
 
 /*
  * Stats — port of the source `about.tsx` "Enhanced Stats Section": a
@@ -11,6 +12,9 @@ import { ScrollReveal } from "./ScrollReveal";
  */
 export default function SalonStats({ data }: { data: unknown }) {
   const d = data as BlockProps["stats"];
+  // H5 gate: the per-stat fade-up arms only below the fold after hydration —
+  // SSR markup stays fully visible (hover scale is kept in both states).
+  const [gridRef, armed] = useRevealGate<HTMLDivElement>();
 
   return (
     <section className="py-16 sm:py-20 lg:py-24">
@@ -21,14 +25,18 @@ export default function SalonStats({ data }: { data: unknown }) {
 
         <ScrollReveal>
           <div className="glass-card p-10 sm:p-12 md:p-16">
-            <div className="grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-12">
+            <div ref={gridRef} className="grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-12">
               {d.items.map((stat, i) => (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
+                  {...(armed
+                    ? {
+                        initial: { opacity: 0, y: 20 },
+                        whileInView: { opacity: 1, y: 0 },
+                        viewport: { once: true },
+                        transition: { delay: i * 0.1 },
+                      }
+                    : {})}
                   whileHover={{ scale: 1.05 }}
                   className="group cursor-default text-center"
                 >

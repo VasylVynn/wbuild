@@ -38,6 +38,7 @@ export default function RestaurantWrapper({
       <RestaurantNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}
+        logoUrl={brand?.logoUrl}
         navLinks={brand?.navLinks}
         ctaHref={brand?.ctaHref}
       />

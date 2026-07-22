@@ -24,6 +24,7 @@ import BlockSheet from "./BlockSheet";
 import BlockEditPanel from "./BlockEditPanel";
 import EditorChat from "./EditorChat";
 import PhotoField from "./PhotoField";
+import LogoDisplayPanel from "./LogoDisplayPanel";
 import ThemePicker from "./ThemePicker";
 
 /** Device modes: «Компʼютер» edits inline; tablet/mobile render the draft in an
@@ -679,9 +680,11 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
         <PhotoField
           value={logoUrl}
           host={host}
+          kind="logo"
           onChange={(url) => void saveLogo(url)}
           onClear={() => void saveLogo(null)}
         />
+        <LogoDisplayPanel host={host} logoUrl={logoUrl} />
         {logoUrl && (
           <Button
             variant="danger"

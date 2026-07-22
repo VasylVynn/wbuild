@@ -11,6 +11,9 @@ import { aisaasMeta, aisaasSections } from "@/components/templates/aisaas";
 import { nextlyMeta, nextlySections } from "@/components/templates/nextly";
 import { react2021Meta, react2021Sections } from "@/components/templates/react2021";
 import { restaurantMeta, restaurantSections } from "@/components/templates/restaurant";
+import { sparkMeta, sparkSections } from "@/components/templates/spark";
+import { belezaMeta, belezaSections } from "@/components/templates/beleza";
+import { launchMeta, launchSections } from "@/components/templates/launch";
 
 /**
  * Site templates — the owner mandate (2026-07): a generated site must BE a
@@ -34,8 +37,13 @@ export type { TemplateSectionDef };
 export interface TemplateBrand {
   brandName?: string;
   brandAccent?: string;
+  /** Owner's logo (storage URL; already the adapted variant when one is chosen).
+   *  Absent → the Nav keeps its text-only brand. */
+  logoUrl?: string;
   navLinks?: { href: string; label: string }[];
   ctaHref?: string;
+  /** DNA-2c: the data-theme this site starts on (wrapper initial; visitor toggle still wins). */
+  dnaTheme?: string;
   /** Real contact facts for the footer's «Контакти» column. */
   contact?: {
     phone?: string;
@@ -44,6 +52,8 @@ export interface TemplateBrand {
     email?: string;
     telegram?: string;
     viber?: string;
+    /** Freeform handle/URL — footers link via instagramHref (contact-links). */
+    instagram?: string;
   };
 }
 
@@ -68,6 +78,12 @@ export interface SiteTemplate {
    */
   themes: string[];
   defaultTheme: string;
+  /**
+   * DNA-2b: font pairs (lib/theme/font-pairs.ts ids) that PRESERVE this
+   * template's identity. The DNA rolls the pair for template sites from this
+   * list; absent/empty → the template's own hardcoded fonts (no override).
+   */
+  dnaFontPairs?: string[];
 }
 
 export const siteTemplates: Record<string, SiteTemplate> = {
@@ -81,6 +97,7 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: studioMeta.wrapper,
     themes: ["dark"],
     defaultTheme: "dark",
+    dnaFontPairs: ["unbounded-inter", "manrope-inter", "montserrat-rubik"],
   },
   ferri: {
     id: ferriMeta.id,
@@ -92,6 +109,9 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: ferriMeta.wrapper,
     themes: ["dark", "light"],
     defaultTheme: "dark",
+    // Restored in DNA-2c: ferri now reads fonts through --ferri-display/--ferri-body
+    // indirections (C3), so pairs render for real.
+    dnaFontPairs: ["literata-inter", "playfair-jost", "lora-source"],
   },
   salon: {
     id: salonMeta.id,
@@ -103,6 +123,7 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: salonMeta.wrapper,
     themes: ["light", "dark"],
     defaultTheme: "light",
+    dnaFontPairs: ["cormorant-manrope", "playfair-jost", "lora-source"],
   },
   portfolio: {
     id: portfolioMeta.id,
@@ -148,6 +169,42 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     themes: ["light"],
     defaultTheme: "light",
   },
+  spark: {
+    id: sparkMeta.id,
+    label: sparkMeta.label,
+    description: sparkMeta.description,
+    verticalIds: sparkMeta.verticalIds,
+    order: sparkMeta.order,
+    sections: sparkSections,
+    wrapper: sparkMeta.wrapper,
+    themes: ["light", "dark"],
+    defaultTheme: "light",
+    dnaFontPairs: ["manrope-inter", "montserrat-rubik", "onest"],
+  },
+  beleza: {
+    id: belezaMeta.id,
+    label: belezaMeta.label,
+    description: belezaMeta.description,
+    verticalIds: belezaMeta.verticalIds,
+    order: belezaMeta.order,
+    sections: belezaSections,
+    wrapper: belezaMeta.wrapper,
+    themes: ["light"],
+    defaultTheme: "light",
+    dnaFontPairs: ["cormorant-manrope", "playfair-jost", "nunito-duo"],
+  },
+  launch: {
+    id: launchMeta.id,
+    label: launchMeta.label,
+    description: launchMeta.description,
+    verticalIds: launchMeta.verticalIds,
+    order: launchMeta.order,
+    sections: launchSections,
+    wrapper: launchMeta.wrapper,
+    themes: ["dark", "light"],
+    defaultTheme: "dark",
+    dnaFontPairs: ["unbounded-inter", "montserrat-rubik", "manrope-inter"],
+  },
   restaurant: {
     id: restaurantMeta.id,
     label: restaurantMeta.label,
@@ -158,6 +215,7 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     wrapper: restaurantMeta.wrapper,
     themes: ["light"],
     defaultTheme: "light",
+    dnaFontPairs: ["lora-source", "literata-inter", "playfair-jost"],
   },
 };
 
@@ -170,6 +228,12 @@ export const TEMPLATE_IDS: [string, ...string[]] = Object.keys(siteTemplates) as
 export function getTemplate(id: string | undefined): SiteTemplate | undefined {
   if (!id) return undefined;
   return siteTemplates[id];
+}
+
+/** Human-facing template name for UI chips/summaries — the label without its «» quoting. */
+export function templateDisplayName(id: string | undefined): string | undefined {
+  const t = getTemplate(id);
+  return t ? t.label.replace(/[«»]/g, "") : undefined;
 }
 
 /**

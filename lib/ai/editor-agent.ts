@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { StoredBlock } from "@/lib/blocks/schema";
+import type { PageSeo } from "@/lib/tenant/types";
 import { blockLibrary } from "@/lib/blocks/library";
 import { skinsFor } from "@/lib/blocks/skins";
 import { themePresets } from "@/lib/theme/presets";
@@ -52,6 +53,17 @@ export const toolInputSchemas = {
   }),
   switch_theme: z.object({ presetId: z.string().describe("Ідентифікатор пресета оформлення.") }),
   switch_pack: z.object({ packId: z.string().describe("Ідентифікатор дизайн-пакета.") }),
+  // D5: page SEO meta. Draft-only like every other tool — goes live on publish.
+  set_seo: z.object({
+    title: z
+      .string()
+      .optional()
+      .describe("SEO-title сторінки, до 60 символів: «{головна послуга} у {місто} — {назва}»."),
+    description: z
+      .string()
+      .optional()
+      .describe("SEO-опис для Google, до 150 символів: продаюча суть із містом і нішею, без лапок."),
+  }),
 } as const;
 
 export type ToolName = keyof typeof toolInputSchemas;
@@ -67,6 +79,8 @@ const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
     "Переписати вміст блоку за інструкцією силами окремого редактора (для великих текстових переробок).",
   switch_theme: "Змінити кольорове оформлення сайту (пресет).",
   switch_pack: "Змінити цілісний дизайн-пакет (тема + розкладки всіх блоків).",
+  set_seo:
+    "Оновити SEO-заголовок і/або SEO-опис сторінки (те, що бачить Google). Потрапляє на живий сайт після «Опублікувати».",
 };
 
 export function buildTools(): Anthropic.Tool[] {
@@ -116,6 +130,7 @@ export function buildEditorSystem(ctx: {
   isTemplateSite: boolean;
   onboardingTranscript: EditorChatMsg[] | null;
   stats: { views7: number; leads7: number } | null;
+  seo?: PageSeo;
 }): string {
   const vertical = getVertical(ctx.verticalId);
   const themes = ctx.themeOptions.map((t) => `${t.id} («${t.label}»)`).join(", ");
@@ -131,7 +146,7 @@ export function buildEditorSystem(ctx: {
   return `Ти — особистий помічник власника сайту «${ctx.businessName}» (${vertical.label}) у редакторі 3minsite. В одній особі ти:
 - ІНЖЕНЕР структури: додаєш/прибираєш/переставляєш секції, міняєш розкладки.
 - КОПІРАЙТЕР і МАРКЕТОЛОГ: пишеш тексти, що продають — конкретні, теплі, без води й кліше.
-- SEO-ПОРАДНИК: радиш, як сформулювати заголовки й тексти, щоб сайт знаходили в Google (локальні запити «послуга + місто»), і чесно кажеш, що SEO — це місяці, не дні.
+- SEO-ПОРАДНИК: радиш, як сформулювати заголовки й тексти, щоб сайт знаходили в Google (локальні запити «послуга + місто»), і чесно кажеш, що SEO — це місяці, не дні. Можеш сам оновити SEO-заголовок і SEO-опис сторінки інструментом set_seo (title до 60 символів за формулою «{послуга} у {місто} — {назва}», description до 150 — продаюча суть із містом).
 - БІЗНЕС-АНАЛІТИК: підказуєш, чого бракує сайту для заявок (ціни, довіра, заклик до дії).
 
 ЯК ПРАЦЮВАТИ:
@@ -148,6 +163,10 @@ ${JSON.stringify(ctx.facts)}
 
 ПОТОЧНІ БЛОКИ СТОРІНКИ (нумерація для інструментів):
 ${describeBlocks(ctx.blocks)}
+
+SEO СТОРІНКИ (чернетка; live після публікації):
+- title: ${ctx.seo?.title ?? "— (не задано)"}
+- description: ${ctx.seo?.description ?? "— (не задано)"}
 
 ОФОРМЛЕННЯ: доступні пресети цієї вертикалі: ${themes}. Усі пресети платформи: ${presetIds}.${
     ctx.isTemplateSite

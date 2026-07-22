@@ -1,7 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { Reveal } from "../shared/reveal";
 
 /*
  * Gallery — studio dark-premium image grid: optional eyebrow + section-title
@@ -18,28 +18,21 @@ export default function StudioGallery({ data }: { data: unknown }) {
     <section className="py-12 md:py-16" aria-labelledby={d.title ? "gallery-title" : undefined}>
       <div className="container mx-auto px-4 sm:px-6">
         {d.title && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
+          <Reveal margin="-80px" className="text-center mb-16">
             <span className="inline-block text-xs font-medium tracking-widest uppercase text-[var(--color-accent)] mb-4">
               Галерея
             </span>
             <h2 id="gallery-title" className="section-title">{d.title}</h2>
-          </motion.div>
+          </Reveal>
         )}
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 max-w-6xl mx-auto">
           {d.images.map((img, i) => (
-            <motion.div
+            <Reveal
               key={i}
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ delay: i * 0.06, duration: 0.5 }}
+              delay={i * 0.06}
+              duration={0.5}
+              margin="-80px"
               className="group relative overflow-hidden rounded-lg border border-white/10 aspect-[4/3]"
             >
               <img
@@ -60,7 +53,7 @@ export default function StudioGallery({ data }: { data: unknown }) {
                   )}
                 </div>
               )}
-            </motion.div>
+            </Reveal>
           ))}
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { telegramHref, viberHref } from "@/lib/blocks/contact-links";
+import { instagramHref, telegramHref, viberHref } from "@/lib/blocks/contact-links";
 
 type NavLink = { href: string; label: string };
 type FooterContact = {
@@ -8,6 +8,7 @@ type FooterContact = {
   email?: string;
   telegram?: string;
   viber?: string;
+  instagram?: string;
 };
 
 const defaultNavLinks: NavLink[] = [
@@ -53,12 +54,6 @@ const InstagramIcon = () => (
     <circle cx="12" cy="12" r="4" />
   </svg>
 );
-const FacebookIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true">
-    <path d="M22 12.06C22 6.505 17.523 2 12 2S2 6.505 2 12.06c0 5.02 3.657 9.184 8.438 9.94v-7.03H7.898v-2.91h2.54V9.845c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562v1.877h2.773l-.443 2.91h-2.33V22c4.78-.756 8.437-4.92 8.437-9.94z" />
-  </svg>
-);
-
 /*
  * Footer — port of the source salon Footer: brand blurb + social icons, a
  * real site-navigation column, and a contact column with icon chips, over a
@@ -70,6 +65,11 @@ const FacebookIcon = () => (
  * generated site) and its bare phone/address/email props. next/link swapped
  * for plain <a>. Copyright year is a hardcoded 2026 constant, matching the
  * studio footer's server-render-friendly approach.
+ *
+ * Bottom-bar social icon: Instagram only, and only when `contact.instagram`
+ * resolves to a real profile (instagramHref) — no hardcoded "#" placeholder
+ * links. The source's Facebook icon had no real-data equivalent and was
+ * dropped rather than left dead.
  */
 export default function SalonFooter({
   brandName = "LUXE",
@@ -87,6 +87,7 @@ export default function SalonFooter({
   const year = 2026;
   const telegram = telegramHref(contact.telegram);
   const viber = viberHref(contact.viber);
+  const instagram = instagramHref(contact.instagram);
 
   return (
     <footer className="relative border-t border-border pt-20 pb-10 overflow-hidden" role="contentinfo">
@@ -176,26 +177,19 @@ export default function SalonFooter({
           <p className="text-muted-foreground text-sm font-light tracking-wide">
             © {year} {brandName} {brandAccent}. Усі права захищені.
           </p>
-          <div className="flex items-center gap-3">
-            <a
-              href="#"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-accent hover:border-accent transition-colors"
-              aria-label="Instagram"
-            >
-              <InstagramIcon />
-            </a>
-            <a
-              href="#"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-accent hover:border-accent transition-colors"
-              aria-label="Facebook"
-            >
-              <FacebookIcon />
-            </a>
-          </div>
+          {instagram && (
+            <div className="flex items-center gap-3">
+              <a
+                href={instagram}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-accent hover:border-accent transition-colors"
+                aria-label="Instagram"
+              >
+                <InstagramIcon />
+              </a>
+            </div>
+          )}
         </div>
       </div>
     </footer>

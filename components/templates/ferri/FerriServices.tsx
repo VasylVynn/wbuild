@@ -34,7 +34,7 @@ export default function FerriServices({ data }: { data: unknown }) {
                     className="mb-4 h-7 w-7 text-gold-500/70 transition-colors group-hover:text-gold-500"
                   />
                 )}
-                <h3 className="font-[family-name:var(--font-cormorant)] text-xl text-cream-100">
+                <h3 className="font-[family-name:var(--ferri-display)] text-xl text-cream-100">
                   {item.name}
                 </h3>
                 {item.description && (

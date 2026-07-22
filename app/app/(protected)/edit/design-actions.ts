@@ -3,9 +3,15 @@
 import { getServiceClient } from "@/lib/supabase/server";
 import { requireMember } from "@/lib/tenant/membership";
 import { resolveTheme } from "@/lib/theme/presets";
+import { designDnaSchema, carryDnaFields, dnaSeed, mulberry32, pick } from "@/lib/theme/dna";
+import { getTemplate } from "@/lib/templates/registry";
+import { rollBundleDna } from "@/lib/theme/dna-roll";
+import { logoPaletteFamily } from "@/lib/theme/logo-palette";
+import { shuffleMiddles, juggleTemplateVariants } from "@/lib/site/publish";
 import { getPack } from "@/lib/design/packs";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import type { Theme } from "@/lib/theme/tokens";
+import type { PageSeo } from "@/lib/tenant/types";
 
 /**
  * Design-pack switcher (§4.5 + §4.7): one draft write flips the WHOLE look —
@@ -15,6 +21,142 @@ import type { Theme } from "@/lib/theme/tokens";
  * a secondary recolor. Draft-only: NO cache purge here — «Опублікувати» does
  * that (see saveDraftBlocks §5.5).
  */
+/**
+ * Design re-roll (bundle-aware since DNA-2): bump designNonce → draw a new
+ * bundle DNA (different bundle ⇒ different hero archetype, skin-set, font
+ * pair, palette family vs the PREVIOUS roll — consecutive guarantee by spec)
+ * and rewrite the DRAFT theme + re-skin/re-rhythm the DRAFT blocks. Props/
+ * copy untouched; draft-only — no cache purge (invariant №6).
+ */
+export async function rerollDesignAction(
+  host: string,
+): Promise<{ ok: boolean; theme?: Theme; error?: string }> {
+  try {
+    const gate = await requireMember({ host }); // §3.1
+    if (!gate.ok) return { ok: false, error: gate.error };
+
+    const sb = getServiceClient();
+    const { data: t } = await sb
+      .from("tenants")
+      .select("id, draft_theme, brand, vertical")
+      .eq("host", host)
+      .maybeSingle();
+    if (!t) return { ok: false, error: "tenant not found" };
+
+    const prevTheme = (t.draft_theme ?? {}) as Theme & { dna?: unknown };
+    const prevParsed = designDnaSchema.safeParse(prevTheme.dna);
+    const previous = prevParsed.success ? prevParsed.data : null;
+    const brand = (t.brand ?? {}) as { photos?: string[]; templateId?: string };
+
+    // Template sites (DNA-2b): pair-only re-roll from the template's identity
+    // allowlist — theme colors/blocks untouched (the template owns them).
+    if (brand.templateId) {
+      const tpl = getTemplate(brand.templateId);
+      const tplPairs = tpl?.dnaFontPairs ?? [];
+      if (!tpl || !tplPairs.length) return { ok: false, error: "цей шаблон ще без dna-пар" };
+      const nonce = previous ? previous.designNonce + 1 : 1;
+      const rng = mulberry32(dnaSeed(host, nonce));
+      const prevPairId = previous?.fontPairId ?? prevTheme.fontPairId;
+      const pool = prevPairId ? tplPairs.filter((id) => id !== prevPairId) : tplPairs;
+      const fontPairId = pick(rng, pool.length ? pool : tplPairs) ?? tplPairs[0];
+      // DNA-2c: data-theme joins the roll (≠ previous when possible)…
+      const tplThemes = tpl.themes;
+      const prevTplTheme = previous?.templateTheme ?? tpl.defaultTheme;
+      const themePool = prevTplTheme ? tplThemes.filter((th) => th !== prevTplTheme) : tplThemes;
+      const templateTheme =
+        tplThemes.length > 1 ? (pick(rng, themePool.length ? themePool : tplThemes) ?? tplThemes[0]) : undefined;
+      const theme = {
+        ...prevTheme,
+        fontPairId,
+        dna: {
+          // "" = unknown provenance — never a fabricated palette id (review).
+          presetId: previous?.presetId ?? "",
+          fontPairId,
+          motionId: previous?.motionId ?? "none",
+          designNonce: nonce,
+          ...(templateTheme && { templateTheme }),
+        },
+      };
+      // …and so does the composition axis: seeded section variants (repeats
+      // never share one) + the same middle permutation classic sites get.
+      const { data: pg } = await sb
+        .from("pages")
+        .select("id, draft_content")
+        .eq("tenant_id", t.id)
+        .eq("slug", "")
+        .maybeSingle();
+      if (!pg) return { ok: false, error: "page not found" };
+      const draft = (pg.draft_content ?? {}) as {
+        blocks?: StoredBlock[];
+        pocket?: StoredBlock[];
+        seo?: PageSeo;
+      };
+      let blocks = juggleTemplateVariants(draft.blocks ?? [], tpl, rng);
+      blocks = shuffleMiddles(blocks, rng);
+      // Theme (with the advanced nonce) writes FIRST (review): if the page
+      // write then fails, a retry re-rolls with a NEW nonce instead of
+      // re-shuffling an already-mutated draft under the old one.
+      const { error } = await sb.from("tenants").update({ draft_theme: theme }).eq("id", t.id);
+      if (error) return { ok: false, error: error.message };
+      const { error: pe } = await sb
+        .from("pages")
+        .update({ draft_content: { ...draft, blocks } })
+        .eq("id", pg.id);
+      if (pe) return { ok: false, error: pe.message };
+      return { ok: true, theme: theme as Theme };
+    }
+
+    const { dna } = rollBundleDna({
+      tenantId: host,
+      nonce: previous ? previous.designNonce + 1 : 1,
+      verticalId: (t.vertical as string) ?? undefined,
+      photosCount: brand.photos?.length ?? 0,
+      previous,
+      logoFamily: await logoPaletteFamily((brand as { logoUrl?: string }).logoUrl),
+    });
+    const theme: Theme = {
+      ...resolveTheme(dna.presetId),
+      fontPairId: dna.fontPairId,
+      dna,
+    };
+
+    // Re-skin + re-rhythm the DRAFT page from the new bundle (draft-only).
+    // A missing home page is an ERROR, not a silent theme-only success — DNA
+    // claiming one bundle while blocks keep old skins is a lie (codex review).
+    const { data: p } = await sb
+      .from("pages")
+      .select("id, draft_content")
+      .eq("tenant_id", t.id)
+      .eq("slug", "")
+      .maybeSingle();
+    if (!p) return { ok: false, error: "page not found" };
+    {
+      const draft = (p.draft_content ?? {}) as {
+        blocks?: StoredBlock[];
+        pocket?: StoredBlock[];
+        seo?: PageSeo;
+      };
+      const rng = mulberry32(dnaSeed(host, dna.designNonce));
+      let blocks = (draft.blocks ?? []).map((b) => {
+        const o = dna.skinOverrides?.[b.type];
+        return o === undefined ? b : { ...b, skin: o || undefined };
+      });
+      blocks = shuffleMiddles(blocks, rng);
+      const { error: pe } = await sb
+        .from("pages")
+        .update({ draft_content: { ...draft, blocks } })
+        .eq("id", p.id);
+      if (pe) return { ok: false, error: pe.message };
+    }
+
+    const { error } = await sb.from("tenants").update({ draft_theme: theme }).eq("id", t.id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, theme };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "reroll failed" };
+  }
+}
+
 export async function switchDesignPack(
   host: string,
   packId: string,
@@ -29,7 +171,7 @@ export async function switchDesignPack(
     const sb = getServiceClient();
     const { data: t } = await sb
       .from("tenants")
-      .select("id, brand")
+      .select("id, brand, draft_theme")
       .eq("host", host)
       .maybeSingle();
     if (!t) return { ok: false, error: "tenant not found" };
@@ -42,7 +184,11 @@ export async function switchDesignPack(
       .maybeSingle();
     if (!p) return { ok: false, error: "page not found" };
 
-    const draft = (p.draft_content ?? {}) as { blocks?: StoredBlock[]; pocket?: StoredBlock[] };
+    const draft = (p.draft_content ?? {}) as {
+      blocks?: StoredBlock[];
+      pocket?: StoredBlock[];
+      seo?: PageSeo;
+    };
     const oldBlocks = draft.blocks ?? [];
     const pocket = draft.pocket ?? [];
 
@@ -59,11 +205,19 @@ export async function switchDesignPack(
 
     const { error: pe } = await sb
       .from("pages")
-      .update({ draft_content: { blocks, pocket } })
+      .update({ draft_content: { blocks, pocket, ...(draft.seo && { seo: draft.seo }) } })
       .eq("id", p.id);
     if (pe) return { ok: false, error: pe.message };
 
-    const theme = resolveTheme(pack.themePresetId);
+    // Genome survives a pack switch (codex review): preset updates, the rest
+    // of the DNA (pair/motion/nonce) carries over.
+    const theme: Theme = {
+      ...resolveTheme(pack.themePresetId),
+      ...carryDnaFields(
+        t.draft_theme as { fontPairId?: string; dna?: unknown } | null,
+        pack.themePresetId,
+      ),
+    };
     // Read-modify-write brand so logo/photos/name survive; stamp the pack id so
     // the editor can highlight the active pack on reload.
     const brand = { ...((t.brand ?? {}) as Record<string, unknown>), packId };

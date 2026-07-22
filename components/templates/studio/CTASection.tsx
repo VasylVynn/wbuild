@@ -1,7 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { Reveal } from "../shared/reveal";
 
 /*
  * CTA — verbatim port of the source CTASection: a centred call-to-action band
@@ -25,13 +25,7 @@ export default function CTASection({ data }: { data: unknown }) {
       />
 
       <div className="container mx-auto px-4 sm:px-6 relative">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px" }}
-          transition={{ duration: 0.6 }}
-          className="text-center max-w-lg mx-auto"
-        >
+        <Reveal margin="-80px" className="text-center max-w-lg mx-auto">
           <h2 id="cta-title" className="section-title mb-4">{d.title}</h2>
           {d.subtitle && <p className="text-zinc-400 mb-8">{d.subtitle}</p>}
 
@@ -46,7 +40,7 @@ export default function CTASection({ data }: { data: unknown }) {
           </div>
 
           {/* FIDELITY-TODO: needs schema field cta.note — omitted (source's note line was product-specific copy) */}
-        </motion.div>
+        </Reveal>
       </div>
     </section>
   );

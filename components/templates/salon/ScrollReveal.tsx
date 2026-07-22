@@ -1,12 +1,14 @@
 "use client";
 
-import { motion, useInView, type Variants } from "framer-motion";
-import { useRef, type ReactNode } from "react";
+import { motion, type Variants } from "framer-motion";
+import { useEffect, useState, type ReactNode } from "react";
+import { useRevealGate } from "../shared/reveal";
 
 /*
- * ScrollReveal — verbatim port of the source salon scroll-reveal: a framer-motion
- * useInView fade + directional slide + blur-in (once). Used across salon sections
- * for the on-scroll motion.
+ * ScrollReveal — salon's fade + directional slide + blur-in (once). Motion
+ * values are the verbatim salon port; the reveal is gated behind useRevealGate
+ * (H5): SSR markup is fully visible, only below-the-fold elements arm the
+ * animation after hydration.
  */
 export function ScrollReveal({
   children,
@@ -21,8 +23,27 @@ export function ScrollReveal({
   duration?: number;
   className?: string;
 }) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-50px" });
+  const [ref, armed] = useRevealGate<HTMLDivElement>();
+  // NOT framer's useInView: its observer binds once to the pre-arm plain div,
+  // which the armed render replaces — it would watch a detached node and never
+  // fire. This effect re-binds on `armed`, so it observes the LIVE node.
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: "-50px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [armed, ref]);
 
   const variants: Variants = {
     hidden: {
@@ -40,11 +61,18 @@ export function ScrollReveal({
     },
   };
 
+  if (!armed) {
+    return (
+      <div ref={ref} className={className}>
+        {children}
+      </div>
+    );
+  }
   return (
     <motion.div
       ref={ref}
       initial="hidden"
-      animate={isInView ? "visible" : "hidden"}
+      animate={inView ? "visible" : "hidden"}
       variants={variants}
       className={className}
     >

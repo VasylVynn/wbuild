@@ -1,7 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { Reveal } from "../shared/reveal";
 
 /*
  * How it works — verbatim port of the source HowItWorksSection: centred header
@@ -18,26 +18,19 @@ export default function HowItWorksSection({ data }: { data: unknown }) {
     <section className="py-12 md:py-16 relative" aria-labelledby="how-it-works-title">
       <div className="container mx-auto px-4 sm:px-6">
         {d.title && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
+          <Reveal margin="-80px" className="text-center mb-16">
             <h2 id="how-it-works-title" className="section-title">{d.title}</h2>
             {/* FIDELITY-TODO: needs schema field services.subtitle — source renders a section-subtitle <p> here */}
-          </motion.div>
+          </Reveal>
         )}
 
         <div className="grid md:grid-cols-3 gap-6 md:gap-8 max-w-4xl mx-auto">
           {d.items.map((item, i) => (
-            <motion.div
+            <Reveal
               key={i}
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ delay: 0.1 + i * 0.15, duration: 0.5 }}
+              delay={0.1 + i * 0.15}
+              duration={0.5}
+              margin="-80px"
               className="text-center"
             >
               <span className="inline-block text-xs font-medium text-zinc-600 uppercase tracking-widest mb-4">
@@ -47,7 +40,7 @@ export default function HowItWorksSection({ data }: { data: unknown }) {
               {item.description && (
                 <p className="text-zinc-500 text-sm leading-relaxed max-w-xs mx-auto">{item.description}</p>
               )}
-            </motion.div>
+            </Reveal>
           ))}
         </div>
       </div>

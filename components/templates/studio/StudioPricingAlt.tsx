@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { Reveal, useRevealGate } from "../shared/reveal";
 
 /*
  * Pricing (alt layout) — single bordered feature-table instead of the
@@ -13,23 +14,21 @@ import type { BlockProps } from "@/lib/blocks/schema";
  */
 export default function StudioPricingAlt({ data }: { data: unknown }) {
   const d = data as BlockProps["services"];
+  // Rows are semantic <article>s, so the shared <Reveal> div can't wrap them —
+  // gate the reveal in place instead (H5): plain <article> until armed.
+  const [listRef, armed] = useRevealGate<HTMLDivElement>();
 
   return (
     <section className="py-12 md:py-16" aria-labelledby="pricing-alt-title">
       <div className="container mx-auto px-4 sm:px-6">
         {d.title && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-80px" }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
+          <Reveal margin="-80px" className="text-center mb-16">
             <h2 id="pricing-alt-title" className="section-title">{d.title}</h2>
-          </motion.div>
+          </Reveal>
         )}
 
         <div
+          ref={listRef}
           className="max-w-3xl mx-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)] overflow-hidden"
           role="list"
           aria-label="Тарифи"
@@ -41,19 +40,12 @@ export default function StudioPricingAlt({ data }: { data: unknown }) {
               .map((line) => line.trim())
               .filter(Boolean);
 
-            return (
-              <motion.article
-                key={i}
-                role="listitem"
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-80px" }}
-                transition={{ delay: i * 0.1, duration: 0.6 }}
-                className={`relative grid sm:grid-cols-[1fr_auto] gap-6 p-6 ${
-                  promoted ? "border-l-2 border-[var(--color-accent)] bg-white/[0.02]" : ""
-                }`}
-                aria-label={item.name}
-              >
+            const rowClass = `relative grid sm:grid-cols-[1fr_auto] gap-6 p-6 ${
+              promoted ? "border-l-2 border-[var(--color-accent)] bg-white/[0.02]" : ""
+            }`;
+
+            const rowContent = (
+              <>
                 <div>
                   <div className="flex items-center gap-3 mb-1">
                     <h3 className="text-xl font-semibold text-white">{item.name}</h3>
@@ -92,6 +84,29 @@ export default function StudioPricingAlt({ data }: { data: unknown }) {
                 >
                   Замовити
                 </a>
+              </>
+            );
+
+            if (!armed) {
+              return (
+                <article key={i} role="listitem" className={rowClass} aria-label={item.name}>
+                  {rowContent}
+                </article>
+              );
+            }
+
+            return (
+              <motion.article
+                key={i}
+                role="listitem"
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ delay: i * 0.1, duration: 0.6 }}
+                className={rowClass}
+                aria-label={item.name}
+              >
+                {rowContent}
               </motion.article>
             );
           })}

@@ -5,12 +5,15 @@ import PortfolioWrapper from "./PortfolioWrapper";
 import PortfolioHero from "./PortfolioHero";
 import PortfolioMarquee from "./PortfolioMarquee";
 import PortfolioAbout from "./PortfolioAbout";
+import PortfolioSwitchback from "./PortfolioSwitchback";
 import PortfolioGallery from "./PortfolioGallery";
+import PortfolioPublications from "./PortfolioPublications";
 import PortfolioTimeline from "./PortfolioTimeline";
+import PortfolioTeam from "./PortfolioTeam";
 import PortfolioBanner from "./PortfolioBanner";
-import PortfolioTestimonials from "./PortfolioTestimonials";
-import PortfolioLeadForm from "./PortfolioLeadForm";
-import PortfolioContacts from "./PortfolioContacts";
+import PortfolioTestimonials, { PortfolioTestimonialsStrip } from "./PortfolioTestimonials";
+import PortfolioLeadForm, { PortfolioLeadFormSplit } from "./PortfolioLeadForm";
+import PortfolioContacts, { PortfolioContactsSplit } from "./PortfolioContacts";
 
 /**
  * Portfolio ("portfolio-ui-6") — a dark tech look — near-black teal-accented
@@ -29,6 +32,7 @@ export const portfolioSections: Record<string, TemplateSectionDef> = {
   marquee: {
     block: "marquee",
     label: "Стрічка навичок",
+    navLabel: "Навички",
     description: "Рухома стрічка коротких ключових слів (навички / технології / напрямки). Лише реальні.",
     component: PortfolioMarquee,
   },
@@ -38,11 +42,27 @@ export const portfolioSections: Record<string, TemplateSectionDef> = {
     description: "Заголовок і текст; рядки з «- » стають списком.",
     component: PortfolioAbout,
   },
+  switchback: {
+    block: "switchback",
+    label: "Історія у деталях",
+    navLabel: "Історія",
+    description:
+      "Чергування фото + текст «зиґзаґом»: широкі ряди, у яких зображення міняє бік, а поруч — serif-заголовок, короткий текст і опційне посилання-стрілка. Без фото ряд стає центрованим текстом.",
+    component: PortfolioSwitchback,
+  },
   gallery: {
     block: "gallery",
     label: "Роботи",
     description: "Сітка проєктів/робіт із підписом (назва/категорія) на наведенні.",
     component: PortfolioGallery,
+  },
+  publications: {
+    block: "publications",
+    label: "Праці та згадки",
+    navLabel: "Праці",
+    description:
+      "Індекс робіт / публікацій / кейсів: рядки з порядковим номером, назвою (serif), підзаголовком і роком + джерелом праворуч. Тонкі лінії-роздільники, без фото. Лише реальні праці.",
+    component: PortfolioPublications,
   },
   timeline: {
     block: "timeline",
@@ -50,9 +70,17 @@ export const portfolioSections: Record<string, TemplateSectionDef> = {
     description: "Хронологія досвіду чи процесу — період, етап, опис. Лише реальні дати й етапи.",
     component: PortfolioTimeline,
   },
+  team: {
+    block: "team",
+    label: "Команда",
+    description:
+      "Реальні люди бізнесу: центровані скляні картки з круглим портретом (або монограмою у teal-кружку без фото), serif-імʼям, роллю (teal) та коротким описом.",
+    component: PortfolioTeam,
+  },
   banner: {
     block: "cta",
     label: "Смуга-твердження",
+    navLabel: "Гасло",
     description:
       "Повноширинна смуга з великим гаслом/цитатою і підзаголовком, із неоновою підсвіткою — без кнопки.",
     component: PortfolioBanner,
@@ -60,20 +88,26 @@ export const portfolioSections: Record<string, TemplateSectionDef> = {
   testimonials: {
     block: "testimonials",
     label: "Відгуки",
-    description: "Скляні картки відгуків — цитата, автор, роль.",
+    description:
+      "Скляні картки відгуків — цитата, автор, роль. Варіант strip — центрована стрічка великих цитат у стовпчик, без карток.",
     component: PortfolioTestimonials,
+    variants: { strip: PortfolioTestimonialsStrip },
   },
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
-    description: "Форма збору заявок — надсилає лід власнику в Telegram.",
+    description:
+      "Форма збору заявок — надсилає лід власнику в Telegram. Варіант split — скляна decor-панель із заголовком ліворуч, форма праворуч.",
     component: PortfolioLeadForm,
+    variants: { split: PortfolioLeadFormSplit },
   },
   contacts: {
     block: "contacts",
     label: "Контакти",
-    description: "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram).",
+    description:
+      "Контактні дані та кнопки месенджерів (дзвінок / Viber / Telegram). Варіант split — повноширинна смуга у дві колонки: заголовок і кнопки ліворуч, перелік фактів у скляному стовпчику праворуч.",
     component: PortfolioContacts,
+    variants: { split: PortfolioContactsSplit },
   },
 };
 
@@ -94,8 +128,11 @@ export const portfolioMeta: {
     "hero",
     "marquee",
     "about",
+    "switchback",
     "gallery",
+    "publications",
     "timeline",
+    "team",
     "banner",
     "testimonials",
     "lead_form",

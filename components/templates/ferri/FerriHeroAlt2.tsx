@@ -18,7 +18,7 @@ export default function FerriHeroAlt2({ data }: { data: unknown }) {
     <section className="relative flex min-h-screen items-center justify-center overflow-hidden">
       <div className="absolute inset-0">
         {d.imageUrl ? (
-          <img src={d.imageUrl} alt={d.title} className="h-full w-full object-cover" />
+          <img src={d.imageUrl} alt={d.imageAlt ?? d.title} className="h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full bg-gradient-to-br from-navy-900 via-navy-950 to-navy-800" />
         )}
@@ -44,7 +44,7 @@ export default function FerriHeroAlt2({ data }: { data: unknown }) {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className="font-[family-name:var(--font-cormorant)] text-5xl font-light leading-[1.05] text-cream-100 drop-shadow-lg sm:text-6xl md:text-7xl"
+          className="font-[family-name:var(--ferri-display)] text-5xl font-light leading-[1.05] text-cream-100 drop-shadow-lg sm:text-6xl md:text-7xl"
         >
           {d.title}
           {d.titleAccent && (

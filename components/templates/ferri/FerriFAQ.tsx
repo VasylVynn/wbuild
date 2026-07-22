@@ -34,7 +34,7 @@ export default function FerriFAQ({ data }: { data: unknown }) {
                     aria-expanded={isOpen}
                     aria-controls={`ferri-faq-answer-${i}`}
                   >
-                    <span className="font-[family-name:var(--font-cormorant)] text-lg text-cream-100 sm:text-xl">
+                    <span className="font-[family-name:var(--ferri-display)] text-lg text-cream-100 sm:text-xl">
                       {item.question}
                     </span>
                     <motion.svg

@@ -64,7 +64,7 @@ export default function React2021Hero({ data }: { data: unknown }) {
             >
               <img
                 src={d.imageUrl}
-                alt={d.title}
+                alt={d.imageAlt ?? d.title}
                 className="h-64 w-full object-cover sm:h-80 md:h-96 lg:h-[28rem]"
               />
             </div>

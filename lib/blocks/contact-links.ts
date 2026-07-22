@@ -16,7 +16,7 @@ function digitsOnly(raw: string): string {
  * country code, e.g. "0671234567" / "+380671234567" / "80671234567" ->
  * "380671234567". Returns "" if there aren't enough digits to be a phone.
  */
-function normalizeUaPhoneDigits(raw: string): string {
+export function normalizeUaPhoneDigits(raw: string): string {
   const digits = digitsOnly(raw);
   if (!digits) return "";
   if (digits.startsWith("0")) return `380${digits.slice(1)}`; // local "0XX..." form
@@ -44,6 +44,33 @@ function isPhoneLike(raw: string): boolean {
   const trimmed = raw.trim();
   if (!/^[+\d][\d\s\-().]*$/.test(trimmed)) return false;
   return digitsOnly(trimmed).length >= 9;
+}
+
+/**
+ * Instagram handle from freeform input: bare name, "@name", or a full profile
+ * URL (with or without www/query/trailing path). Returns null when nothing
+ * usable remains. Shared by the site renderer (contacts/footers), the chat
+ * client (link detection) and the Apify import (wave E).
+ */
+export function normalizeIgHandle(raw: string | undefined | null): string | null {
+  if (!raw?.trim()) return null;
+  let s = raw.trim();
+  const fromUrl = s.match(/instagram\.com\/([^/?#\s]+)/i);
+  if (fromUrl) s = fromUrl[1];
+  s = s.replace(/^@+/, "");
+  // IG usernames: letters/digits/dot/underscore, ≤30 chars. Reserved paths
+  // (instagram.com/p/…, /reel/…, /explore/…) are post links, not profiles.
+  if (!/^[a-z0-9._]{1,30}$/i.test(s)) return null;
+  if (["p", "reel", "reels", "tv", "stories", "explore", "accounts"].includes(s.toLowerCase())) {
+    return null;
+  }
+  return s;
+}
+
+/** https://www.instagram.com/<handle> from freeform input, or null. */
+export function instagramHref(raw: string | undefined | null): string | null {
+  const handle = normalizeIgHandle(raw);
+  return handle ? `https://www.instagram.com/${handle}` : null;
 }
 
 /**
