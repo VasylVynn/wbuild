@@ -491,11 +491,16 @@ export async function publishDraft(host: string): Promise<{ ok: boolean; url: st
       (b) => b.type === "gallery" && (b.props.pendingImages ?? 0) > 0,
     );
     if (publishedPending && draft.genToken) {
-      const { data: fresh } = await sb
+      // Errors here are NOT swallowed: in this exact race a silent failure
+      // would report publish success while the live site stays on shimmer.
+      // Throw → the outer catch returns { ok:false }, and a retry republishes
+      // the (by-then-resolved) draft cleanly.
+      const { data: fresh, error: freshErr } = await sb
         .from("pages")
         .select("draft_content")
         .eq("id", page.id)
         .maybeSingle();
+      if (freshErr) throw new Error(`publish self-correct read failed: ${freshErr.message}`);
       const freshDraft = (fresh?.draft_content ?? {}) as typeof draft;
       const nowResolved =
         freshDraft.genToken === draft.genToken &&
@@ -503,11 +508,12 @@ export async function publishDraft(host: string): Promise<{ ok: boolean; url: st
           (b) => b.type === "gallery" && (b.props.pendingImages ?? 0) > 0,
         );
       if (nowResolved) {
-        await sb
+        const { error: recopyErr } = await sb
           .from("pages")
           .update({ published_content: buildPublished(freshDraft) })
           .eq("id", page.id)
           .eq("published_content->>genToken", draft.genToken);
+        if (recopyErr) throw new Error(`publish self-correct re-copy failed: ${recopyErr.message}`);
       }
     }
 
