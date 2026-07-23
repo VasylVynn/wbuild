@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, CHAT_MODEL } from "@/lib/ai/anthropic";
+import { stripLoneSurrogates, sanitizeMessages } from "@/lib/ai/sanitize";
 import {
   buildEditorSystem,
   buildTools,
@@ -417,26 +418,32 @@ export async function POST(req: Request): Promise<Response> {
           // thinking + nested output_config.effort/task_budget instead, via the
           // beta client (task-budgets-2026-03-13). task_budget lets the loop
           // self-pace within a turn; MAX_LOOPS stays as the hard backstop.
+          const roundSystem =
+            loop === 0
+              ? system
+              : buildEditorSystem({
+                  businessName: site.businessName,
+                  verticalId: site.verticalId,
+                  facts,
+                  blocks,
+                  themeOptions: site.themeOptions,
+                  isTemplateSite: Boolean(site.templateId),
+                  onboardingTranscript: onboarding,
+                  stats,
+                  seo,
+                  dossier: dossierText,
+                });
           const stream = client.beta.messages.stream({
             model: CHAT_MODEL,
             max_tokens: 8000,
             thinking: { type: "adaptive" },
             output_config: { effort: "high", task_budget: { type: "tokens", total: 60_000 } },
             betas: ["task-budgets-2026-03-13"],
-            system: loop === 0 ? system : buildEditorSystem({
-              businessName: site.businessName,
-              verticalId: site.verticalId,
-              facts,
-              blocks,
-              themeOptions: site.themeOptions,
-              isTemplateSite: Boolean(site.templateId),
-              onboardingTranscript: onboarding,
-              stats,
-              seo,
-              dossier: dossierText,
-            }),
+            // Strip lone surrogates (emoji cut mid-pair in dossier/history) — an
+            // unpaired surrogate anywhere in the body is a hard 400 (§sanitize).
+            system: stripLoneSurrogates(roundSystem),
             tools: buildTools(),
-            messages: apiMessages,
+            messages: sanitizeMessages(apiMessages),
           });
 
           for await (const ev of stream) {

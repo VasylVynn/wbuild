@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, CHAT_MODEL } from "@/lib/ai/anthropic";
+import { stripLoneSurrogates, safeSlice, sanitizeMessages } from "@/lib/ai/sanitize";
 import {
   onboardTools,
   applySaveFacts,
@@ -90,7 +91,10 @@ function parseBody(body: unknown): {
     if (!m || typeof m !== "object") return null;
     const { role, content } = m as Record<string, unknown>;
     if ((role !== "user" && role !== "assistant") || typeof content !== "string") return null;
-    history.push({ role, content: content.slice(0, MAX_MSG_CHARS) });
+    // safeSlice + strip: a 4000-char cut landing inside an emoji left a lone
+    // surrogate in the resent history → the WHOLE next Anthropic call 400'd
+    // («no low surrogate in string», seen in prod).
+    history.push({ role, content: stripLoneSurrogates(safeSlice(content, MAX_MSG_CHARS)) });
   }
   const factsParsed = businessFactsSchema.partial().safeParse(b.facts ?? {});
   if (!factsParsed.success) return null;
@@ -208,8 +212,13 @@ export async function POST(req: Request): Promise<Response> {
         scrapedAt: new Date().toISOString(),
       };
       return res.digest || "Не вдалося витягти дані з Instagram.";
-    } catch {
-      return "Не вдалося звернутися до Instagram — розкажіть про бізнес самі.";
+    } catch (e) {
+      // Loud log (prod debugging: a silent catch here hid the real scrape
+      // failure behind the model's improvised «збережу ваш профіль»).
+      console.error(
+        `[onboard] scrape_instagram failed for ${p.data.handle}: ${e instanceof Error ? e.message : e}`,
+      );
+      return "ПОМИЛКА: не вдалося відкрити Instagram-профіль (тимчасова технічна помилка). ЧЕСНО скажи власнику, що зазирнути не вийшло, і запропонуй: спробувати ще раз (виклич scrape_instagram повторно) або розповісти основне самому. НЕ вдавай, що профіль збережено.";
     }
   }
 
@@ -251,7 +260,7 @@ export async function POST(req: Request): Promise<Response> {
       });
       // A text-heavy/unsuitable image leaves the visible gallery (still an info source).
       if (result.useOnSite === false) photos = photos.filter((u) => u !== url);
-      const ocr = result.ocrText ? ` OCR:"${result.ocrText.slice(0, 80)}"` : "";
+      const ocr = result.ocrText ? ` OCR:"${safeSlice(result.ocrText, 80)}"` : "";
       lines.push(
         `- ${photoIdFor(url)} [${result.kind}, наСайт:${result.useOnSite ? "так" : "ні"}]${
           result.alt ? ` ${result.alt}` : ""
@@ -337,9 +346,11 @@ export async function POST(req: Request): Promise<Response> {
             thinking: { type: "adaptive" },
             output_config: { effort: "medium", task_budget: { type: "tokens", total: 40000 } },
             betas: ["task-budgets-2026-03-13"],
-            system,
+            // Strip lone surrogates (emoji cut mid-pair by our excerpt slices) —
+            // an unpaired surrogate anywhere in the body is a hard 400 (§sanitize).
+            system: stripLoneSurrogates(system),
             tools: onboardTools,
-            messages: apiMessages,
+            messages: sanitizeMessages(apiMessages),
           });
 
           let roundHasText = false;
@@ -440,10 +451,10 @@ export async function POST(req: Request): Promise<Response> {
               max_tokens: 2000,
               thinking: { type: "adaptive" },
               output_config: { effort: "low" },
-              system: lastSystem,
+              system: stripLoneSurrogates(lastSystem),
               tools: onboardTools,
               tool_choice: { type: "none" },
-              messages: apiMessages,
+              messages: sanitizeMessages(apiMessages),
             });
             for await (const ev of speak) {
               if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
