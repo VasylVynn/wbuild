@@ -2,6 +2,7 @@ import "server-only";
 import { after } from "next/server";
 import { getServiceClient } from "@/lib/supabase/server";
 import { revalidateTenant } from "@/lib/cache";
+import { publicSiteUrl } from "@/lib/config";
 import { generateSite } from "@/lib/ai/generate";
 import { generateHeroImage } from "@/lib/media/generate-image";
 import { adaptLogoForTemplate } from "@/lib/media/logo-adapt";
@@ -295,7 +296,7 @@ export async function generateDraft(opts: {
  * triggered, never called by an agent loop (invariant 6).
  */
 export async function publishDraft(host: string): Promise<{ ok: boolean; url: string; error?: string }> {
-  const url = `https://${host}`;
+  const url = publicSiteUrl(host);
   try {
     const sb = getServiceClient();
     const { data: tenant, error: tErr } = await sb
