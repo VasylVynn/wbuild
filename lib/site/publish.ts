@@ -4,7 +4,7 @@ import { getServiceClient } from "@/lib/supabase/server";
 import { revalidateTenant } from "@/lib/cache";
 import { publicSiteUrl } from "@/lib/config";
 import { generateSite } from "@/lib/ai/generate";
-import { generateHeroImage } from "@/lib/media/generate-image";
+import { generateSiteImages, isImageGenConfigured } from "@/lib/media/generate-image";
 import { adaptLogoForTemplate } from "@/lib/media/logo-adapt";
 import { getVertical } from "@/lib/verticals/registry";
 import type { BusinessFacts } from "@/lib/verticals/schema";
@@ -77,6 +77,9 @@ export function shuffleMiddles(blocks: StoredBlock[], rng: () => number): Stored
  * generateAndPublish() is gone; admin/dev shortcuts call the two in sequence.
  */
 
+/** Generated gallery size for photo-less sites (hero comes on top of these). */
+const GENERATED_GALLERY_COUNT = 4;
+
 export async function generateDraft(opts: {
   host: string;
   facts: BusinessFacts;
@@ -122,6 +125,18 @@ export async function generateDraft(opts: {
       logoFamily,
     });
     const rng = mulberry32(dnaSeed(host, dna.designNonce));
+
+    // Background image generation (owner decision: «сайт має бути гарний і без
+    // фото»): with zero owner photos the site ships IMMEDIATELY — hero text-only,
+    // gallery with shimmer placeholders — and the images arrive via after()
+    // below, patched into the draft AND the published copy if already live.
+    // Gated on an image-gen key: without it the placeholders would never
+    // resolve, so we skip the shimmer path entirely (site renders text-only).
+    const needGeneratedImages =
+      !media?.photos?.length && !media?.generatedHero && isImageGenConfigured();
+    if (needGeneratedImages) {
+      media = { ...(media ?? { photos: [] }), generatedPending: GENERATED_GALLERY_COUNT };
+    }
 
     const dossier = opts.dossier ?? buildDossier({ facts, media: media ?? null });
     const site = await generateSite(dossier, vertical.id, media, templateId, rng);
@@ -171,35 +186,6 @@ export async function generateDraft(opts: {
         ...(templateTheme && { templateTheme }),
       },
     };
-
-    // No owner photos → generate ONE atmospheric hero background (§4.8). Runs
-    // AFTER site generation so the prompt gets the model's business-specific
-    // subject AND the chosen theme palette (a mismatched image is worse than
-    // none). Fail-open: null on any error, and a site with no image is fine.
-    if (!media?.photos?.length && !media?.generatedHero) {
-      const gen = await generateHeroImage({
-        verticalId: vertical.id,
-        subject: site.imageSubject,
-        palette: {
-          primary: themeWithDna.colors.primary,
-          background: themeWithDna.colors.background,
-        },
-      });
-      if (gen) {
-        media = { ...(media ?? { photos: [] }), generatedHero: gen };
-        // generateSite already ran → patch the hero block directly (same values
-        // the id-cast conversion would have assigned had the URL existed
-        // earlier, alt included — D3 keeps the two paths in lockstep).
-        const hero = site.blocks.find((b) => b.type === "hero");
-        if (hero) {
-          const props = hero.props as { imageUrl?: string; imageAlt?: string };
-          props.imageUrl = gen;
-          props.imageAlt = `Атмосферне зображення — ${
-            facts.city ? `${facts.businessName}, ${facts.city}` : facts.businessName
-          }`;
-        }
-      }
-    }
 
     const sb = getServiceClient();
 
@@ -283,10 +269,126 @@ export async function generateDraft(opts: {
     // draft; fail-open inside (a broken inspector must never kill generation).
     await runDraftQualityLoop({ host, facts, verticalId: vertical.id, media, templateId: site.templateId, dossier });
 
+    // Background image batch — runs post-response, AFTER the quality loop's
+    // final draft save (no write race). Patches the shimmer placeholders with
+    // real generated images; reaches the published copy too if the owner has
+    // already hit «Опублікувати» by then.
+    if (needGeneratedImages) {
+      const subject = site.imageSubject;
+      const palette = {
+        primary: themeWithDna.colors.primary,
+        background: themeWithDna.colors.background,
+      };
+      const verticalIdForGen = vertical.id;
+      const altBase = facts.city ? `${facts.businessName}, ${facts.city}` : facts.businessName;
+      after(async () => {
+        try {
+          const { hero, gallery } = await generateSiteImages({
+            verticalId: verticalIdForGen,
+            subject,
+            palette,
+            galleryCount: GENERATED_GALLERY_COUNT,
+          });
+          if (!hero && gallery.length === 0) return;
+          await patchGeneratedImages({ host, hero, gallery, altBase });
+        } catch (e) {
+          console.warn(`[publish] deferred image gen failed: ${e instanceof Error ? e.message : e}`);
+        }
+      });
+    }
+
     return { ok: true, host };
   } catch (e) {
     return { ok: false, host, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/**
+ * Deferred-image patch: swap the shimmer placeholders for the generated URLs
+ * in the DRAFT — and in the PUBLISHED copy too when the owner already
+ * published (then purge). Re-reads fresh rows (lost-update lesson from the
+ * logo-adapt job); every failure is a warn, never a throw.
+ */
+async function patchGeneratedImages(opts: {
+  host: string;
+  hero: string | null;
+  gallery: string[];
+  altBase: string;
+}): Promise<void> {
+  const { host, hero, gallery, altBase } = opts;
+  const sb = getServiceClient();
+  const { data: tenant } = await sb
+    .from("tenants")
+    .select("id, brand")
+    .eq("host", host)
+    .maybeSingle();
+  if (!tenant) return;
+
+  const patchBlocks = (blocks: StoredBlock[]): StoredBlock[] =>
+    blocks.map((b) => {
+      if (b.type === "hero" && hero && !b.props.imageUrl) {
+        return {
+          ...b,
+          props: { ...b.props, imageUrl: hero, imageAlt: `Атмосферне зображення — ${altBase}` },
+        };
+      }
+      if (b.type === "gallery" && (b.props.pendingImages ?? 0) > 0 && gallery.length >= 2) {
+        return {
+          ...b,
+          props: {
+            title: b.props.title,
+            images: gallery.map((url, i) => ({
+              url,
+              alt: `Атмосферне зображення ${i + 1} — ${altBase}`,
+            })),
+          },
+        };
+      }
+      if (b.type === "gallery" && (b.props.pendingImages ?? 0) > 0) {
+        // <2 images came back → an empty gallery must not stay: drop the
+        // placeholders (renderers hide an empty gallery) rather than show one
+        // lonely tile forever.
+        return { ...b, props: { title: b.props.title, images: b.props.images } };
+      }
+      return b;
+    });
+
+  const { data: page } = await sb
+    .from("pages")
+    .select("id, draft_content, published_content, is_published")
+    .eq("tenant_id", tenant.id)
+    .eq("slug", "")
+    .maybeSingle();
+  if (!page) return;
+
+  const draft = (page.draft_content ?? {}) as { blocks?: StoredBlock[] } & Record<string, unknown>;
+  const pub = (page.published_content ?? null) as
+    | ({ blocks?: StoredBlock[] } & Record<string, unknown>)
+    | null;
+
+  const update: Record<string, unknown> = {};
+  if (Array.isArray(draft.blocks)) {
+    update.draft_content = { ...draft, blocks: patchBlocks(draft.blocks) };
+  }
+  if (page.is_published && pub && Array.isArray(pub.blocks)) {
+    update.published_content = { ...pub, blocks: patchBlocks(pub.blocks) };
+  }
+  if (Object.keys(update).length) {
+    const { error } = await sb.from("pages").update(update).eq("id", page.id);
+    if (error) {
+      console.warn(`[publish] image patch page update failed: ${error.message}`);
+      return;
+    }
+  }
+
+  const brand = {
+    ...((tenant.brand ?? {}) as Record<string, unknown>),
+    ...(hero && { generatedHero: hero }),
+    ...(gallery.length && { generatedGallery: gallery }),
+  };
+  await sb.from("tenants").update({ brand }).eq("id", tenant.id);
+
+  if (page.is_published) await revalidateTenant(host);
 }
 
 /**

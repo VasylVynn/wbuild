@@ -30,14 +30,13 @@ import type { BusinessFacts } from "@/lib/verticals/schema";
 import { MAX_PHOTOS, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
 import { processImage } from "@/lib/media/client-image";
 import { Button, Chip, Card, ConfirmDialog } from "@/components/ui";
-import PhotoField from "@/components/editor/PhotoField";
 import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Phase = "chat" | "media" | "gate" | "generating" | "preview" | "done" | "error";
+type Phase = "chat" | "gate" | "generating" | "preview" | "done" | "error";
 
 const GREETING: ChatMsg = {
   role: "assistant",
@@ -742,10 +741,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   };
 
   // Confirmed CTA → the optional media step (login gate comes AFTER it).
-  const handleReviewAndCreate = () => {
-    if (loading) return;
-    setPhase("media");
-  };
 
   // ---------------------------------------------------------------------------
   // Media step (§4.8) — optional logo + up to 3 photos, saved fire-and-forget so
@@ -761,17 +756,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     const clean: SiteMedia = { ...next, photoMeta: pruneMeta(next) };
     setMedia(clean);
     if (convIdRef.current) void saveMediaAction(convIdRef.current, clean);
-  };
-
-  const setLogo = (url: string) => persistMedia({ ...media, logoUrl: url });
-  const clearLogo = () => persistMedia({ ...media, logoUrl: undefined });
-  const replacePhoto = (i: number, url: string) =>
-    persistMedia({ ...media, photos: media.photos.map((p, idx) => (idx === i ? url : p)) });
-  const removePhoto = (i: number) =>
-    persistMedia({ ...media, photos: media.photos.filter((_, idx) => idx !== i) });
-  const addPhoto = (url: string) => {
-    if (media.photos.length >= MAX_PHOTOS) return;
-    persistMedia({ ...media, photos: [...media.photos, url] });
   };
 
   // ---------------------------------------------------------------------------
@@ -852,8 +836,10 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
 
   const declineReview = () => setPendingReviews(pendingReviews.slice(1));
 
-  // Media step → generate a DRAFT (login-gated) and show the preview (04 §2).
-  const handleMediaNext = async () => {
+  // Confirm → straight to generation (owner decision: no media step — IG photos
+  // are already in; with none we generate images in the background and the site
+  // shows shimmer placeholders). Login-gated: the draft preview is authed.
+  const handleCreateSite = async () => {
     if (loading) return;
     setLoading(true);
     try {
@@ -1107,11 +1093,11 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         <footer className="mx-auto w-full max-w-2xl px-4 pb-5">
           {confirmed && (
             <button
-              onClick={handleReviewAndCreate}
+              onClick={() => void handleCreateSite()}
               disabled={loading}
               className="mb-3 flex min-h-[60px] w-full items-center justify-center rounded-[18px] bg-brand text-[18px] font-bold text-white shadow-[0_8px_24px_rgba(27,91,191,0.35)] transition-colors hover:bg-brand-hover disabled:opacity-50"
             >
-              Додати фото й створити сайт →
+              Створити сайт →
             </button>
           )}
 
@@ -1252,105 +1238,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // ---------------------------------------------------------------------------
   // Render — media step (§4.8): optional logo + photos before the confirm form
   // ---------------------------------------------------------------------------
-
-  if (phase === "media") {
-    const convId = convIdRef.current ?? undefined;
-    return (
-      <div className={`min-h-[100dvh] ${rootBase}`}>
-        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
-        <header className="border-b border-line bg-surface">
-          <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-3.5">
-            <button
-              onClick={() => setPhase("chat")}
-              aria-label="Назад до розмови"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[20px] font-bold text-ink-muted hover:bg-sunken"
-            >
-              ←
-            </button>
-            <span className="text-[18px] font-extrabold text-ink">Лого та фото</span>
-          </div>
-        </header>
-
-        <div className="mx-auto w-full max-w-2xl px-4 py-6">
-          <Card className="flex flex-col gap-6 p-5 sm:p-8">
-            <div>
-              <h2 className="font-brand text-[22px] font-semibold leading-tight text-ink">
-                Додайте лого та фото — сайт одразу виглядатиме як ваш
-              </h2>
-              <p className="mt-2 text-[16px] leading-relaxed text-ink-muted">
-                Це необовʼязково — можна пропустити і додати пізніше в редакторі.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2.5">
-              <span className="text-[15px] font-bold text-ink">Лого або фото вивіски</span>
-              {facts.hasLogo === false && (
-                <p className="text-[14px] leading-snug text-ink-muted">
-                  Немає лого? Нічого страшного — шапка сайту гарно виглядає і з текстовою назвою.
-                </p>
-              )}
-              <PhotoField
-                value={media.logoUrl}
-                conversationId={convId}
-                kind="logo"
-                onChange={setLogo}
-                onClear={clearLogo}
-              />
-            </div>
-
-            <div className="flex flex-col gap-2.5">
-              <span className="text-[15px] font-bold text-ink">Фото: роботи, приміщення, товари</span>
-              {facts.hasPhotos === false && (
-                <p className="text-[14px] leading-snug text-ink-muted">
-                  Без фото я створю атмосферне зображення для сайту — справжні фото можна додати
-                  будь-коли в редакторі.
-                </p>
-              )}
-              <div className="flex flex-wrap items-start gap-3">
-                {media.photos.map((url, i) => (
-                  <PhotoField
-                    key={i}
-                    value={url}
-                    conversationId={convId}
-                    onChange={(u) => replacePhoto(i, u)}
-                    onClear={() => removePhoto(i)}
-                  />
-                ))}
-                {media.photos.length < MAX_PHOTOS && (
-                  <PhotoField
-                    key={`add-${media.photos.length}`}
-                    conversationId={convId}
-                    onChange={addPhoto}
-                    onClear={() => {}}
-                  />
-                )}
-              </div>
-            </div>
-          </Card>
-
-          <div className="mt-6 flex flex-col gap-2">
-            <Button
-              size="lg"
-              disabled={loading}
-              onClick={() => void handleMediaNext()}
-              className="min-h-[60px] w-full text-[19px] shadow-[0_8px_24px_rgba(27,91,191,0.3)]"
-            >
-              Згенерувати сайт →
-            </Button>
-            <Button
-              variant="quiet"
-              size="md"
-              disabled={loading}
-              onClick={() => void handleMediaNext()}
-              className="w-full"
-            >
-              Згенерувати без фото
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // Render — draft preview (04 §2): the generated draft, live, awaiting the

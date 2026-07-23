@@ -15,6 +15,11 @@ export type SiteMedia = {
   photos: string[];
   generatedHero?: string;
   photoMeta?: PhotoMeta[];
+  /** Request-scoped signal (never persisted): N generated gallery images are
+   *  being produced in the background — assemble() keeps a gallery with that
+   *  many shimmer placeholders instead of dropping it (owner decision: the
+   *  site must look good even with zero uploaded photos). */
+  generatedPending?: number;
 };
 
 /**

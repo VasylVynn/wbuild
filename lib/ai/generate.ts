@@ -538,9 +538,19 @@ function assemble(
       return { type: "hero", props: { ...props, imageUrl, imageAlt }, section: b.section, variant: b.variant };
     }
     if (b.type === "gallery") {
+      // Background image generation (owner decision): with no real photos but
+      // pending generated ones, the gallery ships EMPTY with `pendingImages`
+      // shimmer placeholders — the after()-job patches real URLs in later.
+      const images = galleryFromCast(b.props.images);
+      const pending = media?.generatedPending ?? 0;
       return {
         type: "gallery",
-        props: { title: b.props.title, images: galleryFromCast(b.props.images) },
+        props:
+          images.length >= 2
+            ? { title: b.props.title, images }
+            : pending > 0
+              ? { title: b.props.title, images: [], pendingImages: pending }
+              : { title: b.props.title, images },
         section: b.section,
         variant: b.variant,
       };
@@ -562,9 +572,15 @@ function assemble(
     .filter((b) => b.type !== "hero" && b.type !== "contacts" && b.type !== "lead_form")
     // switchback has no trusted per-item image source → always dropped (§4.8).
     .filter((b) => b.type !== "switchback")
-    // gallery is kept ONLY when ≥2 real photos actually fill it — a fabricated
-    // or single-photo gallery reads as a bug on the live site (§4.8).
-    .filter((b) => b.type !== "gallery" || b.props.images.length >= 2)
+    // gallery is kept when ≥2 real photos fill it — or when background
+    // generation will (pendingImages shimmer placeholders). A fabricated or
+    // single-photo gallery still reads as a bug on the live site (§4.8).
+    .filter(
+      (b) =>
+        b.type !== "gallery" ||
+        b.props.images.length >= 2 ||
+        (b.props.pendingImages ?? 0) > 0,
+    )
     .filter((b) => b.type !== "map" || hasAddress)
     .filter((b) => b.type !== "instagram_cta" || hasIgHandle)
     // On a template site, drop middle blocks whose type maps to no section — they
@@ -611,10 +627,13 @@ function assemble(
   // any block. Skip on a template with no gallery section: it would render via
   // the default (light) registry component inside the template's shell.
   const canHostGallery = !template || sectionForType(template, "gallery") !== undefined;
+  const pendingGenerated = media?.generatedPending ?? 0;
   const injectedGallery: BlockInstance[] =
     galleryPool.length >= 2 && !modelChoseGallery && canHostGallery
       ? [{ type: "gallery", props: { title: "Наші фото", images: galleryFromPool() } }]
-      : [];
+      : pendingGenerated > 0 && !modelChoseGallery && canHostGallery
+        ? [{ type: "gallery", props: { title: "Наша атмосфера", images: [], pendingImages: pendingGenerated } }]
+        : [];
 
   // The contacts closer is part of the funnel invariant (§5.6): if the model
   // omitted it, synthesize one — groundAndPlace then fills it with the real

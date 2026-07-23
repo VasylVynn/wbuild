@@ -2,6 +2,7 @@
 
 import type { BlockProps } from "@/lib/blocks/schema";
 import { Reveal } from "../shared/reveal";
+import { PendingTile, pendingTileCount } from "@/components/blocks/gallery-pending";
 
 /*
  * Gallery — studio dark-premium image grid: optional eyebrow + section-title
@@ -13,6 +14,8 @@ import { Reveal } from "../shared/reveal";
  */
 export default function StudioGallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const pending = pendingTileCount(d.images, d.pendingImages);
+  if (d.images.length === 0 && pending === 0) return null;
 
   return (
     <section className="py-12 md:py-16" aria-labelledby={d.title ? "gallery-title" : undefined}>
@@ -53,6 +56,17 @@ export default function StudioGallery({ data }: { data: unknown }) {
                   )}
                 </div>
               )}
+            </Reveal>
+          ))}
+          {Array.from({ length: pending }, (_, i) => (
+            <Reveal
+              key={`pending-${i}`}
+              delay={i * 0.06}
+              duration={0.5}
+              margin="-80px"
+              className="relative overflow-hidden rounded-lg border border-white/10 aspect-[4/3]"
+            >
+              <PendingTile className="absolute inset-0 rounded-lg" />
             </Reveal>
           ))}
         </div>

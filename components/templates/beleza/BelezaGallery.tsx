@@ -1,5 +1,6 @@
 import type { BlockProps } from "@/lib/blocks/schema";
 import { Reveal } from "@/components/templates/shared/reveal";
+import { PendingTile, pendingTileCount } from "@/components/blocks/gallery-pending";
 
 /*
  * Gallery — real work of the space (§4.8: images come only from props). Each
@@ -34,6 +35,8 @@ function Header({ title }: { title?: string }) {
 
 export default function BelezaGallery({ data }: { data: unknown }) {
   const d = data as GalleryData;
+  const pending = pendingTileCount(d.images, d.pendingImages);
+  if (d.images.length === 0 && pending === 0) return null;
 
   return (
     <section id="gallery" className="beleza-section">
@@ -48,6 +51,11 @@ export default function BelezaGallery({ data }: { data: unknown }) {
               </figure>
             </Reveal>
           ))}
+          {Array.from({ length: pending }, (_, i) => (
+            <Reveal key={`pending-${i}`} delay={i * 0.04}>
+              <PendingTile className="aspect-square w-full" />
+            </Reveal>
+          ))}
         </div>
       </div>
     </section>
@@ -56,6 +64,8 @@ export default function BelezaGallery({ data }: { data: unknown }) {
 
 export function BelezaGalleryMasonry({ data }: { data: unknown }) {
   const d = data as GalleryData;
+  const pending = pendingTileCount(d.images, d.pendingImages);
+  if (d.images.length === 0 && pending === 0) return null;
 
   return (
     <section id="gallery" className="beleza-section beleza-tint">
@@ -67,6 +77,12 @@ export function BelezaGalleryMasonry({ data }: { data: unknown }) {
               <img src={img.url} alt={img.alt ?? img.title ?? ""} className="w-full object-cover transition-transform duration-500 group-hover:scale-105" />
               <Caption img={img} />
             </figure>
+          ))}
+          {Array.from({ length: pending }, (_, i) => (
+            <PendingTile
+              key={`pending-${i}`}
+              className={`mb-4 w-full break-inside-avoid ${["h-48", "h-64", "h-56"][i % 3]}`}
+            />
           ))}
         </div>
       </div>

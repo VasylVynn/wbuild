@@ -1,4 +1,5 @@
 import type { BlockProps } from "@/lib/blocks/schema";
+import { PendingTile, pendingTileCount } from "./gallery-pending";
 
 /**
  * Gallery — SKINS (layout variants of the SAME content, brief §3):
@@ -25,6 +26,7 @@ function SectionTitle({ title }: { title: string }) {
 // "" — the original plain masonry grid, extracted unchanged.
 function GalleryDefault({ data }: { data: GalleryData }) {
   const { title, images } = data;
+  const pending = pendingTileCount(images, data.pendingImages);
   return (
     <div className="mx-auto max-w-5xl px-4 py-16">
       {title && <SectionTitle title={title} />}
@@ -38,6 +40,11 @@ function GalleryDefault({ data }: { data: GalleryData }) {
               loading="lazy"
               className="w-full rounded-[var(--radius)] object-cover"
             />
+          </li>
+        ))}
+        {Array.from({ length: pending }, (_, i) => (
+          <li key={`pending-${i}`} className="break-inside-avoid">
+            <PendingTile className="aspect-[4/3] w-full rounded-[var(--radius)]" />
           </li>
         ))}
       </ul>
@@ -102,6 +109,10 @@ export default function Gallery({
   data: GalleryData;
   skin?: string;
 }) {
+  // Nothing to show and nothing being generated → no empty band.
+  if (data.images.length === 0 && pendingTileCount(data.images, data.pendingImages) === 0) {
+    return null;
+  }
   return (
     <section
       style={{

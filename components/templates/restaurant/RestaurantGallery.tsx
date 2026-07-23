@@ -1,4 +1,5 @@
 import type { BlockProps } from "@/lib/blocks/schema";
+import { PendingTile, pendingTileCount } from "@/components/blocks/gallery-pending";
 
 /*
  * Gallery — grid of dish/interior photos in the warm hospitality language:
@@ -9,6 +10,8 @@ import type { BlockProps } from "@/lib/blocks/schema";
  */
 export default function RestaurantGallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const pending = pendingTileCount(d.images, d.pendingImages);
+  if (d.images.length === 0 && pending === 0) return null;
 
   return (
     <section className="bg-[#F3EADD] py-16 sm:py-20">
@@ -44,6 +47,9 @@ export default function RestaurantGallery({ data }: { data: unknown }) {
                 </div>
               )}
             </div>
+          ))}
+          {Array.from({ length: pending }, (_, i) => (
+            <PendingTile key={`pending-${i}`} className="h-64 w-full rounded-2xl" />
           ))}
         </div>
       </div>

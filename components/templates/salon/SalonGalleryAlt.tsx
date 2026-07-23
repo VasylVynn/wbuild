@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { PendingTile, pendingTileCount } from "@/components/blocks/gallery-pending";
 import { ScrollReveal } from "./ScrollReveal";
 
 /*
@@ -11,6 +12,8 @@ import { ScrollReveal } from "./ScrollReveal";
  */
 export default function SalonGalleryAlt({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const pending = pendingTileCount(d.images, d.pendingImages);
+  if (d.images.length === 0 && pending === 0) return null;
 
   return (
     <section className="py-16 sm:py-20 lg:py-24 bg-background dark:bg-black relative overflow-hidden transition-colors duration-500">
@@ -63,6 +66,11 @@ export default function SalonGalleryAlt({ data }: { data: unknown }) {
 
                 <div className="absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/10 group-hover:ring-accent/40 transition-all duration-500 pointer-events-none" />
               </motion.div>
+            </ScrollReveal>
+          ))}
+          {Array.from({ length: pending }, (_, i) => (
+            <ScrollReveal key={`pending-${i}`} delay={i * 0.05}>
+              <PendingTile className="aspect-square w-full rounded-3xl" />
             </ScrollReveal>
           ))}
         </div>

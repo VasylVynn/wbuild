@@ -93,7 +93,12 @@ export const galleryImageSchema = z.object({
 });
 export const gallerySchema = z.object({
   title: z.string().optional(),
-  images: z.array(galleryImageSchema).min(1),
+  // min(0): a freshly generated site may ship an EMPTY gallery that carries
+  // only `pendingImages` shimmer placeholders while background image
+  // generation runs (renderers show animated tiles, then the real images are
+  // patched in — even post-publish).
+  images: z.array(galleryImageSchema).min(0),
+  pendingImages: z.number().int().min(0).max(12).optional(),
 });
 
 // ---------------------------------------------------------------------------

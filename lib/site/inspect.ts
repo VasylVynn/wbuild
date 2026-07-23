@@ -122,9 +122,22 @@ function visibleText(value: unknown, key?: string): string[] {
   return [];
 }
 
+/** A gallery whose images are still being generated in the background — a valid
+ *  intentional state (shimmer placeholders), NOT an awkward-empty section. */
+function isPendingGallery(block: StoredBlock): boolean {
+  return (
+    block.type === "gallery" &&
+    block.props.images.length === 0 &&
+    (block.props.pendingImages ?? 0) > 0
+  );
+}
+
 function sectionDigest(entries: SectionEntry[]): string {
   return entries
     .map(({ id, block }) => {
+      if (isPendingGallery(block)) {
+        return `- [id=${id}, блок gallery] (фото генеруються у фоні — не порушення)`;
+      }
       const text = visibleText(block.props).join(" | ").slice(0, 700);
       return `- [id=${id}, блок ${block.type}] ${text || "(без тексту)"}`;
     })
@@ -434,6 +447,10 @@ export async function runDraftQualityLoop(opts: {
         const entry = byId.get(v.sectionId);
         if (!entry || dropIndexes.has(entry.index)) continue;
         const block = blocks[entry.index];
+
+        // A pending-generation gallery is an intentional state — never fix/drop
+        // it here (the after()-job patches real images in later).
+        if (isPendingGallery(block)) continue;
 
         // Requisite drift: deterministic, no model, always applicable.
         if (v.kind === "requisite_drift") {
