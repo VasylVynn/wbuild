@@ -486,11 +486,19 @@ export async function onboardTurn(
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("\n");
+  // Aligned with the streaming route (owner decision): NO question-append —
+  // «скиньте посилання» is a valid turn-ender, and a code-appended second ask
+  // reads as two conflicting requests. Only total silence gets a status-aware
+  // deterministic floor (this degraded path has no speak-up call).
   let message = sanitize(text);
-  if (acc.status === "collecting" && !message.includes("?")) {
-    message = `${message}\n\n${fallbackQuestion(acc.facts)}`.trim();
+  if (!message) {
+    message =
+      acc.status === "confirmed"
+        ? "Чудово! Генерую чернетку сайту — за мить покажу превʼю, і ви самі вирішите, коли публікувати."
+        : acc.status === "ready"
+          ? buildFactsSummary(acc.facts, templateDisplayName(acc.templateId))
+          : fallbackQuestion(acc.facts);
   }
-  if (!message) message = fallbackQuestion(acc.facts);
 
   return {
     message,
