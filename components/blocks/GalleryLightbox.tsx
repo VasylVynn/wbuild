@@ -62,11 +62,6 @@ function LightboxOverlay({
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  // Portal to <body> so the fixed overlay lives in the ROOT stacking context —
-  // gallery sections use `isolation: isolate` / positioned wrappers, which would
-  // otherwise trap our z-[100] below a sticky nav (z-50) painted at the root.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
 
   // Lock page scroll, focus the dialog, and RESTORE focus to the trigger on
   // close (a11y): capture whatever was focused (the gallery tile) before we
@@ -117,8 +112,12 @@ function LightboxOverlay({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [hasMultiple, onClose, onPrev, onNext]);
 
-  if (!mounted) return null;
-
+  // Portal to <body> so the fixed overlay lives in the ROOT stacking context —
+  // gallery sections use `isolation: isolate` / positioned wrappers, which would
+  // otherwise trap our z-[100] below a sticky nav (z-50) painted at the root.
+  // Safe without a mounted-guard: LightboxOverlay only renders when an image is
+  // open (index !== null), which is a client-only, post-click state — it is
+  // never invoked during SSR, so document.body always exists here.
   return createPortal(
     <div
       ref={dialogRef}
