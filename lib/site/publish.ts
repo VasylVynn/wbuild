@@ -341,7 +341,7 @@ async function patchGeneratedImages(opts: {
   const sb = getServiceClient();
   const { data: tenant } = await sb
     .from("tenants")
-    .select("id, brand")
+    .select("id")
     .eq("host", host)
     .maybeSingle();
   if (!tenant) return;
@@ -432,15 +432,39 @@ async function patchGeneratedImages(opts: {
   }
 
   // Nothing this job owned (a newer generation won the race) → leave brand and
-  // cache alone. Only stamp brand.generated* when we actually patched content.
+  // cache alone.
   if (!ownedAnything) return;
 
-  const brand = {
-    ...((tenant.brand ?? {}) as Record<string, unknown>),
-    ...(hero && { generatedHero: hero }),
-    ...(gallery.length && { generatedGallery: gallery }),
-  };
-  await sb.from("tenants").update({ brand }).eq("id", tenant.id);
+  // brand.generatedHero is reused by editor regeneration (edit/actions.ts) so
+  // a re-roll doesn't pay for a fresh image — a load-bearing denormalized copy
+  // of the hero URL now living in the content block. The top-of-function
+  // `tenant.brand` snapshot is stale, and this is a whole-object write, so a
+  // stale job could clobber a newer generation's brand. Guard it: re-read the
+  // page token, and only stamp brand while THIS generation is still current;
+  // merge into a FRESH brand read (logo-adapt precedent).
+  if (hero || gallery.length) {
+    const { data: fresh } = await sb
+      .from("pages")
+      .select("draft_content, published_content")
+      .eq("tenant_id", tenant.id)
+      .eq("slug", "")
+      .maybeSingle();
+    const dTok = (fresh?.draft_content as { genToken?: string } | null)?.genToken;
+    const pTok = (fresh?.published_content as { genToken?: string } | null)?.genToken;
+    if (dTok === genToken || pTok === genToken) {
+      const { data: tFresh } = await sb
+        .from("tenants")
+        .select("brand")
+        .eq("id", tenant.id)
+        .maybeSingle();
+      const brand = {
+        ...((tFresh?.brand ?? {}) as Record<string, unknown>),
+        ...(hero && { generatedHero: hero }),
+        ...(gallery.length && { generatedGallery: gallery }),
+      };
+      await sb.from("tenants").update({ brand }).eq("id", tenant.id);
+    }
+  }
 
   // Purge only when the LIVE copy actually changed (a draft-only patch never
   // affects what visitors see, §5.5).
