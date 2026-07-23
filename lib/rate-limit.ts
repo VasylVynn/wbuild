@@ -30,7 +30,8 @@ export type LimitName =
   | "event" // public analytics beacon (view / tel_click / contact_click)
   | "custom_request" // «Хочу кастомні зміни» request to the platform team
   | "img_analyze" // vision photo analysis (burns Anthropic tokens, wave G)
-  | "ig_import"; // Instagram profile scrape+import (burns Apify credit, wave E)
+  | "ig_scrape" // Instagram deep scrape (burns Apify credit, refactor §1.3 — per-tenant)
+  | "onboard_generate"; // draft generation from the onboarding chat (expensive AI call, refactor 04 §2 — per-tenant/IP)
 
 type LimitConfig = { max: number; windowSec: number };
 
@@ -46,7 +47,8 @@ const DEFAULTS: Record<LimitName, LimitConfig> = {
   event: { max: 300, windowSec: 3600 }, // honest visitor: a handful of events
   custom_request: { max: 5, windowSec: 86400 }, // honest owner: 1-2 requests
   img_analyze: { max: 60, windowSec: 3600 }, // honest session: ~10 photos
-  ig_import: { max: 10, windowSec: 86400 }, // honest user: 1-2 imports/day
+  ig_scrape: { max: 5, windowSec: 86400 }, // per-tenant deep scrape: ~1-2/day, checked before Apify spend
+  onboard_generate: { max: 10, windowSec: 86400 }, // draft generation from onboarding: ~1-3/day, gated before the expensive AI call
 };
 
 function envInt(name: string): number | undefined {
