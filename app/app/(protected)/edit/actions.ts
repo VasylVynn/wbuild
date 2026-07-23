@@ -297,22 +297,6 @@ export async function regenerateSite(
       packId?: string;
       templateId?: string;
     };
-    // Reuse the site's saved template so regeneration KEEPS the look — only the
-    // content/composition is re-rolled, not the design. (Legacy pack sites land
-    // on a template here: the pack fallback left generateSite with the dossier
-    // refactor.) The dossier is the bare facts+media build — the tenant path
-    // has no photoMeta/snapshot, so casting falls back deterministically.
-    const media: SiteMedia = {
-      logoUrl: brand.logoUrl,
-      photos: brand.photos ?? [],
-      generatedHero: brand.generatedHero,
-    };
-    const site = await generateSite(
-      buildDossier({ facts: t.facts, media }),
-      t.vertical,
-      media,
-      brand.templateId,
-    );
 
     const { data: p } = await sb
       .from("pages")
@@ -322,8 +306,27 @@ export async function regenerateSite(
       .maybeSingle();
     if (!p) return { ok: false, error: "page not found" };
     const oldDraft = p.draft_content as
-      | { blocks?: StoredBlock[]; pocket?: StoredBlock[]; seo?: PageSeo }
+      | { blocks?: StoredBlock[]; pocket?: StoredBlock[]; seo?: PageSeo; generatedHero?: string }
       | null;
+
+    // Reuse the site's saved template so regeneration KEEPS the look — only the
+    // content/composition is re-rolled, not the design. (Legacy pack sites land
+    // on a template here: the pack fallback left generateSite with the dossier
+    // refactor.) The dossier is the bare facts+media build — the tenant path
+    // has no photoMeta/snapshot, so casting falls back deterministically.
+    // generatedHero now lives in draft_content (written atomically by the image
+    // job); fall back to the legacy brand copy for pre-migration sites.
+    const media: SiteMedia = {
+      logoUrl: brand.logoUrl,
+      photos: brand.photos ?? [],
+      generatedHero: oldDraft?.generatedHero ?? brand.generatedHero,
+    };
+    const site = await generateSite(
+      buildDossier({ facts: t.facts, media }),
+      t.vertical,
+      media,
+      brand.templateId,
+    );
     const oldBlocks = oldDraft?.blocks ?? [];
     const oldPocket = oldDraft?.pocket ?? [];
 
@@ -336,6 +339,9 @@ export async function regenerateSite(
         draft_content: {
           blocks: site.blocks,
           pocket: [...oldPocket, ...oldBlocks].slice(-40),
+          // Carry the generated hero forward so the NEXT regeneration reuses it
+          // (new sites no longer keep a brand copy — draft_content is the home).
+          ...(media.generatedHero && { generatedHero: media.generatedHero }),
           ...(seo && { seo }),
         },
       })

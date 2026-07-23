@@ -399,8 +399,13 @@ async function patchGeneratedImages(opts: {
   // actually written, so we know whether this job owned the content.
   let ownedAnything = false;
 
+  // The generated hero URL is stored INSIDE draft_content (not brand) so it
+  // rides the SAME atomic CAS write as the blocks — no separate brand
+  // read-modify-write to race (codex review). Editor regeneration reads it from
+  // draft_content (edit/actions.ts). generatedGallery is dropped: nothing read
+  // it, and the images already live in the gallery block.
   if (Array.isArray(draft.blocks) && draft.genToken === genToken) {
-    const next = { ...draft, blocks: patchBlocks(draft.blocks) };
+    const next = { ...draft, blocks: patchBlocks(draft.blocks), ...(hero && { generatedHero: hero }) };
     const { data: rows, error } = await sb
       .from("pages")
       .update({ draft_content: next })
@@ -416,7 +421,7 @@ async function patchGeneratedImages(opts: {
 
   let patchedPublished = false;
   if (page.is_published && pub && Array.isArray(pub.blocks) && pub.genToken === genToken) {
-    const next = { ...pub, blocks: patchBlocks(pub.blocks) };
+    const next = { ...pub, blocks: patchBlocks(pub.blocks), ...(hero && { generatedHero: hero }) };
     const { data: rows, error } = await sb
       .from("pages")
       .update({ published_content: next })
@@ -431,40 +436,8 @@ async function patchGeneratedImages(opts: {
     }
   }
 
-  // Nothing this job owned (a newer generation won the race) → leave brand and
-  // cache alone.
+  // Nothing this job owned (a newer generation won the race) → nothing to purge.
   if (!ownedAnything) return;
-
-  // brand.generatedHero is reused by editor regeneration (edit/actions.ts) so
-  // a re-roll doesn't pay for a fresh image — a load-bearing denormalized copy
-  // of the hero URL now living in the content block. The top-of-function
-  // `tenant.brand` snapshot is stale, and this is a whole-object write, so a
-  // stale job could clobber a newer generation's brand. Guard it: re-read the
-  // page token, and only stamp brand while THIS generation is still current;
-  // merge into a FRESH brand read (logo-adapt precedent).
-  if (hero || gallery.length) {
-    const { data: fresh } = await sb
-      .from("pages")
-      .select("draft_content, published_content")
-      .eq("tenant_id", tenant.id)
-      .eq("slug", "")
-      .maybeSingle();
-    const dTok = (fresh?.draft_content as { genToken?: string } | null)?.genToken;
-    const pTok = (fresh?.published_content as { genToken?: string } | null)?.genToken;
-    if (dTok === genToken || pTok === genToken) {
-      const { data: tFresh } = await sb
-        .from("tenants")
-        .select("brand")
-        .eq("id", tenant.id)
-        .maybeSingle();
-      const brand = {
-        ...((tFresh?.brand ?? {}) as Record<string, unknown>),
-        ...(hero && { generatedHero: hero }),
-        ...(gallery.length && { generatedGallery: gallery }),
-      };
-      await sb.from("tenants").update({ brand }).eq("id", tenant.id);
-    }
-  }
 
   // Purge only when the LIVE copy actually changed (a draft-only patch never
   // affects what visitors see, §5.5).
@@ -500,6 +473,7 @@ export async function publishDraft(host: string): Promise<{ ok: boolean; url: st
       blocks?: StoredBlock[];
       seo?: PageSeo;
       genToken?: string;
+      generatedHero?: string;
     };
     if (!draft.blocks?.length) throw new Error("draft is empty — generate before publishing");
 
@@ -518,6 +492,7 @@ export async function publishDraft(host: string): Promise<{ ok: boolean; url: st
         published_content: {
           blocks: draft.blocks,
           ...(draft.genToken && { genToken: draft.genToken }),
+          ...(draft.generatedHero && { generatedHero: draft.generatedHero }),
           ...(draft.seo && { seo: draft.seo }),
         },
         is_published: true,
