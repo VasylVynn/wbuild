@@ -93,6 +93,12 @@ export async function generateDraft(opts: {
 }): Promise<{ ok: boolean; host: string; error?: string }> {
   const { host, facts, verticalId, templateId } = opts;
   let media = opts.media;
+  // Per-generation token (03 §2.4 background images): stamped into
+  // draft_content and carried by the deferred image job. A stale job whose
+  // token no longer matches the stored content SKIPS it — so a failed job from
+  // an earlier «Згенерувати ще раз» can never erase a newer generation's
+  // pending gallery (codex review).
+  const genToken = crypto.randomUUID();
   try {
     const vertical = getVertical(verticalId);
 
@@ -257,7 +263,7 @@ export async function generateDraft(opts: {
         title: "Головна",
         show_in_nav: false,
         nav_order: 0,
-        draft_content: { blocks: site.blocks, pocket: [], ...(site.seo && { seo: site.seo }) },
+        draft_content: { blocks: site.blocks, pocket: [], genToken, ...(site.seo && { seo: site.seo }) },
       },
       { onConflict: "tenant_id,slug" },
     );
@@ -300,8 +306,10 @@ export async function generateDraft(opts: {
         // pending gallery MUST be resolved: real images when we have them, an
         // empty (self-hiding) gallery otherwise. Skipping this would strand the
         // shimmer placeholders in stored draft_content forever (codex review).
+        // genToken scopes the patch to THIS generation — a stale job whose
+        // token no longer matches the stored content leaves it untouched.
         try {
-          await patchGeneratedImages({ host, hero, gallery, altBase });
+          await patchGeneratedImages({ host, hero, gallery, altBase, genToken });
         } catch (e) {
           console.warn(`[publish] deferred image patch failed: ${e instanceof Error ? e.message : e}`);
         }
@@ -325,8 +333,11 @@ async function patchGeneratedImages(opts: {
   hero: string | null;
   gallery: string[];
   altBase: string;
+  /** The generation this job belongs to — patch content only while it still
+   *  carries this token (a newer «Згенерувати ще раз» replaces it). */
+  genToken: string;
 }): Promise<void> {
-  const { host, hero, gallery, altBase } = opts;
+  const { host, hero, gallery, altBase, genToken } = opts;
   const sb = getServiceClient();
   const { data: tenant } = await sb
     .from("tenants")
@@ -372,18 +383,33 @@ async function patchGeneratedImages(opts: {
     .maybeSingle();
   if (!page) return;
 
-  const draft = (page.draft_content ?? {}) as { blocks?: StoredBlock[] } & Record<string, unknown>;
+  const draft = (page.draft_content ?? {}) as {
+    blocks?: StoredBlock[];
+    genToken?: string;
+  } & Record<string, unknown>;
   const pub = (page.published_content ?? null) as
-    | ({ blocks?: StoredBlock[] } & Record<string, unknown>)
+    | ({ blocks?: StoredBlock[]; genToken?: string } & Record<string, unknown>)
     | null;
 
+  // Per-content token gate: patch draft ONLY while it still belongs to THIS
+  // generation; likewise the published copy independently (it may be an older
+  // generation the owner published before this job's regenerate). A stale job
+  // matches neither → no-op, so it can't erase a newer generation's pending
+  // gallery (codex review).
+  const draftOwned = draft.genToken === genToken;
+  const pubOwned = pub?.genToken === genToken;
+
   const update: Record<string, unknown> = {};
-  if (Array.isArray(draft.blocks)) {
+  if (draftOwned && Array.isArray(draft.blocks)) {
     update.draft_content = { ...draft, blocks: patchBlocks(draft.blocks) };
   }
-  if (page.is_published && pub && Array.isArray(pub.blocks)) {
+  if (page.is_published && pubOwned && pub && Array.isArray(pub.blocks)) {
     update.published_content = { ...pub, blocks: patchBlocks(pub.blocks) };
   }
+  // Nothing this job owns → don't touch content OR brand (a stale job must
+  // leave the newer generation's brand.generatedHero/Gallery intact).
+  if (!draftOwned && !pubOwned) return;
+
   if (Object.keys(update).length) {
     const { error } = await sb.from("pages").update(update).eq("id", page.id);
     if (error) {
@@ -430,6 +456,7 @@ export async function publishDraft(host: string): Promise<{ ok: boolean; url: st
     const draft = (page.draft_content ?? {}) as {
       blocks?: StoredBlock[];
       seo?: PageSeo;
+      genToken?: string;
     };
     if (!draft.blocks?.length) throw new Error("draft is empty — generate before publishing");
 
@@ -440,10 +467,16 @@ export async function publishDraft(host: string): Promise<{ ok: boolean; url: st
     if (tUpdErr) throw new Error(`tenant publish failed: ${tUpdErr.message}`);
 
     // published_content carries blocks + seo, never the pocket (editor-only).
+    // genToken rides along so a still-running image job can patch the published
+    // copy too (it was generated for THIS token).
     const { error: pUpdErr } = await sb
       .from("pages")
       .update({
-        published_content: { blocks: draft.blocks, ...(draft.seo && { seo: draft.seo }) },
+        published_content: {
+          blocks: draft.blocks,
+          ...(draft.genToken && { genToken: draft.genToken }),
+          ...(draft.seo && { seo: draft.seo }),
+        },
         is_published: true,
       })
       .eq("id", page.id);

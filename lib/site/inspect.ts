@@ -421,6 +421,9 @@ export async function runDraftQualityLoop(opts: {
       blocks?: StoredBlock[];
       pocket?: StoredBlock[];
       seo?: PageSeo;
+      // Per-generation token (publish.ts): preserved on re-save so the deferred
+      // image job's token check still matches after the quality loop rewrites.
+      genToken?: string;
     };
     let blocks = draft.blocks ?? [];
     if (!blocks.length) return;
@@ -492,6 +495,7 @@ export async function runDraftQualityLoop(opts: {
             draft_content: {
               blocks,
               pocket: draft.pocket ?? [],
+              ...(draft.genToken && { genToken: draft.genToken }),
               ...(draft.seo && { seo: draft.seo }),
             },
           })
