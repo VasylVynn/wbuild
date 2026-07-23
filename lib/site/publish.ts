@@ -324,9 +324,18 @@ export async function generateDraft(opts: {
 
 /**
  * Deferred-image patch: swap the shimmer placeholders for the generated URLs
- * in the DRAFT — and in the PUBLISHED copy too when the owner already
- * published (then purge). Re-reads fresh rows (lost-update lesson from the
- * logo-adapt job); every failure is a warn, never a throw.
+ * in the DRAFT — and, if the owner published mid-flight, the LIVE copy too.
+ *
+ * Two atomic compare-and-swaps on the genToken close the races an ordinary
+ * read-modify-write can't:
+ *   1. a newer «Згенерувати ще раз» (different genToken) — the CAS WHERE gates
+ *      it, so a stale job touches nothing.
+ *   2. a publishDraft landing mid-flight — the published CAS runs AFTER the
+ *      draft patch and writes the *resolved* content (real images), not the
+ *      stale pending read; because the draft is patched first, any publish that
+ *      copies the draft copies real images, and any published copy still on
+ *      this token is overwritten with the resolved content.
+ * Fail-open: any error is a warn, never a throw.
  */
 async function patchGeneratedImages(opts: {
   host: string;
@@ -339,45 +348,29 @@ async function patchGeneratedImages(opts: {
 }): Promise<void> {
   const { host, hero, gallery, altBase, genToken } = opts;
   const sb = getServiceClient();
-  const { data: tenant } = await sb
-    .from("tenants")
-    .select("id")
-    .eq("host", host)
-    .maybeSingle();
+  const { data: tenant } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
   if (!tenant) return;
 
   const patchBlocks = (blocks: StoredBlock[]): StoredBlock[] =>
     blocks.map((b) => {
       if (b.type === "hero" && hero && !b.props.imageUrl) {
-        return {
-          ...b,
-          props: { ...b.props, imageUrl: hero, imageAlt: `Атмосферне зображення — ${altBase}` },
-        };
-      }
-      if (b.type === "gallery" && (b.props.pendingImages ?? 0) > 0 && gallery.length >= 2) {
-        return {
-          ...b,
-          props: {
-            title: b.props.title,
-            images: gallery.map((url, i) => ({
-              url,
-              alt: `Атмосферне зображення ${i + 1} — ${altBase}`,
-            })),
-          },
-        };
+        return { ...b, props: { ...b.props, imageUrl: hero, imageAlt: `Атмосферне зображення — ${altBase}` } };
       }
       if (b.type === "gallery" && (b.props.pendingImages ?? 0) > 0) {
-        // <2 images came back → an empty gallery must not stay: drop the
-        // placeholders (renderers hide an empty gallery) rather than show one
-        // lonely tile forever.
-        return { ...b, props: { title: b.props.title, images: b.props.images } };
+        // ≥2 real images → fill; else drop the placeholders (renderer hides an
+        // empty gallery — a lonely tile reads as a bug).
+        const images =
+          gallery.length >= 2
+            ? gallery.map((url, i) => ({ url, alt: `Атмосферне зображення ${i + 1} — ${altBase}` }))
+            : b.props.images;
+        return { ...b, props: { title: b.props.title, images } };
       }
       return b;
     });
 
   const { data: page } = await sb
     .from("pages")
-    .select("id, draft_content, published_content, is_published")
+    .select("id, draft_content")
     .eq("tenant_id", tenant.id)
     .eq("slug", "")
     .maybeSingle();
@@ -386,62 +379,50 @@ async function patchGeneratedImages(opts: {
   const draft = (page.draft_content ?? {}) as {
     blocks?: StoredBlock[];
     genToken?: string;
+    seo?: PageSeo;
   } & Record<string, unknown>;
-  const pub = (page.published_content ?? null) as
-    | ({ blocks?: StoredBlock[]; genToken?: string } & Record<string, unknown>)
-    | null;
+  if (!Array.isArray(draft.blocks) || draft.genToken !== genToken) return;
 
-  // ATOMIC compare-and-swap on the token (codex review): the read above is
-  // stale by the time we write, so the token filter lives in the UPDATE's WHERE
-  // — Postgres re-checks it at write time in a single statement. If a newer
-  // «Згенерувати ще раз» replaced the content's token between our read and
-  // write, zero rows match and we clobber nothing. `.select()` returns the rows
-  // actually written, so we know whether this job owned the content.
-  let ownedAnything = false;
+  const resolvedBlocks = patchBlocks(draft.blocks);
 
-  // The generated hero URL is stored INSIDE draft_content (not brand) so it
-  // rides the SAME atomic CAS write as the blocks — no separate brand
-  // read-modify-write to race (codex review). Editor regeneration reads it from
-  // draft_content (edit/actions.ts). generatedGallery is dropped: nothing read
-  // it, and the images already live in the gallery block.
-  if (Array.isArray(draft.blocks) && draft.genToken === genToken) {
-    const next = { ...draft, blocks: patchBlocks(draft.blocks), ...(hero && { generatedHero: hero }) };
-    const { data: rows, error } = await sb
-      .from("pages")
-      .update({ draft_content: next })
-      .eq("id", page.id)
-      .eq("draft_content->>genToken", genToken)
-      .select("id");
-    if (error) {
-      console.warn(`[publish] draft image patch failed: ${error.message}`);
-    } else if (rows?.length) {
-      ownedAnything = true;
-    }
+  // 1) DRAFT — atomic CAS on the token (the WHERE is re-checked at write time,
+  // so a newer generation between our read and write is never clobbered).
+  const { data: dRows, error: dErr } = await sb
+    .from("pages")
+    .update({ draft_content: { ...draft, blocks: resolvedBlocks, ...(hero && { generatedHero: hero }) } })
+    .eq("id", page.id)
+    .eq("draft_content->>genToken", genToken)
+    .select("id");
+  if (dErr) {
+    console.warn(`[publish] draft image patch failed: ${dErr.message}`);
+    return;
+  }
+  if (!dRows?.length) return; // a newer generation won — nothing more to do.
+
+  // 2) PUBLISHED — write the RESOLVED content (not the stale pending read),
+  // gated by CAS on the published token. Runs after the draft patch: if a
+  // publish copied the (already-resolved) draft it holds real images; if it
+  // copied a pending draft first, this overwrites that published copy while it
+  // still carries our token. No stale is_published gate — the CAS is the gate.
+  const publishedContent = {
+    blocks: resolvedBlocks,
+    genToken,
+    ...(hero && { generatedHero: hero }),
+    ...(draft.seo && { seo: draft.seo }),
+  };
+  const { data: pRows, error: pErr } = await sb
+    .from("pages")
+    .update({ published_content: publishedContent })
+    .eq("id", page.id)
+    .eq("published_content->>genToken", genToken)
+    .select("id");
+  if (pErr) {
+    console.warn(`[publish] published image patch failed: ${pErr.message}`);
+    return;
   }
 
-  let patchedPublished = false;
-  if (page.is_published && pub && Array.isArray(pub.blocks) && pub.genToken === genToken) {
-    const next = { ...pub, blocks: patchBlocks(pub.blocks), ...(hero && { generatedHero: hero }) };
-    const { data: rows, error } = await sb
-      .from("pages")
-      .update({ published_content: next })
-      .eq("id", page.id)
-      .eq("published_content->>genToken", genToken)
-      .select("id");
-    if (error) {
-      console.warn(`[publish] published image patch failed: ${error.message}`);
-    } else if (rows?.length) {
-      ownedAnything = true;
-      patchedPublished = true;
-    }
-  }
-
-  // Nothing this job owned (a newer generation won the race) → nothing to purge.
-  if (!ownedAnything) return;
-
-  // Purge only when the LIVE copy actually changed (a draft-only patch never
-  // affects what visitors see, §5.5).
-  if (patchedPublished) await revalidateTenant(host);
+  // Purge only when the LIVE copy actually changed (§5.5).
+  if (pRows?.length) await revalidateTenant(host);
 }
 
 /**
