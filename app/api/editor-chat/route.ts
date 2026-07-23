@@ -311,7 +311,7 @@ export async function POST(req: Request): Promise<Response> {
       }
       case "refresh_instagram": {
         const handle = (a.handle as string | undefined)?.trim() || facts.instagram;
-        if (!handle) return { ok: false, summary: "Немає Instagram-хендлу — ні в запиті, ні у фактах." };
+        if (!handle) return { ok: false, summary: "Немає Instagram-нікнейму — ні в запиті, ні у фактах." };
         // Per-tenant rate limit checked BEFORE any Apify spend (refactor §1.3).
         const igLimit = await checkRateLimit("ig_scrape", site.tenantId);
         if (!igLimit.ok) return { ok: false, summary: rateLimitMessage(igLimit.retryAfterSec) };

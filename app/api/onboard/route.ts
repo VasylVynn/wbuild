@@ -177,7 +177,7 @@ export async function POST(req: Request): Promise<Response> {
 
   async function runScrape(input: unknown): Promise<string> {
     const p = scrapeInstagramInput.safeParse(input);
-    if (!p.success) return "Некоректний хендл Instagram.";
+    if (!p.success) return "Не впізнав нікнейм чи посилання Instagram — попросіть власника надіслати ще раз.";
     if (!apifyEnabled) return "Instagram-імпорт зараз недоступний.";
     // Per-tenant scrape limit BEFORE Apify spend (keyed by conversation, IP fallback).
     const rl = await checkRateLimit("ig_scrape", conversationId ?? ip);
@@ -458,9 +458,10 @@ export async function POST(req: Request): Promise<Response> {
           }
         }
 
-        if (accum.status === "collecting" && !message.includes("?")) {
-          message = `${message}\n\n${fallbackQuestion(accum.facts)}`.trim();
-        }
+        // NO question-append guard here (owner decision): «скиньте посилання»
+        // is a perfectly good turn-ender without a «?», and a code-appended
+        // second ask reads as two conflicting requests. The prompt owns the
+        // one-ask-per-turn rule; code only floors total silence below.
         // Deterministic floor — only reachable when the speak-up call itself
         // failed. Status-aware: a confirmed turn must never end with a question.
         if (!message) {
