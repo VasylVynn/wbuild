@@ -1,6 +1,9 @@
+"use client";
+
 import type { BlockProps } from "@/lib/blocks/schema";
 import { Reveal } from "@/components/templates/shared/reveal";
 import { PendingTile, pendingTileCount } from "@/components/blocks/gallery-pending";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * Gallery — real work of the space (§4.8: images come only from props). Each
@@ -36,6 +39,7 @@ function Header({ title }: { title?: string }) {
 export default function BelezaGallery({ data }: { data: unknown }) {
   const d = data as GalleryData;
   const pending = pendingTileCount(d.images, d.pendingImages);
+  const { open, overlay } = useLightbox(d.images);
   if (d.images.length === 0 && pending === 0) return null;
 
   return (
@@ -46,8 +50,15 @@ export default function BelezaGallery({ data }: { data: unknown }) {
           {d.images.map((img, i) => (
             <Reveal key={i} delay={i * 0.04}>
               <figure className="group relative overflow-hidden rounded-2xl">
-                <img src={img.url} alt={img.alt ?? img.title ?? ""} className="aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                <Caption img={img} />
+                <button
+                  type="button"
+                  onClick={() => open(i)}
+                  aria-label={img.alt || img.title || "Переглянути фото"}
+                  className="relative block w-full cursor-pointer text-left"
+                >
+                  <img src={img.url} alt={img.alt ?? img.title ?? ""} className="aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  <Caption img={img} />
+                </button>
               </figure>
             </Reveal>
           ))}
@@ -58,6 +69,7 @@ export default function BelezaGallery({ data }: { data: unknown }) {
           ))}
         </div>
       </div>
+      {overlay}
     </section>
   );
 }
@@ -65,6 +77,7 @@ export default function BelezaGallery({ data }: { data: unknown }) {
 export function BelezaGalleryMasonry({ data }: { data: unknown }) {
   const d = data as GalleryData;
   const pending = pendingTileCount(d.images, d.pendingImages);
+  const { open, overlay } = useLightbox(d.images);
   if (d.images.length === 0 && pending === 0) return null;
 
   return (
@@ -74,8 +87,15 @@ export function BelezaGalleryMasonry({ data }: { data: unknown }) {
         <div className="gap-4 sm:columns-2 lg:columns-3">
           {d.images.map((img, i) => (
             <figure key={i} className="group relative mb-4 break-inside-avoid overflow-hidden rounded-2xl">
-              <img src={img.url} alt={img.alt ?? img.title ?? ""} className="w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-              <Caption img={img} />
+              <button
+                type="button"
+                onClick={() => open(i)}
+                aria-label={img.alt || img.title || "Переглянути фото"}
+                className="relative block w-full cursor-pointer text-left"
+              >
+                <img src={img.url} alt={img.alt ?? img.title ?? ""} className="w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                <Caption img={img} />
+              </button>
             </figure>
           ))}
           {Array.from({ length: pending }, (_, i) => (
@@ -86,6 +106,7 @@ export function BelezaGalleryMasonry({ data }: { data: unknown }) {
           ))}
         </div>
       </div>
+      {overlay}
     </section>
   );
 }

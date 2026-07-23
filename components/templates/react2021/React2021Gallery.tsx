@@ -1,4 +1,7 @@
+"use client";
+
 import type { BlockProps } from "@/lib/blocks/schema";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * Gallery — react-2021 has no dedicated gallery source component, so this
@@ -10,6 +13,7 @@ import type { BlockProps } from "@/lib/blocks/schema";
  */
 export default function React2021Gallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const { open, overlay } = useLightbox(d.images);
 
   return (
     <section className="bg-gray-50 py-12 sm:py-16">
@@ -31,27 +35,35 @@ export default function React2021Gallery({ data }: { data: unknown }) {
               key={i}
               className="group relative overflow-hidden rounded-xl bg-white shadow-sm transition-shadow duration-300 hover:shadow-lg"
             >
-              <img
-                src={img.url}
-                alt={img.alt ?? img.title ?? ""}
-                className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110"
-              />
-              {(img.title || img.category) && (
-                <div className="absolute inset-x-0 bottom-0 translate-y-full bg-white/95 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0">
-                  {img.title && (
-                    <p className="text-sm font-bold text-[#1a2e35]">{img.title}</p>
-                  )}
-                  {img.category && (
-                    <span className="mt-1 inline-block rounded-full bg-[#ec4755]/10 px-3 py-1 text-xs font-semibold text-[#ec4755]">
-                      {img.category}
-                    </span>
-                  )}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => open(i)}
+                aria-label={img.alt || img.title || "Переглянути фото"}
+                className="relative block w-full cursor-pointer text-left"
+              >
+                <img
+                  src={img.url}
+                  alt={img.alt ?? img.title ?? ""}
+                  className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                />
+                {(img.title || img.category) && (
+                  <div className="absolute inset-x-0 bottom-0 translate-y-full bg-white/95 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0">
+                    {img.title && (
+                      <p className="text-sm font-bold text-[#1a2e35]">{img.title}</p>
+                    )}
+                    {img.category && (
+                      <span className="mt-1 inline-block rounded-full bg-[#ec4755]/10 px-3 py-1 text-xs font-semibold text-[#ec4755]">
+                        {img.category}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </button>
             </div>
           ))}
         </div>
       </div>
+      {overlay}
     </section>
   );
 }

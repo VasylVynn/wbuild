@@ -1,5 +1,8 @@
+"use client";
+
 import type { BlockProps } from "@/lib/blocks/schema";
 import { PendingTile, pendingTileCount } from "@/components/blocks/gallery-pending";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * Gallery — grid of dish/interior photos in the warm hospitality language:
@@ -11,6 +14,7 @@ import { PendingTile, pendingTileCount } from "@/components/blocks/gallery-pendi
 export default function RestaurantGallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
   const pending = pendingTileCount(d.images, d.pendingImages);
+  const { open, overlay } = useLightbox(d.images);
   if (d.images.length === 0 && pending === 0) return null;
 
   return (
@@ -31,21 +35,28 @@ export default function RestaurantGallery({ data }: { data: unknown }) {
               key={i}
               className="group relative overflow-hidden rounded-2xl bg-white shadow-[0_10px_30px_-12px_rgba(42,32,24,0.35)] transition-shadow duration-300 hover:shadow-[0_16px_40px_-12px_rgba(42,32,24,0.45)]"
             >
-              <img
-                src={img.url}
-                alt={img.alt ?? img.title ?? ""}
-                className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110"
-              />
-              {(img.title || img.category) && (
-                <div className="absolute inset-x-0 bottom-0 translate-y-full bg-[#C0562F]/90 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0">
-                  {img.title && <p className="text-sm font-bold text-white">{img.title}</p>}
-                  {img.category && (
-                    <span className="mt-1 inline-block rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white">
-                      {img.category}
-                    </span>
-                  )}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => open(i)}
+                aria-label={img.alt || img.title || "Переглянути фото"}
+                className="relative block w-full cursor-pointer text-left"
+              >
+                <img
+                  src={img.url}
+                  alt={img.alt ?? img.title ?? ""}
+                  className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                />
+                {(img.title || img.category) && (
+                  <div className="absolute inset-x-0 bottom-0 translate-y-full bg-[#C0562F]/90 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0">
+                    {img.title && <p className="text-sm font-bold text-white">{img.title}</p>}
+                    {img.category && (
+                      <span className="mt-1 inline-block rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white">
+                        {img.category}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </button>
             </div>
           ))}
           {Array.from({ length: pending }, (_, i) => (
@@ -53,6 +64,7 @@ export default function RestaurantGallery({ data }: { data: unknown }) {
           ))}
         </div>
       </div>
+      {overlay}
     </section>
   );
 }

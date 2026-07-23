@@ -3,6 +3,7 @@
 import type { BlockProps } from "@/lib/blocks/schema";
 import { Reveal } from "../shared/reveal";
 import { PendingTile, pendingTileCount } from "@/components/blocks/gallery-pending";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * Gallery — studio dark-premium image grid: optional eyebrow + section-title
@@ -15,6 +16,7 @@ import { PendingTile, pendingTileCount } from "@/components/blocks/gallery-pendi
 export default function StudioGallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
   const pending = pendingTileCount(d.images, d.pendingImages);
+  const { open, overlay } = useLightbox(d.images);
   if (d.images.length === 0 && pending === 0) return null;
 
   return (
@@ -38,24 +40,31 @@ export default function StudioGallery({ data }: { data: unknown }) {
               margin="-80px"
               className="group relative overflow-hidden rounded-lg border border-white/10 aspect-[4/3]"
             >
-              <img
-                src={img.url}
-                alt={img.alt ?? img.title ?? ""}
-                className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-              />
+              <button
+                type="button"
+                onClick={() => open(i)}
+                aria-label={img.alt || img.title || "Переглянути фото"}
+                className="absolute inset-0 block h-full w-full cursor-pointer text-left"
+              >
+                <img
+                  src={img.url}
+                  alt={img.alt ?? img.title ?? ""}
+                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                />
 
-              {(img.title || img.category) && (
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-400 flex flex-col justify-end p-5">
-                  {img.title && (
-                    <h3 className="text-white text-base font-semibold leading-snug">{img.title}</h3>
-                  )}
-                  {img.category && (
-                    <p className="text-[var(--color-accent)] text-xs tracking-[0.2em] uppercase font-medium mt-1">
-                      {img.category}
-                    </p>
-                  )}
-                </div>
-              )}
+                {(img.title || img.category) && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-400 flex flex-col justify-end p-5">
+                    {img.title && (
+                      <h3 className="text-white text-base font-semibold leading-snug">{img.title}</h3>
+                    )}
+                    {img.category && (
+                      <p className="text-[var(--color-accent)] text-xs tracking-[0.2em] uppercase font-medium mt-1">
+                        {img.category}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </button>
             </Reveal>
           ))}
           {Array.from({ length: pending }, (_, i) => (
@@ -71,6 +80,7 @@ export default function StudioGallery({ data }: { data: unknown }) {
           ))}
         </div>
       </div>
+      {overlay}
     </section>
   );
 }

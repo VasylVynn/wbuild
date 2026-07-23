@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
 import { PendingTile, pendingTileCount } from "@/components/blocks/gallery-pending";
 import { ScrollReveal } from "./ScrollReveal";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * Gallery — port of the source "Transformations That Tell Stories" masonry:
@@ -18,6 +19,7 @@ import { ScrollReveal } from "./ScrollReveal";
 export default function SalonGallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
   const pending = pendingTileCount(d.images, d.pendingImages);
+  const { open, overlay } = useLightbox(d.images);
   if (d.images.length === 0 && pending === 0) return null;
 
   return (
@@ -47,41 +49,48 @@ export default function SalonGallery({ data }: { data: unknown }) {
                   index % 3 === 0 ? "h-[350px] md:h-[500px]" : index % 3 === 1 ? "h-[350px] md:h-[400px]" : "h-[350px] md:h-[450px]"
                 }`}
               >
-                <img
-                  src={img.url}
-                  alt={img.alt ?? img.title ?? ""}
-                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-1000 group-hover:scale-110"
-                />
+                <button
+                  type="button"
+                  onClick={() => open(index)}
+                  aria-label={img.alt || img.title || "Переглянути фото"}
+                  className="absolute inset-0 block h-full w-full cursor-pointer text-left"
+                >
+                  <img
+                    src={img.url}
+                    alt={img.alt ?? img.title ?? ""}
+                    className="h-full w-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                  />
 
-                {/* Elegant overlay */}
-                {(img.title || img.category) && (
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-8">
-                    <motion.div
-                      initial={{ y: 20, opacity: 0 }}
-                      whileHover={{ y: 0, opacity: 1 }}
-                      transition={{ duration: 0.4 }}
-                      className="space-y-1"
-                    >
-                      {img.title && (
-                        <h3 className="font-display text-2xl font-semibold text-white">{img.title}</h3>
-                      )}
-                      {img.category && (
-                        <p className="text-accent text-xs tracking-[0.2em] uppercase font-medium">
-                          {img.category}
-                        </p>
-                      )}
-                    </motion.div>
-                  </div>
-                )}
+                  {/* Elegant overlay */}
+                  {(img.title || img.category) && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-8">
+                      <motion.div
+                        initial={{ y: 20, opacity: 0 }}
+                        whileHover={{ y: 0, opacity: 1 }}
+                        transition={{ duration: 0.4 }}
+                        className="space-y-1"
+                      >
+                        {img.title && (
+                          <h3 className="font-display text-2xl font-semibold text-white">{img.title}</h3>
+                        )}
+                        {img.category && (
+                          <p className="text-accent text-xs tracking-[0.2em] uppercase font-medium">
+                            {img.category}
+                          </p>
+                        )}
+                      </motion.div>
+                    </div>
+                  )}
 
-                {/* Corner detail */}
-                <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-2 group-hover:translate-y-0">
-                  <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center bg-white/10 backdrop-blur-md">
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
+                  {/* Corner detail */}
+                  <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-2 group-hover:translate-y-0">
+                    <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center bg-white/10 backdrop-blur-md">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                      </svg>
+                    </div>
                   </div>
-                </div>
+                </button>
               </motion.div>
             </ScrollReveal>
           ))}
@@ -93,6 +102,7 @@ export default function SalonGallery({ data }: { data: unknown }) {
             </ScrollReveal>
           ))}
         </div>
+        {overlay}
 
         {/* Call to action */}
         <ScrollReveal delay={0.6}>

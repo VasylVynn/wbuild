@@ -1,4 +1,7 @@
+"use client";
+
 import type { BlockProps } from "@/lib/blocks/schema";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * Gallery — a grid of real photos (§4.8: every image is a props URL). Each tile
@@ -7,6 +10,7 @@ import type { BlockProps } from "@/lib/blocks/schema";
  */
 export default function LaunchGallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const { open, overlay } = useLightbox(d.images);
 
   return (
     <section className="relative px-4 py-20 sm:px-6 md:py-28">
@@ -22,11 +26,18 @@ export default function LaunchGallery({ data }: { data: unknown }) {
               key={i}
               className="group launch-glass relative aspect-square overflow-hidden rounded-2xl p-1"
             >
-              <img
-                src={img.url}
-                alt={img.alt ?? img.title ?? ""}
-                className="h-full w-full rounded-xl object-cover transition-transform duration-500 group-hover:scale-105"
-              />
+              <button
+                type="button"
+                onClick={() => open(i)}
+                aria-label={img.alt || img.title || "Переглянути фото"}
+                className="block h-full w-full cursor-pointer text-left"
+              >
+                <img
+                  src={img.url}
+                  alt={img.alt ?? img.title ?? ""}
+                  className="h-full w-full rounded-xl object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+              </button>
               {(img.title || img.category) && (
                 <figcaption className="pointer-events-none absolute inset-1 flex flex-col justify-end rounded-xl bg-gradient-to-t from-black/70 via-black/10 to-transparent p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                   {img.title && <span className="text-sm font-semibold text-white">{img.title}</span>}
@@ -37,6 +48,7 @@ export default function LaunchGallery({ data }: { data: unknown }) {
           ))}
         </div>
       </div>
+      {overlay}
     </section>
   );
 }
@@ -47,6 +59,7 @@ export default function LaunchGallery({ data }: { data: unknown }) {
  */
 export function LaunchGalleryMasonry({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const { open, overlay } = useLightbox(d.images);
 
   return (
     <section className="relative px-4 py-20 sm:px-6 md:py-28">
@@ -62,11 +75,18 @@ export function LaunchGalleryMasonry({ data }: { data: unknown }) {
               key={i}
               className="group launch-glass relative block break-inside-avoid overflow-hidden rounded-2xl p-1"
             >
-              <img
-                src={img.url}
-                alt={img.alt ?? img.title ?? ""}
-                className="w-full rounded-xl object-cover transition-transform duration-500 group-hover:scale-105"
-              />
+              <button
+                type="button"
+                onClick={() => open(i)}
+                aria-label={img.alt || img.title || "Переглянути фото"}
+                className="block w-full cursor-pointer text-left"
+              >
+                <img
+                  src={img.url}
+                  alt={img.alt ?? img.title ?? ""}
+                  className="w-full rounded-xl object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+              </button>
               {(img.title || img.category) && (
                 <figcaption className="pointer-events-none absolute inset-1 flex flex-col justify-end rounded-xl bg-gradient-to-t from-black/70 via-black/10 to-transparent p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                   {img.title && <span className="text-sm font-semibold text-white">{img.title}</span>}
@@ -77,6 +97,7 @@ export function LaunchGalleryMasonry({ data }: { data: unknown }) {
           ))}
         </div>
       </div>
+      {overlay}
     </section>
   );
 }

@@ -1,4 +1,7 @@
+"use client";
+
 import type { BlockProps } from "@/lib/blocks/schema";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * Gallery — port of the source Projects grid (Portfolio-Landing-Page-6):
@@ -9,6 +12,7 @@ import type { BlockProps } from "@/lib/blocks/schema";
  */
 export default function PortfolioGallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const { open, overlay } = useLightbox(d.images);
 
   return (
     <section className="py-16 sm:py-24" aria-labelledby="portfolio-gallery-title">
@@ -31,41 +35,49 @@ export default function PortfolioGallery({ data }: { data: unknown }) {
               style={{ animationDelay: `${(i + 1) * 100}ms` }}
             >
               <div className="relative aspect-[4/3] overflow-hidden">
-                <img
-                  src={img.url}
-                  alt={img.alt ?? img.title ?? ""}
-                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-card via-card/50 to-transparent opacity-60" />
+                <button
+                  type="button"
+                  onClick={() => open(i)}
+                  aria-label={img.alt || img.title || "Переглянути фото"}
+                  className="absolute inset-0 block h-full w-full cursor-pointer text-left"
+                >
+                  <img
+                    src={img.url}
+                    alt={img.alt ?? img.title ?? ""}
+                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-card via-card/50 to-transparent opacity-60" />
 
-                {(img.title || img.category) && (
-                  <div className="absolute inset-x-0 bottom-0 p-5 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                    {img.category && (
-                      <span className="inline-block rounded-full bg-highlight/15 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-highlight">
-                        {img.category}
-                      </span>
-                    )}
-                    {img.title && <p className="mt-2 font-serif text-lg font-semibold text-foreground">{img.title}</p>}
+                  {(img.title || img.category) && (
+                    <div className="absolute inset-x-0 bottom-0 p-5 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                      {img.category && (
+                        <span className="inline-block rounded-full bg-highlight/15 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-highlight">
+                          {img.category}
+                        </span>
+                      )}
+                      {img.title && <p className="mt-2 font-serif text-lg font-semibold text-foreground">{img.title}</p>}
+                    </div>
+                  )}
+
+                  <div className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full glass opacity-0 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100">
+                    <svg
+                      className="h-4 w-4 text-primary"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 17 17 7M7 7h10v10" />
+                    </svg>
                   </div>
-                )}
-
-                <div className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full glass opacity-0 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100">
-                  <svg
-                    className="h-4 w-4 text-primary"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    aria-hidden="true"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 17 17 7M7 7h10v10" />
-                  </svg>
-                </div>
+                </button>
               </div>
             </div>
           ))}
         </div>
       </div>
+      {overlay}
     </section>
   );
 }
