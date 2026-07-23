@@ -23,7 +23,6 @@ import {
 import {
   startConversation,
   saveTurn,
-  saveMediaAction,
   loadConversation,
 } from "@/app/app/new/persist-actions";
 import type { BusinessFacts } from "@/lib/verticals/schema";
@@ -741,22 +740,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   };
 
   // Confirmed CTA → the optional media step (login gate comes AFTER it).
-
-  // ---------------------------------------------------------------------------
-  // Media step (§4.8) — optional logo + up to 3 photos, saved fire-and-forget so
-  // uploads survive the login-gate redirect. «Далі» and «Пропустити» share this.
-  // ---------------------------------------------------------------------------
-
-  // Persist to state AND to the conversation row (best-effort). Onboarding
-  // uploads scope by conversationId; if there's no row yet (Supabase off) the
-  // save is simply skipped.
-  const persistMedia = (next: SiteMedia) => {
-    // Drop meta entries whose url is neither a photo nor the logo (a removed or
-    // swapped url leaves its class/alt behind otherwise).
-    const clean: SiteMedia = { ...next, photoMeta: pruneMeta(next) };
-    setMedia(clean);
-    if (convIdRef.current) void saveMediaAction(convIdRef.current, clean);
-  };
 
   // ---------------------------------------------------------------------------
   // Chat photo attachments (wave G) — the paperclip only ATTACHES files to the
@@ -1533,23 +1516,18 @@ function ChatBubble({ msg }: { msg: ChatMsg }) {
 // Working indicator: dots + a label. While the model is in its extended-
 // thinking phase we say so honestly («Думаю…» — real state from the stream,
 // not a fake stage); before that a short "reading" label.
+// Same chip style as the live tool-status chips (04 §2) — one consistent
+// "agent is working" language: a spinning pill, never a separate bubble.
 function AgentTyping({ thinking = false }: { thinking?: boolean }) {
   return (
-    <div className="flex justify-start">
-      <div className="flex items-center gap-2.5 rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface px-[18px] py-4">
-        <span className="flex items-center gap-1.5">
-          {[0, 0.15, 0.3].map((d) => (
-            <span
-              key={d}
-              className="h-2 w-2 rounded-full bg-ink-faint"
-              style={{ animation: `ob-typing 1.2s infinite ${d}s` }}
-            />
-          ))}
-        </span>
-        <span className="text-[14px] font-semibold text-ink-muted">
-          {thinking ? "Думаю, як допомогти найкраще…" : "Читаю відповідь…"}
-        </span>
-      </div>
+    <div className="flex flex-wrap gap-2">
+      <span className="flex items-center gap-2 rounded-full border-[1.5px] border-brand-soft bg-brand-soft px-3.5 py-2 text-[13px] font-bold text-brand">
+        <span
+          className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent"
+          aria-hidden
+        />
+        {thinking ? "Думаю…" : "Пишу відповідь…"}
+      </span>
     </div>
   );
 }
