@@ -1,17 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Sparkles, Send, Check, CircleAlert, X } from "lucide-react";
-import type { EditorChatMsg } from "@/lib/ai/editor-agent";
+import { Sparkles, Send, Check, CircleAlert, X, Paperclip } from "lucide-react";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import type { Theme } from "@/lib/theme/tokens";
 import { getEditorChatHistory } from "@/app/app/(protected)/edit/chat-actions";
 
 /**
- * Editor-agent chat panel (P3): the owner talks to one assistant (engineer +
- * copywriter + SEO advisor + analyst) that edits the DRAFT through validated
- * tools. Streaming: text paints live, tool calls show as action chips. After a
- * turn that changed blocks the shell gets fresh state + an undo snapshot.
+ * Editor-agent chat panel (P3, upgraded by refactor 03/04): the owner talks to
+ * one assistant (engineer + copywriter + SEO advisor + analyst, now also able
+ * to update facts, rescan Instagram, read photos and self-check the site) that
+ * edits the DRAFT through validated tools. Streaming: text paints live, tool
+ * calls show as a Ukrainian action label while running then a result chip.
+ * After a turn that changed blocks the shell gets fresh state + an undo
+ * snapshot.
+ *
+ * Photo attachments (§4.8): the composer uploads to /api/upload itself (same
+ * client-side canvas re-encode as PhotoField — strips EXIF/GPS before it ever
+ * leaves the device) and sends only the resulting STORAGE URLs to the chat
+ * route, which analyzes them server-side. The model never receives raw image
+ * bytes from this panel.
  */
 
 type StreamEvent =
@@ -24,7 +32,7 @@ type StreamEvent =
   | { t: "refusal"; message: string };
 
 type ChatItem =
-  | { kind: "msg"; role: "user" | "assistant"; content: string }
+  | { kind: "msg"; role: "user" | "assistant"; content: string; photos?: string[] }
   | { kind: "action"; summary: string; ok: boolean };
 
 const SUGGESTIONS = [
@@ -33,6 +41,39 @@ const SUGGESTIONS = [
   "Прибери зайві секції",
   "Порадь, як покращити SEO",
 ];
+
+// Bounds how many photos one turn can carry — keeps upload + server-side
+// vision analysis fast and matches the route's own MAX_ATTACHMENTS_PER_TURN.
+const MAX_ATTACH = 4;
+const MAX_EDGE = 1600; // longest edge, px — same budget as PhotoField
+const QUALITY = 0.82;
+
+/** Client-side re-encode BEFORE upload (same contract as PhotoField's
+ * processImage): strips EXIF/GPS, bakes in orientation, caps size. */
+async function processPhotoForUpload(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const longest = Math.max(bitmap.width, bitmap.height);
+  const scale = longest > MAX_EDGE ? MAX_EDGE / longest : 1;
+  const width = Math.round(bitmap.width * scale);
+  const height = Math.round(bitmap.height * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas недоступний");
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+
+  const toBlob = (type: string) =>
+    new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), type, QUALITY));
+
+  const webp = await toBlob("image/webp");
+  if (webp) return webp;
+  const jpeg = await toBlob("image/jpeg");
+  if (jpeg) return jpeg;
+  throw new Error("Не вдалося обробити фото");
+}
 
 function renderBold(text: string): ReactNode[] {
   return text
@@ -60,6 +101,13 @@ export default function EditorChat({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<"idle" | "think" | "typing" | "acting">("idle");
+  // Uploaded (storage URL) photos waiting to go out with the next message, and
+  // the current tool's Ukrainian label (04 §2: show the capability running,
+  // not a generic spinner) while stage === "acting".
+  const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(0);
+  const [actingLabel, setActingLabel] = useState("Вношу зміни…");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const busyPaintRef = useRef(false);
 
@@ -84,15 +132,48 @@ export default function EditorChat({
     });
   }, [host]);
 
+  /** Upload picked files to /api/upload (client re-encode first) and queue the
+   * returned storage URLs for the next message — best-effort per file. */
+  const attachFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const room = MAX_ATTACH - pendingPhotos.length;
+    for (const file of Array.from(files).slice(0, Math.max(0, room))) {
+      setUploadingPhotos((n) => n + 1);
+      try {
+        const blob = await processPhotoForUpload(file);
+        const ext = blob.type === "image/webp" ? "webp" : "jpg";
+        const fd = new FormData();
+        fd.append("file", blob, `photo.${ext}`);
+        fd.append("host", host);
+        fd.append("kind", "photo");
+        const res = await fetch("/api/upload", { method: "POST", body: fd });
+        const json = (await res.json().catch(() => null)) as { ok?: boolean; url?: string } | null;
+        if (res.ok && json?.url) {
+          const url = json.url;
+          setPendingPhotos((prev) => [...prev, url]);
+        }
+      } catch {
+        /* best-effort — a failed upload just doesn't get attached */
+      } finally {
+        setUploadingPhotos((n) => n - 1);
+      }
+    }
+  };
+
   const send = async (raw: string) => {
     const text = raw.trim();
-    if (!text || busy) return;
+    if ((!text && pendingPhotos.length === 0) || busy) return;
     // Undo point: the draft as it is RIGHT NOW, before the agent touches it.
     const snapshot = getSnapshot();
+    const photos = pendingPhotos;
     setInput("");
+    setPendingPhotos([]);
     setBusy(true);
     setStage("think");
-    setItems((prev) => [...prev, { kind: "msg", role: "user", content: text }]);
+    setItems((prev) => [
+      ...prev,
+      { kind: "msg", role: "user", content: text, ...(photos.length ? { photos } : {}) },
+    ]);
 
     let acc = "";
     const paintAssistant = (content: string) => {
@@ -113,7 +194,7 @@ export default function EditorChat({
       const res = await fetch("/api/editor-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host, message: text }),
+        body: JSON.stringify({ host, message: text, ...(photos.length ? { attachments: photos } : {}) }),
       });
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("application/json")) {
@@ -153,6 +234,7 @@ export default function EditorChat({
             paintAssistant(acc);
           } else if (ev.t === "tool") {
             setStage("acting");
+            setActingLabel(ev.label);
           } else if (ev.t === "tooldone") {
             busyPaintRef.current = false;
             acc = "";
@@ -252,16 +334,29 @@ export default function EditorChat({
                 {it.summary}
               </div>
             ) : (
-              <div key={i} className={`flex ${it.role === "user" ? "justify-end" : "justify-start"}`}>
-                <p
-                  className={`max-w-[92%] whitespace-pre-wrap rounded-[14px] px-3.5 py-2.5 text-[13.5px] leading-relaxed ${
-                    it.role === "user"
-                      ? "bg-brand text-white"
-                      : "border border-line bg-surface text-ink"
-                  }`}
-                >
-                  {it.role === "user" ? it.content : renderBold(it.content)}
-                </p>
+              <div
+                key={i}
+                className={`flex flex-col gap-1.5 ${it.role === "user" ? "items-end" : "items-start"}`}
+              >
+                {it.photos && it.photos.length > 0 && (
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                    {it.photos.map((src) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img key={src} src={src} alt="" className="h-14 w-14 rounded-[10px] object-cover" />
+                    ))}
+                  </div>
+                )}
+                {it.content && (
+                  <p
+                    className={`max-w-[92%] whitespace-pre-wrap rounded-[14px] px-3.5 py-2.5 text-[13.5px] leading-relaxed ${
+                      it.role === "user"
+                        ? "bg-brand text-white"
+                        : "border border-line bg-surface text-ink"
+                    }`}
+                  >
+                    {it.role === "user" ? it.content : renderBold(it.content)}
+                  </p>
+                )}
               </div>
             ),
           )}
@@ -277,7 +372,7 @@ export default function EditorChat({
                   />
                 ))}
               </span>
-              {stage === "acting" ? "Вношу зміни…" : "Думаю…"}
+              {stage === "acting" ? actingLabel : "Думаю…"}
             </div>
           )}
           <div ref={endRef} />
@@ -285,7 +380,51 @@ export default function EditorChat({
       </div>
 
       <div className="border-t border-sunken p-3">
+        {(pendingPhotos.length > 0 || uploadingPhotos > 0) && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {pendingPhotos.map((src) => (
+              <div key={src} className="group relative h-12 w-12 overflow-hidden rounded-[10px] border border-line">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setPendingPhotos((prev) => prev.filter((u) => u !== src))}
+                  aria-label="Прибрати фото"
+                  className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-ink/60 text-[10px] text-white transition-colors hover:bg-ink"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            {uploadingPhotos > 0 && (
+              <div className="flex h-12 w-12 items-center justify-center rounded-[10px] border border-dashed border-line-strong">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              void attachFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy || pendingPhotos.length >= MAX_ATTACH}
+            aria-label="Прикріпити фото"
+            title="Прикріпити фото"
+            className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[12px] border border-line-strong text-ink-faint transition-colors hover:border-brand hover:text-brand disabled:opacity-45"
+          >
+            <Paperclip size={16} />
+          </button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -303,7 +442,7 @@ export default function EditorChat({
           <button
             type="button"
             onClick={() => void send(input)}
-            disabled={busy || !input.trim()}
+            disabled={busy || (!input.trim() && pendingPhotos.length === 0)}
             aria-label="Надіслати"
             className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[12px] bg-brand text-white transition-colors hover:bg-brand-hover disabled:opacity-45"
           >

@@ -6,7 +6,7 @@ import type { PageSeo } from "@/lib/tenant/types";
 import { blockLibrary } from "@/lib/blocks/library";
 import { skinsFor } from "@/lib/blocks/skins";
 import { themePresets } from "@/lib/theme/presets";
-import type { BusinessFacts } from "@/lib/verticals/schema";
+import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
 import { getVertical } from "@/lib/verticals/registry";
 
 /**
@@ -64,6 +64,25 @@ export const toolInputSchemas = {
       .optional()
       .describe("SEO-опис для Google, до 150 символів: продаюча суть із містом і нішею, без лапок."),
   }),
+  // Refactor 03 §3.3 / 04 §1: editor power tools. All draft-scoped; none touch
+  // published content directly (publish stays human-only, invariant 6).
+  update_facts: z.object({
+    patch: businessFactsSchema
+      .partial()
+      .describe(
+        "Часткові оновлені факти бізнесу — лише поля, що змінюються (телефон, адреса, години, послуги...). last-wins: нове значення заміняє старе для кожного вказаного поля.",
+      ),
+  }),
+  refresh_instagram: z.object({
+    handle: z
+      .string()
+      .optional()
+      .describe("Instagram-хендл для пересканування; якщо не вказано — береться facts.instagram."),
+  }),
+  analyze_photo: z.object({
+    url: z.string().describe("URL фото в НАШОМУ Storage (з чату чи вже наявного блоку) для аналізу."),
+  }),
+  inspect_site: z.object({}),
 } as const;
 
 export type ToolName = keyof typeof toolInputSchemas;
@@ -81,14 +100,42 @@ const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
   switch_pack: "Змінити цілісний дизайн-пакет (тема + розкладки всіх блоків).",
   set_seo:
     "Оновити SEO-заголовок і/або SEO-опис сторінки (те, що бачить Google). Потрапляє на живий сайт після «Опублікувати».",
+  update_facts:
+    "Оновити факти бізнесу (телефон, адреса, години, послуги з цінами тощо). Використовуй, коли власник називає нову/виправлену інформацію або підтверджує кандидата з Instagram/фото. Онови факти ПЕРШИМ, тоді за потреби онови залежні блоки (contacts/services) іншим інструментом.",
+  refresh_instagram:
+    "Пересканувати Instagram-профіль (глибоко: біо, до ~20 постів, фото) і отримати свіжі дані. Використовуй, коли власник просить перевірити/оновити дані з інстаграму, згадує нові пости чи фото, або поточні дані виглядають застарілими. Обмежено кількістю сканувань на день.",
+  analyze_photo:
+    "Проаналізувати одне фото зі Storage: що на ньому, який текст, які телефони/ціни/адреси видно. Використовуй для щойно завантаженого власником фото, якщо ще не бачив його аналізу.",
+  inspect_site:
+    "Перевірити чернетку сайту на вигадані факти, суперечності між блоками й невідповідність вертикалі. Виклич перед фінальним «готово» після серії правок або коли власник просить перевірити сайт.",
 };
 
-export function buildTools(): Anthropic.Tool[] {
+/** Ukrainian action label per tool — streamed as {t:"tool",label} while it runs
+ * (04 §2: the owner watches the agent work, not a generic spinner). Exhaustive
+ * over ToolName so the UI never has to fall back to a raw English tool name. */
+export const TOOL_LABELS: Record<ToolName, string> = {
+  update_block: "Оновлюю секцію…",
+  add_block: "Додаю секцію…",
+  remove_block: "Прибираю секцію…",
+  move_block: "Переставляю секцію…",
+  set_hidden: "Змінюю видимість секції…",
+  set_skin: "Змінюю вигляд секції…",
+  regenerate_block: "Переписую текст секції…",
+  switch_theme: "Змінюю оформлення…",
+  switch_pack: "Змінюю дизайн-пакет…",
+  set_seo: "Оновлюю SEO…",
+  update_facts: "Оновлюю дані…",
+  refresh_instagram: "Зазираю в Instagram…",
+  analyze_photo: "Аналізую фото…",
+  inspect_site: "Перевіряю сайт…",
+};
+
+export function buildTools(): Anthropic.Beta.BetaTool[] {
   return (Object.keys(toolInputSchemas) as ToolName[]).map((name) => ({
     name,
     description: TOOL_DESCRIPTIONS[name],
     input_schema: z.toJSONSchema(toolInputSchemas[name]),
-  })) as unknown as Anthropic.Tool[];
+  })) as unknown as Anthropic.Beta.BetaTool[];
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +178,11 @@ export function buildEditorSystem(ctx: {
   onboardingTranscript: EditorChatMsg[] | null;
   stats: { views7: number; leads7: number } | null;
   seo?: PageSeo;
+  /** Business Dossier (refactor §1.5), pre-formatted by formatDossierForPrompt —
+   * Instagram bio/candidates/posts, per-photo media inventory, brand-voice cues.
+   * Built once per request by the route; undefined when unavailable (no
+   * Supabase, no snapshot yet) — the prompt degrades gracefully without it. */
+  dossier?: string;
 }): string {
   const vertical = getVertical(ctx.verticalId);
   const themes = ctx.themeOptions.map((t) => `${t.id} («${t.label}»)`).join(", ");
@@ -153,14 +205,22 @@ export function buildEditorSystem(ctx: {
 - Кожна зміна сайту — ТІЛЬКИ через інструменти. Ніколи не описуй зміну, не зробивши її інструментом.
 - Зміни падають у ЧЕРНЕТКУ — на живий сайт вони потраплять лише коли власник натисне «Опублікувати». Публікувати сам ти НЕ можеш.
 - Після інструментів коротко перелічи, що зробив, людською мовою. Якщо прохання неоднозначне — спершу постав одне уточнювальне питання.
-- НЕ вигадуй фактів (телефони, адреси, ціни, назви) — бери з ФАКТІВ або запитай. Ціни можеш пропонувати як орієнтовні, явно кажучи про це.
+- НЕ вигадуй фактів (телефони, адреси, ціни, назви) — бери з ФАКТІВ/ДОСЬЄ або запитай. Ціни можеш пропонувати як орієнтовні, явно кажучи про це.
 - Пиши українською, тепло і по суті. Можна виділяти **жирним**. Жодної іншої розмітки.
-- Фото: можеш лишити поле порожнім або попросити власника завантажити — вигадані URL заборонені й будуть відкинуті.
+- Фото: можеш лишити поле порожнім або попросити власника завантажити — вигадані URL заборонені й будуть відкинуті. Власник може прикріпити фото прямо в чаті — тоді ти бачиш ТЕКСТОВИЙ аналіз (не сам файл) і справжній URL, який можна вставити в блок через update_block/add_block.
 - Якщо просять неможливе для платформи (магазин/оплата/кабінети/інтеграції/довільний код) — чесно відмов і згадай кнопку «Хочу кастомні зміни».
+
+МОЖЛИВОСТІ ПОНАД РЕДАГУВАННЯ БЛОКІВ (чесно про те, що ти вмієш, і коли це використовувати):
+- update_facts — власник назвав нову/виправлену інформацію (телефон, адреса, години, послуга з ціною) АБО підтвердив кандидата з Instagram/фото. Онови факти ПЕРШИМ, тоді за потреби онови залежні блоки (contacts/services) окремо.
+- refresh_instagram — власник просить перевірити/оновити дані з Instagram, згадує нові пости чи фото, або поточні дані виглядають застарілими.
+- analyze_photo — зʼявилось фото, чийого аналізу в цьому контексті ще немає (нове завантаження або URL з блоку), і власник питає про нього чи ти сам вирішив глянути перед кастингом у блок.
+- inspect_site — перед фінальним «готово» після серії правок, або коли власник прямо просить перевірити сайт на помилки/суперечності.
+- Фото прайсу/меню (kind=menu або знайдені ціни в аналізі): запропонуй update_facts зі знайденими послугами — явно скажи власнику, що це з фото і потребує підтвердження, не застосовуй мовчки.
+- Публікація сайту — ЛИШЕ дія власника (кнопка «Опублікувати»); ти не можеш і ніколи не кажи, що можеш.
 
 ФАКТИ БІЗНЕСУ (єдине джерело правди):
 ${JSON.stringify(ctx.facts)}
-
+${ctx.dossier ? `\n${ctx.dossier}\n` : ""}
 ПОТОЧНІ БЛОКИ СТОРІНКИ (нумерація для інструментів):
 ${describeBlocks(ctx.blocks)}
 
