@@ -14,6 +14,8 @@ import BelezaFAQ, { BelezaFAQBoxed } from "./BelezaFAQ";
 import BelezaCTA, { BelezaCTASplit } from "./BelezaCTA";
 import BelezaLeadForm, { BelezaLeadFormInline } from "./BelezaLeadForm";
 import BelezaContacts, { BelezaContactsBand } from "./BelezaContacts";
+import BelezaMap from "./BelezaMap";
+import BelezaInstagramCta from "./BelezaInstagramCta";
 
 /**
  * Beleza ("beleza") — «Белеза», a soft beauty-aesthetic look, our SECOND beauty
@@ -101,6 +103,20 @@ export const belezaSections: Record<string, TemplateSectionDef> = {
     component: BelezaCTA,
     variants: { split: BelezaCTASplit },
   },
+  instagram_cta: {
+    block: "instagram_cta",
+    label: "Instagram",
+    description:
+      "Рожева смуга із закликом «Написати в Direct», ніком і кількістю підписників. Лише коли бізнес живе в Instagram (нік підставляє код).",
+    component: BelezaInstagramCta,
+  },
+  map: {
+    block: "map",
+    label: "Карта",
+    description:
+      "Google-карта з адресою та рожевою кнопкою «Прокласти маршрут». Лише коли у фактах є адреса (підставляє код).",
+    component: BelezaMap,
+  },
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
@@ -140,8 +156,10 @@ export const belezaMeta: {
     "gallery",
     "team",
     "testimonials",
+    "instagram_cta",
     "faq",
     "cta",
+    "map",
     "lead_form",
     "contacts",
   ],

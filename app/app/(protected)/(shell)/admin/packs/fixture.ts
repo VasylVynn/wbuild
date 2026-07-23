@@ -180,6 +180,23 @@ export const fixtureContent = [
         ],
       },
     },
+    {
+      type: "map",
+      props: {
+        title: "Як нас знайти",
+        address: "м. Львів, вул. Прикладна, 1",
+      },
+    },
+    {
+      type: "instagram_cta",
+      props: {
+        title: "Ми в Instagram",
+        subtitle: "Свіжі роботи щодня і швидкі відповіді в Direct.",
+        handle: "example.studio",
+        followersCount: 2400,
+        buttonLabel: "Написати в Direct",
+      },
+    },
   ];
 
 export function fixtureBlocks(pack: DesignPack): StoredBlock[] {

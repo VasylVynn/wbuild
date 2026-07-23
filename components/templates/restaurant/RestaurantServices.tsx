@@ -41,14 +41,16 @@ export default function RestaurantServices({ data }: { data: unknown }) {
                     {item.badge}
                   </span>
                 )}
-                <span
-                  className="mx-1 flex-1 border-b border-dotted border-[#2A2018]/25"
-                  aria-hidden="true"
-                />
                 {item.price && (
-                  <span className="shrink-0 font-serif text-lg font-bold text-[#B7791F]">
-                    {item.price}
-                  </span>
+                  <>
+                    <span
+                      className="mx-1 flex-1 border-b border-dotted border-[#2A2018]/25"
+                      aria-hidden="true"
+                    />
+                    <span className="shrink-0 font-serif text-lg font-bold text-[#B7791F]">
+                      {item.price}
+                    </span>
+                  </>
                 )}
               </div>
               {item.description && (

@@ -248,6 +248,42 @@ export const publicationsSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// map — Google Maps embed for the confirmed address (refactor 03 §2.4).
+// Geocode-free: the iframe queries by the address STRING. The address is a
+// FACT — assemble() overwrites it with facts.address 1:1 and drops the whole
+// block when the owner gave no address.
+// ---------------------------------------------------------------------------
+export const mapSchema = z.object({
+  title: z.string().optional(),
+  address: z
+    .string()
+    .min(1)
+    .describe("Адреса бізнесу — копіюється кодом 1:1 з фактів, не вигадуй"),
+});
+
+// ---------------------------------------------------------------------------
+// instagram_cta — first-class «Написати в Direct» CTA for IG-native businesses
+// (refactor 03 §2.4). ADDITIVE to lead_form (invariant 7), never a replacement.
+// handle is a FACT (facts.instagram) and followersCount comes from the IG
+// snapshot — assemble() grounds both deterministically, model values ignored.
+// ---------------------------------------------------------------------------
+export const instagramCtaSchema = z.object({
+  title: z.string().optional(),
+  subtitle: z.string().optional(),
+  handle: z
+    .string()
+    .min(1)
+    .describe("Instagram-нік бізнесу — копіюється кодом 1:1 з фактів, не вигадуй"),
+  followersCount: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("К-сть підписників (заповнюється кодом зі знімка Instagram, не вигадуй)"),
+  buttonLabel: z.string().optional(),
+});
+
+// ---------------------------------------------------------------------------
 // Registry of prop schemas, keyed by block type.
 // ---------------------------------------------------------------------------
 export const blockSchemas = {
@@ -266,6 +302,8 @@ export const blockSchemas = {
   timeline: timelineSchema,
   marquee: marqueeSchema,
   publications: publicationsSchema,
+  map: mapSchema,
+  instagram_cta: instagramCtaSchema,
 } as const;
 
 export type BlockType = keyof typeof blockSchemas;
@@ -283,7 +321,9 @@ export type BlockProps = {
 // Section id of the source TEMPLATE this block was composed from (§templates).
 // Absent on pack/legacy sites — the renderer then keys on the block type. Shared
 // by the model-emitted instance AND the stored placement so it round-trips.
-const sectionField = z
+// Exported for lib/ai/generate's GENERATION variant of the union (photo casting
+// by id) so the two unions can never drift on these shared fields.
+export const sectionField = z
   .string()
   .optional()
   .describe("id секції шаблону, з якої взято цей блок (лише для сайтів на шаблоні)");
@@ -291,7 +331,7 @@ const sectionField = z
 // Layout variant of the template section the model chose (e.g. "split",
 // "minimal"). Optional — absent means the section's default layout. The renderer
 // falls back to default for unknown ids; code re-validates it against the section.
-const variantField = z
+export const variantField = z
   .string()
   .optional()
   .describe("id layout-варіанту обраної секції (напр. split/minimal); пропусти для типового");
@@ -318,6 +358,8 @@ export const blockInstanceSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("timeline"), props: timelineSchema, section: sectionField, variant: variantField }),
   z.object({ type: z.literal("marquee"), props: marqueeSchema, section: sectionField, variant: variantField }),
   z.object({ type: z.literal("publications"), props: publicationsSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("map"), props: mapSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("instagram_cta"), props: instagramCtaSchema, section: sectionField, variant: variantField }),
 ]);
 export type BlockInstance = z.infer<typeof blockInstanceSchema>;
 
@@ -398,4 +440,6 @@ export const factPaths: Record<BlockType, string[]> = {
   timeline: [], // real dates/steps — kept honest by the prompt
   marquee: [], // short real keywords — kept honest by the prompt
   publications: [], // real works — kept honest by the prompt
+  map: ["address"], // the embed queries by the confirmed address, 1:1
+  instagram_cta: ["handle"], // the Direct link targets the confirmed handle, 1:1
 };

@@ -9,6 +9,8 @@ import { getBlockFields } from "@/lib/blocks/fields";
 import { themePresets, resolveTheme, type ThemePresetId } from "@/lib/theme/presets";
 import { getVertical } from "@/lib/verticals/registry";
 import { generateSite } from "@/lib/ai/generate";
+import { buildDossier } from "@/lib/dossier";
+import type { SiteMedia } from "@/lib/media/media";
 import type { Theme } from "@/lib/theme/tokens";
 import { carryDnaFields } from "@/lib/theme/dna";
 import type { BusinessFacts } from "@/lib/verticals/schema";
@@ -295,18 +297,20 @@ export async function regenerateSite(
       packId?: string;
       templateId?: string;
     };
-    // Reuse the site's saved template/pack so regeneration KEEPS the look — only
-    // the content/composition is re-rolled, not the design. templateId wins when
-    // present (template path ignores packs).
+    // Reuse the site's saved template so regeneration KEEPS the look — only the
+    // content/composition is re-rolled, not the design. (Legacy pack sites land
+    // on a template here: the pack fallback left generateSite with the dossier
+    // refactor.) The dossier is the bare facts+media build — the tenant path
+    // has no photoMeta/snapshot, so casting falls back deterministically.
+    const media: SiteMedia = {
+      logoUrl: brand.logoUrl,
+      photos: brand.photos ?? [],
+      generatedHero: brand.generatedHero,
+    };
     const site = await generateSite(
-      t.facts as BusinessFacts,
+      buildDossier({ facts: t.facts, media }),
       t.vertical,
-      {
-        logoUrl: brand.logoUrl,
-        photos: brand.photos ?? [],
-        generatedHero: brand.generatedHero,
-      },
-      brand.packId,
+      media,
       brand.templateId,
     );
 
@@ -350,7 +354,6 @@ export async function regenerateSite(
       },
     };
     const brandPatch: Record<string, unknown> = {};
-    if (!brand.packId && site.packId) brandPatch.packId = site.packId;
     if (!brand.templateId && site.templateId) brandPatch.templateId = site.templateId;
     // H1: a site landing on a template for the FIRST time with an existing
     // logo gets its adapted variant now (fail-open — null keeps the original).

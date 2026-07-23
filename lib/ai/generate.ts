@@ -3,20 +3,30 @@ import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, GEN_MODEL } from "./anthropic";
 import {
-  blockInstanceSchema,
+  heroSchema,
+  richTextSchema,
+  switchbackSchema,
+  servicesSchema,
+  statsSchema,
+  testimonialsSchema,
+  faqSchema,
+  ctaSchema,
+  leadFormSchema,
+  contactsSchema,
+  teamSchema,
+  timelineSchema,
+  marqueeSchema,
+  publicationsSchema,
+  mapSchema,
+  instagramCtaSchema,
+  sectionField,
+  variantField,
   type BlockInstance,
   type BlockPlacement,
   type BlockType,
   type StoredBlock,
 } from "@/lib/blocks/schema";
 import { blockLibrary, COMPOSITION_RULES } from "@/lib/blocks/library";
-import {
-  getPack,
-  packsFor,
-  randomPack,
-  DESIGN_PACK_IDS,
-  type DesignPack,
-} from "@/lib/design/packs";
 import {
   getTemplate,
   siteTemplates,
@@ -27,38 +37,87 @@ import { themePresets, resolveTheme, THEME_PRESET_IDS } from "@/lib/theme/preset
 import type { Theme } from "@/lib/theme/tokens";
 import { getVertical } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
-import type { BusinessFacts } from "@/lib/verticals/schema";
-import type { SiteMedia } from "@/lib/media/media";
+import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
+import { photoIdFor, type SiteMedia } from "@/lib/media/media";
 import { isStorageUrl } from "@/lib/media/media";
+import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
 import {
   normalizeUaPhoneDigits,
+  normalizeIgHandle,
   instagramHref,
   telegramHref,
   viberHref,
 } from "@/lib/blocks/contact-links";
 
 /**
- * Phase 2 — AI composition (brief §4.1–4.4), vertical-aware. The model composes
- * a page from the block library via TOOL USE (structured-outputs strict mode
- * rejects the 10-variant union — "grammar too large"). It picks a theme from the
- * VERTICAL's allowed presets and gets the vertical's tone hint. Composition
- * rules, grounding, and nav placement are enforced in code afterwards.
+ * Phase 2 — AI composition (brief §4.1–4.4), rebuilt on the Business Dossier
+ * (refactor 03 §2.2): the model reads the FULL dossier (facts + brand-voice
+ * cues + IG bio/captions + per-photo text inventory + the owner's own words),
+ * not a compressed facts object, and composes a page from the block library via
+ * TOOL USE. Photos are cast BY ID (03 §2.1 — §4.8 amended: the model sees
+ * per-photo TEXT metadata and stable ids, never URLs or pixels); assemble()
+ * maps id→storage URL deterministically. Composition rules, grounding, and nav
+ * placement are enforced in code afterwards.
  */
+
+// ---------------------------------------------------------------------------
+// GENERATION-side block union (photo casting by id, 03 §2.1). Differs from the
+// STORED blockInstanceSchema in exactly two arms: hero gains `photoId` and
+// loses the url fields; gallery items are `{photoId, title?, category?}`
+// instead of `{url, alt, …}`. Everything else reuses the registry prop schemas
+// verbatim, so the two unions cannot drift on content fields.
+// ---------------------------------------------------------------------------
+const genHeroSchema = heroSchema.omit({ imageUrl: true, imageAlt: true }).extend({
+  photoId: z
+    .string()
+    .optional()
+    .describe("id фото з медіа-інвентаря (наСайт:так) для фону hero; пропусти, якщо фото немає"),
+});
+
+const genGalleryImageSchema = z.object({
+  photoId: z.string().describe("id фото з медіа-інвентаря (наСайт:так)"),
+  title: z
+    .string()
+    .optional()
+    .describe("Короткий підпис фото на основі РЕАЛЬНОГО підпису/опису — не вигадуй, чого не видно"),
+  category: z.string().optional().describe("Коротка категорія фото (напр. «Стрижки»), якщо доречно"),
+});
+const genGallerySchema = z.object({
+  title: z.string().optional(),
+  images: z.array(genGalleryImageSchema).min(1),
+});
+
+const genBlockSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("hero"), props: genHeroSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("richText"), props: richTextSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("switchback"), props: switchbackSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("services"), props: servicesSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("gallery"), props: genGallerySchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("stats"), props: statsSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("testimonials"), props: testimonialsSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("faq"), props: faqSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("cta"), props: ctaSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("lead_form"), props: leadFormSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("contacts"), props: contactsSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("team"), props: teamSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("timeline"), props: timelineSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("marquee"), props: marqueeSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("publications"), props: publicationsSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("map"), props: mapSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("instagram_cta"), props: instagramCtaSchema, section: sectionField, variant: variantField }),
+]);
+type GenBlockInstance = z.infer<typeof genBlockSchema>;
 
 const generationSchema = z.object({
   themePresetId: z.enum(THEME_PRESET_IDS),
-  // A whole-site TEMPLATE (preferred when the vertical has one): dictates the
-  // entire look and the section menu the page is composed from. Falls back to
-  // designPackId for verticals without templates.
+  // A whole-site TEMPLATE: dictates the entire look and the section menu the
+  // page is composed from. Resolution always succeeds (studio is the safety
+  // net) — the legacy design-pack fallback is gone (03 §2.5, dead code out).
   templateId: z
     .enum(TEMPLATE_IDS)
     .optional()
     .describe("Шаблон сайту зі списку доступних — задає весь вигляд і меню секцій, з яких компонується сторінка."),
-  designPackId: z
-    .enum(DESIGN_PACK_IDS)
-    .optional()
-    .describe("Дизайн-пакет зі списку доступних — задає цілісний вигляд сайту (тему й макет секцій)."),
-  blocks: z.array(blockInstanceSchema),
+  blocks: z.array(genBlockSchema),
   // Atmospheric hero-image subject proposed by the model FOR THIS business —
   // consumed by generateHeroImage (§4.8 suffix + palette are appended in code,
   // so the honesty bounds never depend on the model remembering them).
@@ -97,10 +156,8 @@ export interface GeneratedSite {
   blocks: StoredBlock[];
   theme: Theme;
   themePresetId: string;
-  // Design source: exactly one is set. Template sites carry `templateId` (packs
-  // ignored); pack/legacy sites carry `packId`.
-  packId?: string;
-  templateId?: string;
+  // The site's template (always set — template resolution always succeeds).
+  templateId: string;
   imageSubject?: string;
   // Model-written page meta (D1) — persisted with the page content (draft →
   // published), consumed by generateMetadata/OG/JSON-LD on the public render.
@@ -125,10 +182,10 @@ function buildThemeDoc(vertical: VerticalConfig): string {
 }
 
 /**
- * Full template menu for the model: every available template with its section
- * list (id — label — description — «контент за схемою блоку X»). All templates'
- * menus are listed because the model picks the template AND its sections in ONE
- * call. Sections are shown in the template's canonical `order`.
+ * Template menu for the model: every offered template with its section list
+ * (id — label — description — «контент за схемою блоку X»). Lives in the USER
+ * message's static prefix (before the volatile dossier tail) so the whole
+ * prefix stays byte-stable and cache-friendly (04 §2).
  */
 function buildTemplateDoc(templates: SiteTemplate[]): string {
   return templates
@@ -151,30 +208,14 @@ function buildTemplateDoc(templates: SiteTemplate[]): string {
 }
 
 function buildSystem(vertical: VerticalConfig, forced?: SiteTemplate): string {
-  // When a template is forced (regenerate keeps the site's template), offer the
-  // model ONLY that template's section menu — otherwise it may compose from a
-  // different template's sections that assemble() would then drop/remap.
-  const templates = forced ? [forced] : Object.values(siteTemplates);
+  // When a template is forced (regenerate keeps the site's template), the user
+  // message lists ONLY that template's section menu — otherwise it lists them
+  // all and the model picks. The RULES stay here (static); the menus live in
+  // the user message's static prefix.
   const templateRule = forced
-    ? `ШАБЛОН уже зафіксовано (обраний для цього сайту раніше — в розмові або при створенні): ${forced.id} — ${forced.label}. Встанови templateId="${forced.id}" і компонуй сторінку ЛИШЕ із секцій цього шаблону. Правила:
-- Для КОЖНОГО блоку вкажи section = id секції шаблону; тип блоку має відповідати вказаному («блок X»).
-- Якщо секція має layout-варіанти [layout: default | …] — обери variant, що найкраще пасує цьому бізнесу; якщо не впевнений, не вказуй (буде default).
-- hero-секція — перша, contacts-секція — остання; порядок — орієнтир, не догма.
-- Кожну секцію зазвичай один раз. Якщо контенту СПРАВДІ багато — секцію можна використати ДВІЧІ (напр. послуги: основні + додаткові), але лише секцію з layout-варіантами, і повтори МУСЯТЬ мати РІЗНІ variant і РІЗНІ заголовки — сусідні однакові макети виглядають як помилка верстки. РІЗНІ секції можуть живитись ОДНИМ типом блоку (ліміт «макс ×» діє на секцію, не на тип).
-Секції цього шаблону та layout-варіанти:
-${buildTemplateDoc(templates)}
-
-`
-    : `ШАБЛОН (обов'язково): обери ОДИН templateId, чий ХАРАКТЕР і настрій найкраще передають суть цього бізнесу — за відчуттям, НЕ за нішею (жоден шаблон не «закріплений» за галуззю). Шаблон диктує ВЕСЬ вигляд (палітру, шрифти, анімації, може бути темним) і меню секцій. Правила:
-- Компонуй сторінку ЛИШЕ із секцій обраного шаблону.
-- Для КОЖНОГО блоку вкажи section = id секції шаблону; тип блоку має відповідати вказаному («блок X»).
-- Якщо секція має layout-варіанти [layout: default | …] — обери variant, що найкраще пасує цьому бізнесу; якщо не впевнений, не вказуй (буде default).
-- hero-секція — перша, contacts-секція — остання; порядок — орієнтир, не догма.
-- Кожну секцію зазвичай один раз. Якщо контенту СПРАВДІ багато — секцію можна використати ДВІЧІ (напр. послуги: основні + додаткові), але лише секцію з layout-варіантами, і повтори МУСЯТЬ мати РІЗНІ variant і РІЗНІ заголовки — сусідні однакові макети виглядають як помилка верстки. РІЗНІ секції можуть живитись ОДНИМ типом блоку (ліміт «макс ×» діє на секцію, не на тип).
-Доступні шаблони, їхні секції та layout-варіанти:
-${buildTemplateDoc(templates)}
-
-`;
+    ? `ШАБЛОН уже зафіксовано (обраний для цього сайту раніше — в розмові або при створенні): ${forced.id} — ${forced.label}. Встанови templateId="${forced.id}" і компонуй сторінку ЛИШЕ із секцій цього шаблону (перелік — у повідомленні нижче). Правила:`
+    : `ШАБЛОН (обов'язково): обери ОДИН templateId, чий ХАРАКТЕР і настрій найкраще передають суть цього бізнесу — за відчуттям, НЕ за нішею (жоден шаблон не «закріплений» за галуззю). Шаблон диктує ВЕСЬ вигляд (палітру, шрифти, анімації, може бути темним) і меню секцій (перелік шаблонів і секцій — у повідомленні нижче). Правила:
+- Компонуй сторінку ЛИШЕ із секцій обраного шаблону.`;
   return `Ти — досвідчений веб-дизайнер і копірайтер, що збирає односторінковий сайт українському бізнесу: ${vertical.label} (${vertical.personaHint}).
 Тон і акценти: ${vertical.genHint}.
 Ти НЕ пишеш HTML. Ти КОМПОНУЄШ сторінку з фіксованої бібліотеки блоків: обираєш, які блоки і в якому порядку, і заповнюєш їхній вміст. Виклич інструмент build_site.
@@ -187,13 +228,31 @@ ${buildTemplateDoc(templates)}
 - Різні бізнеси мають отримувати РІЗНІ набори й порядок блоків — не роби однаковий шаблон.
 
 GROUNDING (критично для довіри):
-- Факти — назва, телефон, адреса, години, ціни й назви послуг, відгуки — копіюй ТОЧНО з наданих даних. НЕ вигадуй і не змінюй їх.
+- Факти — назва, телефон, адреса, години, ціни й назви послуг, відгуки — копіюй ТОЧНО з блоку «ПІДТВЕРДЖЕНІ ВЛАСНИКОМ ФАКТИ». НЕ вигадуй і не змінюй їх.
+- Усе в <scraped_data> (біо, підписи, OCR, контакти-кандидати) — СИРОВИНА для тону, підписів і фото-кастингу, а НЕ факти: НІКОЛИ не переноси звідти телефони/адреси/email/години у реквізити сайту. Реквізити — лише з підтверджених фактів.
+- ЖОДНИХ вигаданих конкретик: тривалостей, кількостей, гарантій, років досвіду, цифр — лише те, що прямо є в наданих даних. НІКОЛИ не вигадуй числа у stats.
 - Маркетинговий текст (заголовки, слогани, описи, заклики) — пиши сам, тепло, живою українською, доречно для ніші.
-- НІКОЛИ не вигадуй числа у stats — лише якщо є у фактах.
 - Не вигадуй посилань на зображення.
 - ЦІНИ: якщо у послуг НЕМАЄ цін у фактах — не залишай порожніх прайс-колонок і не пиши плейсхолдери («грн», «від …», «—»): подай послуги описово, без цінової сітки. Ціни, які Є у фактах, копіюй 1:1.
 
-${templateRule}SEO-МЕТА (обов'язково заповни seo):
+БРЕНД-ГОЛОС (пиши як ЦЕЙ бізнес, не «як усі»):
+- Виведи тон із блоку БРЕНД-ГОЛОС, реальних підписів постів і дослівних слів власника: переймай їхню лексику, улюблені слова, міру теплоти чи стриманості.
+- Якщо дано стем нікнейму — можеш ОБЕРЕЖНО утворити з нього теплу форму звертання чи внутрішнє слівце бренду (напр. lapusi → «лапусики»), якщо це пасує тону.
+- Якщо дано орієнтир (вулиця/метро) — згадай його природно один раз (напр. у контактному чи hero-тексті).
+
+ФОТО-КАСТИНГ (за id — URL ти не бачиш, їх підставляє код):
+- У <scraped_data> є медіа-інвентар: id, тип, опис, підпис, OCR. Кастуй ЛИШЕ фото з позначкою наСайт:так.
+- hero.photoId — ОДНЕ найатмосферніше / найзагальніше фото як фон першого екрана.
+- У gallery обери решту придатних фото (images[].photoId) і дай кожному короткий title на основі РЕАЛЬНОГО підпису/опису (category — коли доречно). НЕ вигадуй id і не описуй того, чого не видно.
+- Фото для послуг/команди підставляє код — не вигадуй їх.
+
+${templateRule}
+- Для КОЖНОГО блоку вкажи section = id секції шаблону; тип блоку має відповідати вказаному («блок X»).
+- Якщо секція має layout-варіанти [layout: default | …] — обери variant, що найкраще пасує цьому бізнесу; якщо не впевнений, не вказуй (буде default).
+- hero-секція — перша, contacts-секція — остання; порядок — орієнтир, не догма.
+- Кожну секцію зазвичай один раз. Якщо контенту СПРАВДІ багато — секцію можна використати ДВІЧІ (напр. послуги: основні + додаткові), але лише секцію з layout-варіантами, і повтори МУСЯТЬ мати РІЗНІ variant і РІЗНІ заголовки — сусідні однакові макети виглядають як помилка верстки. РІЗНІ секції можуть живитись ОДНИМ типом блоку (ліміт «макс ×» діє на секцію, не на тип).
+
+SEO-МЕТА (обов'язково заповни seo):
 - seo.title — за формулою «{головна послуга} у {місто} — {назва}», до 60 символів. Головну послугу бери з фактів, місто — з фактів.
 - seo.description — 1–2 продаючі речення до 150 символів: що робить бізнес, для кого, у якому місті. Природною мовою, без лапок і переліку через кому всіх послуг.
 
@@ -206,6 +265,13 @@ SEO В ТЕКСТАХ СТОРІНКИ:
 HERO-ЗОБРАЖЕННЯ: заповни imageSubject — короткий опис АНГЛІЙСЬКОЮ (до 15 слів) атмосферного ФОНОВОГО зображення, що асоціюється саме з цим бізнесом: текстури, матеріали, гра світла, природа. ЗАБОРОНЕНО: приміщення/фасади/вітрини, впізнавані товари як «наші», люди, будь-який текст. Приклад для хімчистки: "soft folded fresh linen textures in airy light".`;
 }
 
+// Strict mode (`strict: true`) is deliberately NOT enabled on this tool: strict
+// tool use demands additionalProperties:false with every property required, and
+// this optional-heavy 17-variant discriminated union was already rejected by
+// structured outputs as "grammar too large" (original note above). Instead the
+// call is ONE attempt + one deterministic repair pass (drop invalid blocks,
+// re-parse) — replacing the old 2-attempt retry, whose second full generation
+// never fixed schema drift more reliably than the repair does.
 const buildSiteTool = {
   name: "build_site",
   description: "Зібрати односторінковий сайт: обрати тему (themePresetId) і скомпонувати масив blocks.",
@@ -213,22 +279,24 @@ const buildSiteTool = {
 } as unknown as Anthropic.Tool;
 
 export async function generateSite(
-  facts: BusinessFacts,
+  // The Business Dossier (03 §1.5) — the single rich context for generation:
+  // owner-confirmed facts, brand-voice cues, IG bio/captions, the per-photo
+  // text inventory the model casts from, and the owner's own words.
+  dossier: Dossier,
   verticalId?: string,
-  // Owner-uploaded media (§4.8). The MODEL never learns about photos — this only
-  // drives the deterministic post-pass in assemble(). Optional so callers that
-  // don't thread media keep working (no photos → no hero/gallery imagery).
+  // Owner media (§4.8 amended, 03 §2.1): the model sees per-photo TEXT metadata
+  // + ids (inside the dossier), never URLs — this object only drives the
+  // deterministic id→URL mapping in assemble(). Optional so callers that don't
+  // thread media keep working (no photos → no hero/gallery imagery).
   media?: SiteMedia,
-  // Force a specific design pack (e.g. regenerate keeps the site's existing
-  // design). When set, it overrides the model's pick and the random fallback.
-  packId?: string,
   // Force a specific template (regenerate keeps the site's existing template;
   // onboarding forwards the design the chat agent picked, wave B4).
-  // When it resolves, the template path wins and packs are ignored entirely.
   templateId?: string,
-  // Seeded PRNG from the caller's design-DNA (wave DNA-1): makes the pack
-  // fallback reproducible per tenant+nonce. Absent → Math.random as before.
-  rng?: () => number,
+  // Seeded PRNG from the caller's design-DNA (wave DNA-1). Unused since the
+  // design-pack fallback was deleted; accepted so DNA-seeded callers keep a
+  // stable call shape (underscore quiets the linter, not the contract).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _rng?: () => number,
 ): Promise<GeneratedSite> {
   const client = getAnthropic();
   const vertical = getVertical(verticalId);
@@ -236,102 +304,99 @@ export async function generateSite(
   // both constrains the model's section menu and wins the final resolution.
   const forcedTemplate = templateId ? getTemplate(templateId) : undefined;
 
+  // Boundary cast (03 §2.2): the dossier's untyped facts blob must be complete
+  // BusinessFacts here — generation cannot run on partial facts.
+  const factsParsed = businessFactsSchema.safeParse(dossier.facts ?? {});
+  if (!factsParsed.success) {
+    const issues = factsParsed.error.issues
+      .slice(0, 3)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+    throw new Error(`generateSite: dossier.facts is not valid BusinessFacts (${issues})`);
+  }
+  const facts = factsParsed.data;
+
+  const offeredTemplates = forcedTemplate ? [forcedTemplate] : Object.values(siteTemplates);
+
+  // Prompt order is cache-friendly (04 §2): the static catalog docs (library /
+  // themes / template menus) come FIRST and stay byte-stable per vertical +
+  // template; the volatile per-business dossier is the LAST thing in the turn.
   const userPrompt = `Бібліотека блоків:
 ${buildLibraryDoc()}
 
 Доступні теми (обери лише з цих):
 ${buildThemeDoc(vertical)}
 
-Факти бізнесу (JSON):
-${JSON.stringify(facts, null, 2)}
+${forcedTemplate ? "Секції зафіксованого шаблону та layout-варіанти:" : "Доступні шаблони, їхні секції та layout-варіанти:"}
+${buildTemplateDoc(offeredTemplates)}
+
+${formatDossierForPrompt(dossier)}
 
 Збери сайт за правилами вище і виклич build_site.`;
 
-  let lastError = "no tool call";
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const messages: Anthropic.MessageParam[] =
-      attempt === 0
-        ? [{ role: "user", content: userPrompt }]
-        : [
-            { role: "user", content: userPrompt },
-            {
-              role: "user",
-              content: `Попередній результат не пройшов валідацію схеми: ${lastError}. Виправ і виклич build_site ще раз.`,
-            },
-          ];
+  const res = await client.messages.create({
+    model: GEN_MODEL,
+    // Sonnet 5 tokenizer runs ~30% heavier for the same text (03 §0.1) — the
+    // old 16000 cap starved big compositions.
+    max_tokens: 20000,
+    // Sonnet 5: `budget_tokens` returns 400 — adaptive thinking + nested
+    // output_config.effort is the supported surface (03 §0.1). Thinking stays
+    // incompatible with a forced tool_choice → "auto"; a missing tool call is
+    // a hard failure below (no retry).
+    thinking: { type: "adaptive" },
+    output_config: { effort: "high" },
+    system: buildSystem(vertical, forcedTemplate),
+    tools: [buildSiteTool],
+    tool_choice: { type: "auto" },
+    messages: [{ role: "user", content: userPrompt }],
+  });
 
-    const res = await client.messages.create({
-      model: GEN_MODEL,
-      max_tokens: 16000,
-      // Extended thinking: the owner already watches a ~30s progress screen, so
-      // the latency is free — the composition/copy quality is not. Thinking is
-      // incompatible with a forced tool_choice → "auto"; a missing tool call is
-      // handled as a failed attempt by this retry loop.
-      thinking: { type: "enabled", budget_tokens: 6000 },
-      system: buildSystem(vertical, forcedTemplate),
-      tools: [buildSiteTool],
-      tool_choice: { type: "auto" },
-      messages,
-    });
+  const toolUse = res.content.find((b) => b.type === "tool_use");
+  if (!toolUse || toolUse.type !== "tool_use") {
+    throw new Error(`Generation returned no build_site call (stop_reason=${res.stop_reason})`);
+  }
 
-    const toolUse = res.content.find((b) => b.type === "tool_use");
-    if (!toolUse || toolUse.type !== "tool_use") {
-      lastError = `stop_reason=${res.stop_reason}, no tool_use block`;
-      continue;
+  let parsed = generationSchema.safeParse(toolUse.input);
+  if (!parsed.success) {
+    // Deterministic repair pass: schema failures are per-block in practice —
+    // drop the invalid blocks and re-parse. assemble() then backfills anything
+    // load-bearing (funnel, contacts), so a partial composition still ships.
+    const input = toolUse.input as { blocks?: unknown[] } | null;
+    if (input && Array.isArray(input.blocks)) {
+      parsed = generationSchema.safeParse({
+        ...input,
+        blocks: input.blocks.filter((b) => genBlockSchema.safeParse(b).success),
+      });
     }
-
-    const parsed = generationSchema.safeParse(toolUse.input);
-    if (parsed.success) {
-      // TEMPLATE path (owner mandate): the caller's template (regenerate keeps
-      // it) → the model's pick if this vertical has that template. When resolved,
-      // the template dictates the whole look and packs are IGNORED. The persisted
-      // theme is still the model's preset (favicon/OG metadata) — the wrapper
-      // overrides the actual on-page colors.
-      // Template is the primary design path: the model picks any template BY
-      // CHARACTER (no vertical gate), regenerate keeps the caller's, and a fixed
-      // default is the last-resort safety net — never a random pick.
-      const template =
-        forcedTemplate ??
-        getTemplate(parsed.data.templateId) ??
-        getTemplate("studio") ??
-        Object.values(siteTemplates)[0];
-      if (template) {
-        return {
-          theme: resolveTheme(parsed.data.themePresetId),
-          themePresetId: parsed.data.themePresetId,
-          templateId: template.id,
-          blocks: assemble(parsed.data.blocks, facts, undefined, media, template),
-          imageSubject: parsed.data.imageSubject,
-          seo: clampSeo(parsed.data.seo),
-        };
-      }
-
-      // The design pack decides the LOOK (theme + a fixed skin per block) so the
-      // site reads as ONE cohesive design, not a per-block skin lottery. Priority:
-      // caller's pack (regenerate keeps the design) → model's choice if compatible
-      // with this vertical → a random compatible pack. The pack ALWAYS wins over
-      // the model's themePresetId.
-      const compatible = packsFor(vertical.id);
-      const pack =
-        (packId ? getPack(packId) : undefined) ??
-        compatible.find((p) => p.id === parsed.data.designPackId) ??
-        randomPack(vertical.id, rng);
-      return {
-        theme: resolveTheme(pack.themePresetId),
-        themePresetId: pack.themePresetId,
-        packId: pack.id,
-        blocks: assemble(parsed.data.blocks, facts, pack, media, undefined),
-        imageSubject: parsed.data.imageSubject,
-        seo: clampSeo(parsed.data.seo),
-      };
-    }
-    lastError = parsed.error.issues
+  }
+  if (!parsed.success) {
+    const issues = parsed.error.issues
       .slice(0, 6)
       .map((i) => `${i.path.join(".")}: ${i.message}`)
       .join("; ");
+    throw new Error(`Generation failed schema validation: ${issues}`);
   }
 
-  throw new Error(`Generation failed schema validation after retries: ${lastError}`);
+  // TEMPLATE resolution (owner mandate): the caller's template (regenerate
+  // keeps it) → the model's pick → the fixed default safety net. Always
+  // succeeds — the legacy design-pack branch is deleted (03 §2.5). The
+  // persisted theme is still the model's preset (favicon/OG metadata) — the
+  // template wrapper overrides the actual on-page colors.
+  const template =
+    forcedTemplate ??
+    getTemplate(parsed.data.templateId) ??
+    getTemplate("studio") ??
+    Object.values(siteTemplates)[0];
+  if (!template) throw new Error("no site templates registered");
+
+  return {
+    theme: resolveTheme(parsed.data.themePresetId),
+    themePresetId: parsed.data.themePresetId,
+    templateId: template.id,
+    blocks: assemble(parsed.data.blocks, facts, media, template, dossier),
+    imageSubject: parsed.data.imageSubject,
+    seo: clampSeo(parsed.data.seo),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -373,53 +438,135 @@ function resolvedVariant(
 }
 
 // ---------------------------------------------------------------------------
-// Post-generation: enforce composition, ground facts, project nav placement.
+// Post-generation: cast photos id→URL, enforce composition, ground facts,
+// project nav placement.
 // ---------------------------------------------------------------------------
 function assemble(
-  raw: BlockInstance[],
+  raw: GenBlockInstance[],
   facts: BusinessFacts,
-  pack: DesignPack | undefined,
   media: SiteMedia | undefined,
   template: SiteTemplate | undefined,
+  dossier: Dossier,
 ): StoredBlock[] {
   const photos = media?.photos ?? [];
-  // The generated hero (§4.8) is a trusted, bucket-hosted URL like a real photo:
-  // it may back the hero, so it belongs in the allow-set. Gallery stays photos-only.
   const generatedHero = media?.generatedHero;
-  const allowed = new Set(photos);
-  if (generatedHero) allowed.add(generatedHero);
+  const metaByUrl = new Map((media?.photoMeta ?? []).map((m) => [m.url, m]));
+
+  // Casting eligibility (§4.8 amended, 03 §2.1): a photo the agent marked as an
+  // info source (text_source), hidden, or vision-rejected (useOnSite === false)
+  // never renders on the site — it feeds the dossier only. Photos without meta
+  // are eligible (pre-refactor uploads).
+  const eligible = photos.filter((url) => {
+    const m = metaByUrl.get(url);
+    if (!m) return true;
+    if (m.role === "text_source" || m.role === "hidden") return false;
+    return m.useOnSite !== false;
+  });
+  // id → URL, derived in code (photoIdFor fallback for legacy meta rows) — the
+  // model casts by these ids and NEVER supplies a URL; an unknown id maps to
+  // nothing and the deterministic fallbacks below take over.
+  const urlById = new Map(eligible.map((url) => [metaByUrl.get(url)?.id ?? photoIdFor(url), url]));
+
   const businessName = facts.businessName;
   // D3: deterministic alt base for owner photos — name + city (local-SEO
-  // keywords that are always TRUE). The model never sees images (§4.8), so
-  // descriptive alts are never model-written; the vision layer's per-photo
-  // description (wave G, photoMeta.alt) wins over the base when it exists.
+  // keywords that are always TRUE). Descriptive alts are never model-written;
+  // the vision layer's per-photo description (photoMeta.alt) wins when present.
   const altBase = facts.city ? `${businessName}, ${facts.city}` : businessName;
-  const altByUrl = new Map<string, string>();
-  for (const m of media?.photoMeta ?? []) {
-    if (m.alt?.trim()) altByUrl.set(m.url, m.alt.trim());
-  }
-  const photoAlt = (url: string, fallback: string) => altByUrl.get(url) ?? fallback;
+  const photoAlt = (url: string, fallback: string) =>
+    metaByUrl.get(url)?.alt?.trim() || fallback;
+  // Gallery-title fallback (03 §2.4 gallery captions): the photo's real IG
+  // caption, excerpted — never an invented description.
+  const captionFor = (url: string): string | undefined => {
+    const c = metaByUrl.get(url)?.sourceCaption;
+    if (!c) return undefined;
+    const flat = c.replace(/\s+/g, " ").trim();
+    if (!flat) return undefined;
+    return flat.length > 60 ? `${flat.slice(0, 60)}…` : flat;
+  };
 
-  const hero = raw.find((b) => b.type === "hero");
-  const contacts = raw.find((b) => b.type === "contacts");
+  // Hero photo := the model's cast id when it maps to an eligible photo → the
+  // first eligible → the generated atmospheric hero (assigned at conversion
+  // below). The gallery pool is everything eligible minus the hero's photo, so
+  // the hero background never repeats inside the gallery.
+  const genHero = raw.find((b) => b.type === "hero");
+  const castHeroId = genHero?.type === "hero" ? genHero.props.photoId : undefined;
+  const heroPhoto = (castHeroId ? urlById.get(castHeroId) : undefined) ?? eligible[0];
+  const galleryPool = eligible.filter((u) => u !== heroPhoto);
 
-  // The hero consumes photos[0] as its background (see groundImages). A gallery
-  // repeating that same photo reads as a bug on the live site, so the gallery
-  // pool is photos 2..N whenever the hero took one; if fewer than 2 remain, no
-  // gallery at all.
-  const heroPhoto = hero ? photos[0] : undefined;
-  const galleryPhotos = heroPhoto ? photos.slice(1) : photos;
+  type StoredGalleryImage = { url: string; alt?: string; title?: string; category?: string };
+  const galleryFromPool = (): StoredGalleryImage[] =>
+    galleryPool.map((url, i) => ({
+      url,
+      alt: photoAlt(url, `${altBase} — фото ${i + 1}`),
+      ...(captionFor(url) && { title: captionFor(url) }),
+    }));
+  // The model's cast list (валідні id, no hero repeat, deduped) wins — its
+  // titles/categories are the whole point of casting. A cast that maps to <2
+  // real photos is unusable → all remaining eligible photos, captions as titles.
+  const galleryFromCast = (
+    cast: { photoId: string; title?: string; category?: string }[],
+  ): StoredGalleryImage[] => {
+    const out: StoredGalleryImage[] = [];
+    const seen = new Set<string>();
+    for (const item of cast) {
+      const url = urlById.get(item.photoId);
+      if (!url || url === heroPhoto || seen.has(url)) continue;
+      seen.add(url);
+      out.push({
+        url,
+        alt: photoAlt(url, `${altBase} — фото ${out.length + 1}`),
+        ...((item.title ?? captionFor(url)) && { title: item.title ?? captionFor(url) }),
+        ...(item.category && { category: item.category }),
+      });
+    }
+    return out.length >= 2 ? out : galleryFromPool();
+  };
 
-  const perType: Partial<Record<BlockType, number>> = {};
+  // GENERATION → STORED conversion (03 §2.1): the id-cast arms become concrete
+  // storage URLs here — deterministically, so nothing model-invented can ever
+  // reach an image field. All other arms are structurally identical.
+  const converted: BlockInstance[] = raw.map((b): BlockInstance => {
+    if (b.type === "hero") {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { photoId: _photoId, ...props } = b.props;
+      const imageUrl = heroPhoto ?? generatedHero;
+      const imageAlt = heroPhoto
+        ? photoAlt(heroPhoto, altBase)
+        : imageUrl
+          ? `Атмосферне зображення — ${altBase}`
+          : undefined;
+      return { type: "hero", props: { ...props, imageUrl, imageAlt }, section: b.section, variant: b.variant };
+    }
+    if (b.type === "gallery") {
+      return {
+        type: "gallery",
+        props: { title: b.props.title, images: galleryFromCast(b.props.images) },
+        section: b.section,
+        variant: b.variant,
+      };
+    }
+    return b;
+  });
+
+  const hero = converted.find((b) => b.type === "hero");
+  const contacts = converted.find((b) => b.type === "contacts");
+
+  // Deterministic drop rules for the fact-anchored blocks (03 §2.4): no
+  // confirmed address → no map; no confirmed handle → no instagram_cta. The
+  // grounding pass then overwrites the fields 1:1 for the survivors.
+  const hasAddress = Boolean(facts.address?.trim());
+  const hasIgHandle = Boolean(normalizeIgHandle(facts.instagram));
+
   const perSection: Record<string, number> = {};
-  const middle = raw
+  const middle = converted
     .filter((b) => b.type !== "hero" && b.type !== "contacts" && b.type !== "lead_form")
     // switchback has no trusted per-item image source → always dropped (§4.8).
     .filter((b) => b.type !== "switchback")
-    // gallery is kept ONLY when ≥2 real photos remain to fill it (after the
-    // hero took its one); its own images are model-invented and replaced below.
-    // Otherwise the model would show fabricated imagery (§4.8 honesty invariant).
-    .filter((b) => b.type !== "gallery" || galleryPhotos.length >= 2)
+    // gallery is kept ONLY when ≥2 real photos actually fill it — a fabricated
+    // or single-photo gallery reads as a bug on the live site (§4.8).
+    .filter((b) => b.type !== "gallery" || b.props.images.length >= 2)
+    .filter((b) => b.type !== "map" || hasAddress)
+    .filter((b) => b.type !== "instagram_cta" || hasIgHandle)
     // On a template site, drop middle blocks whose type maps to no section — they
     // would otherwise render via the default registry and break the template look.
     .filter((b) => !template || resolvedSection(template, b) !== undefined)
@@ -439,9 +586,9 @@ function assemble(
           Object.keys(template.sections[section]?.variants ?? {}).length > 0;
         return used <= (hasAltLayouts ? 2 : 1);
       }
-      const used = (perType[b.type] ?? 0) + 1;
-      perType[b.type] = used;
-      return used <= blockLibrary[b.type].maxPerPage;
+      const seenCount = (perSection[b.type] ?? 0) + 1;
+      perSection[b.type] = seenCount;
+      return seenCount <= blockLibrary[b.type].maxPerPage;
     })
     .slice(0, COMPOSITION_RULES.maxMiddle);
 
@@ -459,25 +606,14 @@ function assemble(
     },
   };
 
-  // With ≥2 real photos and no model gallery, inject one from the uploads right
-  // before the lead funnel — routed through the same placement path as any block.
-  // Skip on a template with no gallery section: it would render via the default
-  // (light) registry component inside the template's shell and break the look.
+  // With ≥2 eligible photos and no model gallery, inject one from the uploads
+  // right before the lead funnel — routed through the same placement path as
+  // any block. Skip on a template with no gallery section: it would render via
+  // the default (light) registry component inside the template's shell.
   const canHostGallery = !template || sectionForType(template, "gallery") !== undefined;
   const injectedGallery: BlockInstance[] =
-    galleryPhotos.length >= 2 && !modelChoseGallery && canHostGallery
-      ? [
-          {
-            type: "gallery",
-            props: {
-              title: "Наші фото",
-              images: galleryPhotos.map((url, i) => ({
-                url,
-                alt: photoAlt(url, `${altBase} — фото ${i + 1}`),
-              })),
-            },
-          },
-        ]
+    galleryPool.length >= 2 && !modelChoseGallery && canHostGallery
+      ? [{ type: "gallery", props: { title: "Наші фото", images: galleryFromPool() } }]
       : [];
 
   // The contacts closer is part of the funnel invariant (§5.6): if the model
@@ -494,19 +630,20 @@ function assemble(
     contactsBlock,
   ];
 
+  // The generated hero (§4.8) is a trusted, bucket-hosted URL like a real photo.
+  const allowed = new Set(photos);
+  if (generatedHero) allowed.add(generatedHero);
+
   const seen: Partial<Record<BlockType, number>> = {};
   const factHrefs = allowedFactHrefs(facts);
+  const igFollowers = dossier.ig.followers;
   const placed = ordered.map((b) =>
     groundAndPlace(
-      groundHrefs(
-        groundImages(b, photos, galleryPhotos, allowed, altBase, photoAlt, generatedHero),
-        facts,
-        factHrefs,
-      ),
+      groundHrefs(groundImages(b, allowed), facts, factHrefs),
       facts,
       seen,
-      pack,
       template,
+      igFollowers,
     ),
   );
 
@@ -567,35 +704,12 @@ function assemble(
 }
 
 /**
- * Deterministic image grounding (§4.8): the model never sees photo URLs, so
- * every image field is (re)assigned from the uploaded set here. Nothing invented
- * ever survives — a fabricated URL is stripped, a real photo is placed.
+ * Deterministic image grounding (§4.8): hero/gallery imagery is already cast
+ * id→URL at conversion time, so this pass only strips the per-item image slots
+ * the model can still write free-form — anything not in the uploaded set dies.
  */
-function groundImages(
-  b: BlockInstance,
-  photos: string[],
-  galleryPhotos: string[],
-  allowed: Set<string>,
-  altBase: string,
-  photoAlt: (url: string, fallback: string) => string,
-  generatedHero?: string,
-): BlockInstance {
+function groundImages(b: BlockInstance, allowed: Set<string>): BlockInstance {
   switch (b.type) {
-    case "hero": {
-      // Hero background := first real photo → generated atmospheric hero → none
-      // (never a model-invented URL). Real uploads always win over the generated one.
-      // Alt is deterministic too (D3): the model never saw the image, so any
-      // alt it wrote is overwritten — a real photo gets the vision layer's
-      // description when one exists (wave G), else the name+city base; the
-      // generated atmospheric image says exactly what it is.
-      const imageUrl = photos[0] ?? generatedHero;
-      const imageAlt = photos[0]
-        ? photoAlt(photos[0], altBase)
-        : imageUrl
-          ? `Атмосферне зображення — ${altBase}`
-          : undefined;
-      return { ...b, props: { ...b.props, imageUrl, imageAlt } };
-    }
     case "services":
       // Per-service images are model-invented → strip any not in the uploaded set.
       return {
@@ -605,19 +719,6 @@ function groundImages(
           items: b.props.items.map((it) =>
             it.imageUrl && !allowed.has(it.imageUrl) ? { ...it, imageUrl: undefined } : it,
           ),
-        },
-      };
-    case "gallery":
-      // Any surviving gallery (kept or injected) is filled with the real photos,
-      // minus the one already backing the hero (no visible duplicate).
-      return {
-        ...b,
-        props: {
-          ...b.props,
-          images: galleryPhotos.map((url, i) => ({
-            url,
-            alt: photoAlt(url, `${altBase} — фото ${i + 1}`),
-          })),
         },
       };
     case "team":
@@ -728,21 +829,18 @@ function groundHrefs(
 function computePlacement(
   type: BlockType,
   seen: Partial<Record<BlockType, number>>,
-  pack: DesignPack | undefined,
   template: SiteTemplate | undefined,
   section: string | undefined,
 ): BlockPlacement {
   const lib = blockLibrary[type];
-  // Template sites carry a `section` and NO skin — the template owns the whole
-  // look. Pack sites carry a fixed skin per block type and no section: a cohesive,
-  // template-faithful look, NOT a per-block lottery. "" (or absent) skin means the
-  // component's default variant. The editor can still switch it any time.
-  const skin = template ? undefined : pack?.skins[type] || undefined;
+  // Template sites carry a `section` and no skin — the template owns the whole
+  // look (the pack/skin plumbing left with the design-pack branch; the editor's
+  // switch_pack path still writes skins on legacy sites).
   if (type === "contacts") {
-    return { anchor: "#contacts", navLabel: lib.navLabel, showInNav: true, hidden: false, skin, section };
+    return { anchor: "#contacts", navLabel: lib.navLabel, showInNav: true, hidden: false, section };
   }
   if (type === "lead_form") {
-    return { anchor: "#lead", navLabel: lib.navLabel, showInNav: true, hidden: false, skin, section };
+    return { anchor: "#lead", navLabel: lib.navLabel, showInNav: true, hidden: false, section };
   }
   if (lib.role === "middle" && lib.inNav) {
     const n = (seen[type] = (seen[type] ?? 0) + 1);
@@ -751,23 +849,22 @@ function computePlacement(
       navLabel: lib.navLabel,
       showInNav: true,
       hidden: false,
-      skin,
       section,
     };
   }
-  return { showInNav: false, hidden: false, skin, section };
+  return { showInNav: false, hidden: false, section };
 }
 
 function groundAndPlace(
   b: BlockInstance,
   facts: BusinessFacts,
   seen: Partial<Record<BlockType, number>>,
-  pack: DesignPack | undefined,
   template: SiteTemplate | undefined,
+  igFollowers: number | undefined,
 ): StoredBlock {
   const section = resolvedSection(template, b);
   const variant = resolvedVariant(template, section, b.variant);
-  const placement = computePlacement(b.type, seen, pack, template, section);
+  const placement = computePlacement(b.type, seen, template, section);
 
   // Grounding (§4.4): contact facts are known — force them verbatim.
   if (b.type === "contacts") {
@@ -783,6 +880,32 @@ function groundAndPlace(
         // Strict (unlike the ?? fields above): a handle is only ever a FACT —
         // a model-invented one must not survive when the owner gave none.
         instagram: facts.instagram,
+      },
+      ...placement,
+      variant,
+    };
+  }
+
+  // map: the embed queries the CONFIRMED address, 1:1 (assemble() already
+  // dropped the block when the fact is absent — ?? only keeps the type happy).
+  if (b.type === "map") {
+    return {
+      ...b,
+      props: { ...b.props, address: facts.address ?? b.props.address },
+      ...placement,
+      variant,
+    };
+  }
+
+  // instagram_cta: handle is the CONFIRMED fact; the follower count comes from
+  // the IG snapshot only — a model-invented number must never render (§4.4).
+  if (b.type === "instagram_cta") {
+    return {
+      ...b,
+      props: {
+        ...b.props,
+        handle: facts.instagram ?? b.props.handle,
+        followersCount: igFollowers,
       },
       ...placement,
       variant,

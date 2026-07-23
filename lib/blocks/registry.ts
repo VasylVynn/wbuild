@@ -11,6 +11,8 @@ import Faq from "@/components/blocks/Faq";
 import Cta from "@/components/blocks/Cta";
 import LeadForm from "@/components/blocks/LeadForm";
 import Contacts from "@/components/blocks/Contacts";
+import Map from "@/components/blocks/Map";
+import InstagramCta from "@/components/blocks/InstagramCta";
 
 /**
  * blockType → React component. The SAME registry backs render (here), and
@@ -36,4 +38,6 @@ export const blockRegistry: Partial<{
   cta: Cta,
   lead_form: LeadForm,
   contacts: Contacts,
+  map: Map,
+  instagram_cta: InstagramCta,
 };

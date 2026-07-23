@@ -22,6 +22,8 @@ import SalonPublications from "./SalonPublications";
 import SalonServicesMenu from "./SalonServicesMenu";
 import SalonContactsStrip from "./SalonContactsStrip";
 import SalonLeadFormSplit from "./SalonLeadFormSplit";
+import SalonMap from "./SalonMap";
+import SalonInstagramCta from "./SalonInstagramCta";
 
 /**
  * Salon ("luxe-salon") — a LIGHT luxury look (soft rounded glass cards, gold +
@@ -102,6 +104,20 @@ export const salonSections: Record<string, TemplateSectionDef> = {
     description: "Акордеон із питаннями та відповідями (одне відкрите).",
     component: SalonFAQ,
   },
+  instagram_cta: {
+    block: "instagram_cta",
+    label: "Instagram",
+    description:
+      "Люкс-смуга із закликом «Написати в Direct», ніком і кількістю підписників. Лише коли бізнес живе в Instagram (нік підставляє код).",
+    component: SalonInstagramCta,
+  },
+  map: {
+    block: "map",
+    label: "Карта",
+    description:
+      "Google-карта у скляній рамці з адресою та кнопкою «Прокласти маршрут». Лише коли у фактах є адреса (підставляє код).",
+    component: SalonMap,
+  },
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
@@ -143,7 +159,9 @@ export const salonMeta: {
     "team",
     "press",
     "testimonials",
+    "instagram_cta",
     "faq",
+    "map",
     "lead_form",
     "contacts",
   ],

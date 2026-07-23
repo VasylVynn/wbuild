@@ -17,6 +17,8 @@ import RestaurantFAQ from "./RestaurantFAQ";
 import RestaurantCTA from "./RestaurantCTA";
 import RestaurantLeadForm, { RestaurantLeadFormSplit } from "./RestaurantLeadForm";
 import RestaurantContacts, { RestaurantContactsSidebar } from "./RestaurantContacts";
+import RestaurantMap from "./RestaurantMap";
+import RestaurantInstagramCta from "./RestaurantInstagramCta";
 
 /**
  * Restaurant ("restaurant") — a warm hospitality look (Lora display serif + Inter
@@ -112,6 +114,20 @@ export const restaurantSections: Record<string, TemplateSectionDef> = {
     description: "Тепла смуга-заклик (напр. «Замовляйте зараз»): заголовок, підзаголовок, кнопка.",
     component: RestaurantCTA,
   },
+  instagram_cta: {
+    block: "instagram_cta",
+    label: "Instagram",
+    description:
+      "Оливкова смуга із закликом «Написати в Direct», ніком і кількістю підписників. Лише коли заклад живе в Instagram (нік підставляє код).",
+    component: RestaurantInstagramCta,
+  },
+  map: {
+    block: "map",
+    label: "Карта",
+    description:
+      "Google-карта з адресою закладу та кнопкою «Прокласти маршрут». Лише коли у фактах є адреса (підставляє код).",
+    component: RestaurantMap,
+  },
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
@@ -153,9 +169,11 @@ export const restaurantMeta: {
     "gallery",
     "team",
     "testimonials",
+    "instagram_cta",
     "publications",
     "faq",
     "cta",
+    "map",
     "lead_form",
     "contacts",
   ],

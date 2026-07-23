@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { isPlatformAdmin } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/supabase/auth";
-import { generateAndPublish } from "@/lib/site/publish";
+import { generateDraft, publishDraft } from "@/lib/site/publish";
 import { ROOT_DOMAIN, stripPort } from "@/lib/config";
 import { revalidateTenant } from "@/lib/cache";
 import type { BusinessFacts } from "@/lib/verticals/schema";
@@ -12,8 +12,8 @@ import type { BusinessFacts } from "@/lib/verticals/schema";
 /**
  * Founders-only one-click site generation for iterating on generation quality
  * (composition, copy, skins, hero images) without going through onboarding
- * chat. Same generateAndPublish() the real onboarding flow uses — this is a
- * shortcut to the input, not a different code path.
+ * chat. Same generateDraft() → publishDraft() pair the real flow uses — this
+ * is a shortcut to the input, not a different code path.
  */
 
 const FIXTURES: Record<string, BusinessFacts> = {
@@ -116,7 +116,10 @@ export async function adminTestGenerate(verticalId: string): Promise<AdminGenera
   const started = Date.now();
 
   try {
-    await generateAndPublish(fixture, host, verticalId, true);
+    const draft = await generateDraft({ facts: fixture, host, verticalId });
+    if (!draft.ok) return { ok: false, error: draft.error ?? "Помилка генерації." };
+    const pub = await publishDraft(host);
+    if (!pub.ok) return { ok: false, error: pub.error ?? "Помилка публікації." };
     const ms = Date.now() - started;
 
     // Owner membership so /edit/{host} works for whoever clicked generate —

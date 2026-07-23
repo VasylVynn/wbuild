@@ -21,6 +21,8 @@ import StudioTestimonialsAlt from "./StudioTestimonialsAlt";
 import StudioTestimonialsFeatured from "./StudioTestimonialsFeatured";
 import StudioContactsSplit from "./StudioContactsSplit";
 import StudioLeadFormBand from "./StudioLeadFormBand";
+import MapSection from "./MapSection";
+import InstagramCtaSection from "./InstagramCtaSection";
 
 /**
  * A single section of the studio template.
@@ -120,6 +122,20 @@ export const studioSections: Record<string, TemplateSectionDef> = {
       "Повноширинна смуга з великим твердженням/гаслом і підзаголовком — без кнопки, розриває ритм сторінки.",
     component: StudioBanner,
   },
+  instagram_cta: {
+    block: "instagram_cta",
+    label: "Instagram",
+    description:
+      "Панель із закликом «Написати в Direct», ніком і кількістю підписників. Лише коли бізнес живе в Instagram (нік підставляє код).",
+    component: InstagramCtaSection,
+  },
+  map: {
+    block: "map",
+    label: "Карта",
+    description:
+      "Google-карта з адресою та кнопкою «Прокласти маршрут». Лише коли у фактах є адреса (підставляє код).",
+    component: MapSection,
+  },
   lead_form: {
     block: "lead_form",
     label: "Форма заявки",
@@ -161,7 +177,9 @@ export const studioMeta: {
     "timeline",
     "team",
     "testimonials",
+    "instagram_cta",
     "banner",
+    "map",
     "lead_form",
     "contacts",
   ],

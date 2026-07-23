@@ -62,6 +62,7 @@ const LABELS: Record<string, string> = {
   viber: "Viber (номер)",
   telegram: "Telegram (нік або номер)",
   instagram: "Instagram (нік або посилання)",
+  handle: "Instagram (нік)",
 };
 
 const TEXTAREA_KEYS = new Set(["body", "description", "quote", "answer", "message", "subtitle"]);
