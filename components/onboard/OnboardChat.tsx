@@ -242,12 +242,39 @@ function routeBatch(
   };
 }
 
+// Generation-screen pacing (design D fix, wave TPL3): there is no real
+// per-step signal — generateDraftAction is one awaited server action — so
+// the step list, sub-message and progress bar are driven by a plain client
+// clock (`genElapsed`, ticked in an effect below). Paced to keep visibly
+// advancing across the real ~3-minute server budget without ever looking
+// frozen or claiming 100% before the call actually resolves.
+const GEN_STEPS = [
+  "Тексти про ваш бізнес",
+  "Послуги та ціни",
+  "Оформлення і кольори",
+  "Готуємо фото",
+  "Збираємо блоки сайту",
+  "Форма замовлення",
+];
+// Seconds elapsed before the step at the same index becomes "active"; the
+// last step just stays active for however much longer generation takes —
+// there is no signal to mark it "done" early.
+const GEN_STEP_SECONDS = [0, 20, 45, 75, 110, 145];
+// Rotates under the heading every 40s so a long wait still reads as
+// ongoing work, not a stall.
+const GEN_MESSAGES = [
+  "Це може зайняти до 3 хвилин — нікуди не йдіть, ми вже працюємо.",
+  "Пишемо тексти й підбираємо кольори під ваш бізнес.",
+  "Ще трохи — готуємо фото та збираємо сторінку.",
+  "Майже готово — фінальні перевірки перед показом.",
+];
+
 // Design animations (design/D). Kept in-file so this component owns everything;
 // prefixed `ob-` to avoid colliding with any global keyframes.
 const KEYFRAMES = `
 @keyframes ob-typing { 0%,60%,100% { transform: translateY(0); opacity: .5 } 30% { transform: translateY(-4px); opacity: 1 } }
-@keyframes ob-genbar { 0% { width: 12% } 60% { width: 78% } 100% { width: 92% } }
-@keyframes ob-float { 0%,100% { transform: translateY(0) rotate(-4deg) } 50% { transform: translateY(-10px) rotate(4deg) } }
+@keyframes ob-pulse { 0%,100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(233,162,59,.28) } 50% { transform: scale(1.06); box-shadow: 0 0 0 12px rgba(233,162,59,0) } }
+@keyframes ob-shimmer { 0% { transform: translateX(-120%) } 100% { transform: translateX(220%) } }
 @keyframes ob-confetti { 0% { transform: translateY(-24px) rotate(0deg); opacity: 1 } 100% { transform: translateY(240px) rotate(260deg); opacity: 0 } }
 `;
 
@@ -289,8 +316,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   const [template, setTemplate] = useState<{ id: string; label: string } | null>(null);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
-  // Extended-thinking phase of the streaming turn — «Думаю…» label.
-  const [thinking, setThinking] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>(
     igImportEnabled ? ["У мене є Instagram"] : [],
   );
@@ -302,6 +327,9 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
 
   // --- Phase ---
   const [phase, setPhase] = useState<Phase>("chat");
+  // Generating-screen clock (seconds since entering "generating") — paces
+  // the step list / progress bar / sub-message; see the effect below.
+  const [genElapsed, setGenElapsed] = useState(0);
 
   // --- Media (logo + photos) — optional step before generation ---
   const [media, setMedia] = useState<SiteMedia>({ photos: [] });
@@ -388,6 +416,18 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     });
   }, []);
 
+  // Generation progress clock: NO real per-step signal exists (generateDraftAction
+  // is one awaited server action), so this ticks a plain elapsed-seconds counter
+  // while phase is "generating" — the render below derives step/message/bar from
+  // it. Resets on every entry (so a retry restarts the sequence) and is cleared
+  // on exit, so it never keeps running once the phase moves on.
+  useEffect(() => {
+    if (phase !== "generating") return;
+    setGenElapsed(0);
+    const id = setInterval(() => setGenElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [phase]);
+
   // ---------------------------------------------------------------------------
   // Chat handlers
   // ---------------------------------------------------------------------------
@@ -471,17 +511,13 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         } catch {
           continue;
         }
-        if (obj.t === "think") {
-          setThinking(true);
-        } else if (obj.t === "tool" && typeof obj.label === "string") {
+        if (obj.t === "tool" && typeof obj.label === "string") {
           // A tool started — show it as an inline status chip.
-          setThinking(false);
           const label = obj.label;
           setActiveTools((prev) => (prev.includes(label) ? prev : [...prev, label]));
         } else if (obj.t === "d" && typeof obj.text === "string") {
           if (!acc) {
             setTyping(false);
-            setThinking(false);
           }
           // The agent finished its tools and is answering — drop the chips.
           setActiveTools([]);
@@ -651,7 +687,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       if (!text) return;
 
       setTyping(true);
-      setThinking(false);
 
       const applyResult = (result: TurnPayload) => {
         const finalMessages: ChatMsg[] = [...uiMessages, { role: "assistant", content: result.message }];
@@ -722,7 +757,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     } finally {
       setLoading(false);
       setTyping(false);
-      setThinking(false);
       setBatchCard(null);
       setActiveTools([]);
       // Return focus to input so the owner can keep typing
@@ -973,9 +1007,10 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
             </span>
             <div className="flex flex-col leading-tight">
               <span className="text-[17px] font-extrabold text-ink">Помічник</span>
-              <span className={`text-[13px] font-bold ${typing ? "text-ink-muted" : "text-ok"}`}>
-                {typing ? "друкує…" : "онлайн"}
-              </span>
+              {/* Static — the tool/thinking chip below the messages is the
+                  sole "agent is working" signal; swapping this label too
+                  read as a redundant third indicator (owner feedback). */}
+              <span className="text-[13px] font-bold text-ok">онлайн</span>
             </div>
             {/* Reset only makes sense once the user actually said something. */}
             {messages.length > 1 && (
@@ -1047,8 +1082,13 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               </div>
             )}
 
-            {/* Inline tool-status chips — the agent's tools running live (04 §2). */}
-            {activeTools.length > 0 && (
+            {/* ONE working indicator at a time, never two together: tool
+                chips win while any tool is running; otherwise a single
+                «Думаю…» chip covers extended thinking AND the plain
+                pre-first-token wait (both look identical to the owner).
+                Once text starts streaming, `typing` flips false and the
+                growing bubble is the only signal — no chip at all. */}
+            {activeTools.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {activeTools.map((label, i) => (
                   <span
@@ -1063,9 +1103,9 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
                   </span>
                 ))}
               </div>
+            ) : (
+              typing && <AgentTyping />
             )}
-
-            {typing && <AgentTyping thinking={thinking} />}
 
             <div ref={messagesEndRef} />
           </div>
@@ -1328,33 +1368,52 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // ---------------------------------------------------------------------------
 
   if (phase === "generating") {
+    // Derived from the plain elapsed-seconds clock (effect above) — no real
+    // per-step signal exists, so this only has to feel like steady progress
+    // across the real ~3-minute budget, never finish early, and never freeze.
+    const stepIndex = GEN_STEP_SECONDS.reduce(
+      (acc, at, i) => (genElapsed >= at ? i : acc),
+      0,
+    );
+    const msgIndex = Math.min(GEN_MESSAGES.length - 1, Math.floor(genElapsed / 40));
+    const barPct = 15 + (stepIndex / (GEN_STEPS.length - 1)) * 75; // 15% → 90%, never 100%
+
     return (
       <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-8 ${rootBase}`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <div className="flex w-full max-w-md flex-col items-center">
           <span
             className="flex h-24 w-24 items-center justify-center rounded-full bg-honey-soft font-brand text-[42px] font-semibold text-honey"
-            style={{ animation: "ob-float 2.4s ease-in-out infinite" }}
+            style={{ animation: "ob-pulse 2.6s ease-in-out infinite" }}
           >
             3
           </span>
           <h2 className="mt-8 text-center font-brand text-[24px] font-medium">Генеруємо ваш сайт…</h2>
           <p className="mt-3 text-center text-[17px] leading-relaxed text-ink-muted">
-            Це може зайняти до 30 секунд. Нікуди не йдіть — уже майже готово.
+            {GEN_MESSAGES[msgIndex]}
           </p>
 
           <div className="mt-8 h-2.5 w-full overflow-hidden rounded-full bg-brand-soft">
             <div
-              className="h-2.5 rounded-full bg-brand"
-              style={{ animation: "ob-genbar 24s ease-out forwards" }}
-            />
+              className="relative h-2.5 overflow-hidden rounded-full bg-brand transition-all duration-1000 ease-out"
+              style={{ width: `${barPct}%` }}
+            >
+              {/* Perpetual shimmer — the bar must never look frozen, even
+                  while its width sits still between step ticks. */}
+              <span
+                className="absolute inset-y-0 left-0 w-1/3 bg-white/40"
+                style={{ animation: "ob-shimmer 1.6s ease-in-out infinite" }}
+                aria-hidden
+              />
+            </div>
           </div>
 
           <div className="mt-7 flex w-full flex-col gap-2.5">
-            <GenStep state="done">Тексти про ваш бізнес</GenStep>
-            <GenStep state="done">Послуги та ціни</GenStep>
-            <GenStep state="active">Оформлення і кольори…</GenStep>
-            <GenStep state="pending">Форма замовлення</GenStep>
+            {GEN_STEPS.map((label, i) => (
+              <GenStep key={label} state={i < stepIndex ? "done" : i === stepIndex ? "active" : "pending"}>
+                {label}
+              </GenStep>
+            ))}
           </div>
         </div>
       </div>
@@ -1513,12 +1572,13 @@ function ChatBubble({ msg }: { msg: ChatMsg }) {
   );
 }
 
-// Working indicator: dots + a label. While the model is in its extended-
-// thinking phase we say so honestly («Думаю…» — real state from the stream,
-// not a fake stage); before that a short "reading" label.
-// Same chip style as the live tool-status chips (04 §2) — one consistent
-// "agent is working" language: a spinning pill, never a separate bubble.
-function AgentTyping({ thinking = false }: { thinking?: boolean }) {
+// Working indicator: a single spinning pill saying «Думаю…». Shown whenever
+// a turn is in flight and no text has streamed yet — extended thinking and
+// the plain pre-first-token wait are indistinguishable to the owner, so they
+// share one honest label instead of a misleading "writing" claim. Same chip
+// style as the live tool-status chips (04 §2), and mutually exclusive with
+// them at the call site: one "agent is working" language, never two chips.
+function AgentTyping() {
   return (
     <div className="flex flex-wrap gap-2">
       <span className="flex items-center gap-2 rounded-full border-[1.5px] border-brand-soft bg-brand-soft px-3.5 py-2 text-[13px] font-bold text-brand">
@@ -1526,7 +1586,7 @@ function AgentTyping({ thinking = false }: { thinking?: boolean }) {
           className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent"
           aria-hidden
         />
-        {thinking ? "Думаю…" : "Пишу відповідь…"}
+        Думаю…
       </span>
     </div>
   );
