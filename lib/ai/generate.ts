@@ -1,4 +1,5 @@
 import "server-only";
+import { stripLoneSurrogates } from "@/lib/ai/sanitize";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, GEN_MODEL } from "./anthropic";
@@ -345,10 +346,12 @@ ${formatDossierForPrompt(dossier)}
     // a hard failure below (no retry).
     thinking: { type: "adaptive" },
     output_config: { effort: "high" },
-    system: buildSystem(vertical, forcedTemplate),
+    // Belt at the API boundary: the dossier carries emoji-heavy scraped text —
+    // a lone surrogate anywhere in the body is a hard 400 (§lib/ai/sanitize).
+    system: stripLoneSurrogates(buildSystem(vertical, forcedTemplate)),
     tools: [buildSiteTool],
     tool_choice: { type: "auto" },
-    messages: [{ role: "user", content: userPrompt }],
+    messages: [{ role: "user", content: stripLoneSurrogates(userPrompt) }],
   });
 
   const toolUse = res.content.find((b) => b.type === "tool_use");

@@ -1,4 +1,5 @@
 import "server-only";
+import { stripLoneSurrogates } from "@/lib/ai/sanitize";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, GEN_MODEL } from "@/lib/ai/anthropic";
@@ -240,13 +241,15 @@ export async function inspectDraft(
       messages: [
         {
           role: "user",
-          content: `ДОСЬЄ БІЗНЕСУ:
+          // Belt: dossier text is emoji-heavy scraped content — a lone
+          // surrogate anywhere in the body is a hard 400 (§lib/ai/sanitize).
+          content: stripLoneSurrogates(`ДОСЬЄ БІЗНЕСУ:
 ${dossierText}
 
 ВИДИМИЙ ТЕКСТ САЙТУ ПО СЕКЦІЯХ:
 ${sectionDigest(entries)}
 
-Виклич report_violations.`,
+Виклич report_violations.`),
         },
       ],
     });
@@ -366,7 +369,7 @@ async function rebuildSectionProps(
       messages: [
         {
           role: "user",
-          content: `ДОСЬЄ БІЗНЕСУ:
+          content: stripLoneSurrogates(`ДОСЬЄ БІЗНЕСУ:
 ${dossierText}
 
 СЕКЦІЯ (блок ${block.type}), поточний вміст (JSON):
@@ -374,7 +377,7 @@ ${JSON.stringify(block.props, null, 1)}
 
 ЩО ВИПРАВИТИ: ${instruction}
 
-Виклич rebuild_section.`,
+Виклич rebuild_section.`),
         },
       ],
     });

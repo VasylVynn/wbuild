@@ -1,4 +1,5 @@
 import "server-only";
+import { stripLoneSurrogates, safeSlice } from "@/lib/ai/sanitize";
 import { normalizeIgHandle } from "@/lib/blocks/contact-links";
 import {
   runProfileScrape,
@@ -72,11 +73,13 @@ async function mapPool<T, R>(
   return results;
 }
 
-/** First `n` chars of a single-line, collapsed excerpt (for the digest). */
+/** First `n` chars of a single-line, collapsed excerpt (for the digest).
+ *  Surrogate-safe + surrogate-clean: captions are emoji-heavy and this text
+ *  reaches the Anthropic body, where a lone surrogate is a hard 400. */
 function excerpt(s: string | undefined, n: number): string {
   if (!s) return "";
-  const flat = s.replace(/\s+/g, " ").trim();
-  return flat.length > n ? `${flat.slice(0, n)}…` : flat;
+  const flat = stripLoneSurrogates(s.replace(/\s+/g, " ").trim());
+  return flat.length > n ? `${safeSlice(flat, n)}…` : flat;
 }
 
 /**
@@ -130,9 +133,21 @@ export async function scrapeInstagramDeep(args: {
   // Both actors in parallel: each keeps its own APIFY_TIMEOUT budget, so the
   // wall-clock stays ~one scrape's worth rather than two (§1.3, ≤150s total).
   const [profile, postsScrape] = await Promise.all([
-    runProfileScrape(handle).catch(() => null),
-    runPostsScrape(handle, POST_LIMIT).catch(() => null),
+    runProfileScrape(handle).catch((e) => {
+      console.error(`[deep] profile scrape failed for @${handle}: ${e instanceof Error ? e.message : e}`);
+      return null;
+    }),
+    runPostsScrape(handle, POST_LIMIT).catch((e) => {
+      console.error(`[deep] posts scrape failed for @${handle}: ${e instanceof Error ? e.message : e}`);
+      return null;
+    }),
   ]);
+  // Both actors dead → the scrape produced NOTHING. Surface it loudly (prod
+  // debugging: this exact silence made the agent quietly fall back to manual
+  // questioning while promising it had "saved the profile").
+  if (!profile && !postsScrape) {
+    console.error(`[deep] scrape returned no data for @${handle} (both actors failed/empty)`);
+  }
 
   const parsed: IgParsedProfile = profile
     ? { ...profile, posts: mergeParsedPosts(profile.posts, postsScrape ?? []) }
@@ -185,7 +200,7 @@ export async function scrapeInstagramDeep(args: {
       url: r.storageUrl,
       id: photoIdFor(r.storageUrl),
       // role is left undefined here — set_media_role assigns it later (04 §1).
-      ...(r.caption && { sourceCaption: r.caption.slice(0, 2000) }),
+      ...(r.caption && { sourceCaption: stripLoneSurrogates(safeSlice(r.caption, 2000)) }),
       ...(r.analysis && {
         kind: r.analysis.kind,
         ...(r.analysis.alt && { alt: r.analysis.alt }),
@@ -211,6 +226,14 @@ export async function scrapeInstagramDeep(args: {
     parsed,
   });
 
-  const digest = buildDigest(parsed, photoMeta);
+  // Honest failure digest (prod lesson): when the scrape produced effectively
+  // NOTHING, the model must be told so explicitly — otherwise it improvises
+  // («поки що збережу ваш профіль…») and quietly interrogates the owner while
+  // implying the profile was read.
+  const gotNothing =
+    !parsed.biography && !parsed.fullName && parsed.posts.length === 0 && photoMeta.length === 0;
+  const digest = gotNothing
+    ? `ПОМИЛКА СКРЕЙПУ: не вдалося отримати дані з Instagram @${parsed.handle} (тимчасова технічна помилка). ЧЕСНО скажи власнику, що зазирнути в профіль зараз не вийшло, і запропонуй два шляхи: спробувати ще раз (виклич scrape_instagram повторно) або розповісти основне самому. НЕ вдавай, що профіль збережено чи прочитано.`
+    : buildDigest(parsed, photoMeta);
   return { parsed, media: { ...(logo && { logo }), photos, photoMeta }, digest };
 }

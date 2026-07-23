@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, CHAT_MODEL } from "./anthropic";
+import { stripLoneSurrogates, sanitizeMessages } from "@/lib/ai/sanitize";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
 import { getVertical, VERTICAL_IDS } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
@@ -465,10 +466,12 @@ export async function onboardTurn(
     model: CHAT_MODEL,
     max_tokens: 4000,
     thinking: { type: "adaptive" },
-    system,
+    // Same lone-surrogate guard as the streaming route: history resent by the
+    // client may carry an emoji cut mid-pair (the prod 400) — strip before send.
+    system: stripLoneSurrogates(system),
     tools: [saveFactsTool],
     tool_choice: { type: "auto" },
-    messages,
+    messages: sanitizeMessages(messages),
   });
 
   let acc: OnboardAccum = {

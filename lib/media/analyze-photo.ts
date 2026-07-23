@@ -1,4 +1,5 @@
 import "server-only";
+import { stripLoneSurrogates, safeSlice } from "@/lib/ai/sanitize";
 import { getAnthropic, isAnthropicConfigured, VISION_MODEL } from "@/lib/ai/anthropic";
 import { isStorageUrl, PHOTO_KINDS, type PhotoKind, type ExtractedInfo } from "./media";
 
@@ -179,7 +180,7 @@ const analysisTool = {
 
 /** Trimmed non-empty string capped at `max`, else undefined. */
 function clean(s: unknown, max: number): string | undefined {
-  return typeof s === "string" && s.trim() ? s.trim().slice(0, max) : undefined;
+  return typeof s === "string" && s.trim() ? stripLoneSurrogates(safeSlice(s.trim(), max)) : undefined;
 }
 
 /** Coerce an unknown value to a bounded array of trimmed non-empty strings. */

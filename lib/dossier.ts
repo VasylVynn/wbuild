@@ -2,6 +2,7 @@ import "server-only";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { getLatestSnapshot, type IgSnapshot } from "@/lib/ig/snapshots";
 import { photoIdFor, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
+import { stripLoneSurrogates, safeSlice } from "@/lib/ai/sanitize";
 
 /**
  * The Business Dossier (refactor §1.5) — ONE rich-context document assembled from
@@ -57,11 +58,14 @@ export type Dossier = {
 
 // --- pure helpers ------------------------------------------------------------
 
-/** First `n` chars of a single-line, whitespace-collapsed excerpt. */
+/** First `n` chars of a single-line, whitespace-collapsed excerpt.
+ *  Surrogate-safe + surrogate-clean: scraped captions/OCR are emoji-heavy and
+ *  this text lands in the Anthropic request body, where a lone surrogate is a
+ *  hard 400 (§lib/ai/sanitize). */
 function excerpt(s: string | undefined, n: number): string {
   if (!s) return "";
-  const flat = s.replace(/\s+/g, " ").trim();
-  return flat.length > n ? `${flat.slice(0, n)}…` : flat;
+  const flat = stripLoneSurrogates(s.replace(/\s+/g, " ").trim());
+  return flat.length > n ? `${safeSlice(flat, n)}…` : flat;
 }
 
 // Common business/vertical/geo suffixes stripped to reach the brand stem.
