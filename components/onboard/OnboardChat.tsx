@@ -12,6 +12,7 @@ import { CircleAlert, PartyPopper, Paperclip, RotateCcw } from "lucide-react";
 import type { ChatMsg, ProgressItem } from "@/lib/ai/onboard";
 import {
   onboardAction,
+  generateDraftAction,
   finalizeAction,
   sessionStateAction,
 } from "@/app/app/new/actions";
@@ -26,7 +27,6 @@ import {
   loadConversation,
 } from "@/app/app/new/persist-actions";
 import type { BusinessFacts } from "@/lib/verticals/schema";
-import { normalizeIgHandle } from "@/lib/blocks/contact-links";
 import { MAX_PHOTOS, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
 import { processImage } from "@/lib/media/client-image";
 import { Button, Chip, Card, ConfirmDialog } from "@/components/ui";
@@ -37,7 +37,7 @@ import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 // Types
 // ---------------------------------------------------------------------------
 
-type Phase = "chat" | "media" | "gate" | "generating" | "done" | "error";
+type Phase = "chat" | "media" | "gate" | "generating" | "preview" | "done" | "error";
 
 const GREETING: ChatMsg = {
   role: "assistant",
@@ -45,24 +45,14 @@ const GREETING: ChatMsg = {
     "Вітаю! 👋 Я допоможу створити сайт для вашого бізнесу. Розкажіть трохи — що це за бізнес, у якому місті, і який телефон для звʼязку?",
 };
 
-// Instagram-first greeting (wave E) — shown only when the Apify import is
+// Instagram-first greeting (wave E) — shown only when the Apify scrape is
 // configured server-side (igImportEnabled prop), so the promise is never empty.
+// A pasted IG link is now a normal message: the agent calls scrape_instagram itself.
 const IG_GREETING: ChatMsg = {
   role: "assistant",
   content:
     "Вітаю! 👋 Я допоможу створити сайт для вашого бізнесу. Розкажіть трохи — що це за бізнес і в якому місті? А якщо у вас є Instagram-сторінка бізнесу — просто надішліть посилання, і я витягну все звідти сам 😉",
 };
-
-// Conservative Instagram detection in a sent message: a pasted profile URL
-// anywhere in the text, or a message that IS a bare "@handle". A plain word
-// («квіти», «kvity») is NOT treated as a handle — the agent saves those to
-// factsPatch.instagram instead, which surfaces the import button.
-function detectIgHandle(text: string): string | null {
-  if (/instagram\.com\//i.test(text)) return normalizeIgHandle(text);
-  const t = text.trim();
-  if (/^@[A-Za-z0-9._]{1,30}$/.test(t)) return normalizeIgHandle(t);
-  return null;
-}
 
 // Progress chips mirror the server's computeProgress (lib/ai/onboard.ts): a pure
 // function of `facts`, so we derive them client-side too — this keeps the header
@@ -98,13 +88,16 @@ function upsertMeta(list: PhotoMeta[] | undefined, entry: PhotoMeta): PhotoMeta[
     : existing.map((m, idx) => (idx === i ? entry : m));
 }
 
-// Keep only meta whose url is still live (a photo or the logo); undefined when
-// nothing remains, so the field is simply omitted from the media.
+// Keep meta whose url is still live (a photo or the logo), PLUS text_source /
+// hidden entries: those legitimately reference non-gallery photos (they feed the
+// dossier, refactor §1.3/§2.1). Undefined when nothing remains.
 function pruneMeta(media: SiteMedia): PhotoMeta[] | undefined {
   if (!media.photoMeta?.length) return undefined;
   const live = new Set(media.photos);
   if (media.logoUrl) live.add(media.logoUrl);
-  const kept = media.photoMeta.filter((m) => live.has(m.url));
+  const kept = media.photoMeta.filter(
+    (m) => live.has(m.url) || m.role === "text_source" || m.role === "hidden",
+  );
   return kept.length ? kept : undefined;
 }
 
@@ -329,17 +322,17 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // (invariant №5 — no invented facts).
   const [pendingReviews, setPendingReviews] = useState<{ quote: string; author: string }[]>([]);
 
-  // --- Instagram import (wave E) — blocking staged spinner card. ---
-  const [importCard, setImportCard] = useState<
-    { stage: "profile" | "posts" | "photos"; done: number; total: number } | null
-  >(null);
-  // One import per session: after it ran (or after reload once photos exist)
-  // the mid-chat button stays hidden. A ref is enough — every import path ends
-  // in setState calls that re-render.
-  const igImportedRef = useRef(false);
+  // Inline tool-status chips (04 §2): the agent's tool lifecycle, streamed as
+  // {t:"tool"} events — the owner watches the agent work, not a blank spinner.
+  const [activeTools, setActiveTools] = useState<string[]>([]);
 
   // --- Reset-conversation confirm dialog ---
   const [resetOpen, setResetOpen] = useState(false);
+
+  // --- Draft preview (04 §2): a generated draft awaiting human publish ---
+  const [draft, setDraft] = useState<{ host: string; previewUrl: string; editUrl: string } | null>(
+    null,
+  );
 
   // --- Done / error state ---
   const [siteUrl, setSiteUrl] = useState("");
@@ -394,14 +387,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       setMedia(data.media ?? { photos: [] });
       // The starter chip belongs to a FRESH conversation only (codex review).
       setQuickReplies([]);
-      // An import that already produced artifacts must not be re-runnable
-      // after reload (paid scrape). A handle without artifacts keeps the
-      // button — that's the retry path for an import that yielded nothing.
-      const m = data.media;
-      const f = data.facts as Partial<BusinessFacts>;
-      if (f?.instagram && (m?.photos?.length || m?.logoUrl)) {
-        igImportedRef.current = true;
-      }
     });
   }, []);
 
@@ -421,6 +406,8 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     quickReplies: string[];
     templateId?: string;
     templateLabel?: string;
+    // Media the agent's tools added this turn (scrape/analyze/set_media_role).
+    media?: { photos: string[]; logoUrl?: string; photoMeta?: PhotoMeta[] };
   };
 
   // `modelMessages` go to the API (this turn's batch summary excluded — the
@@ -435,7 +422,14 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     const res = await fetch("/api/onboard", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: modelMessages, facts, verticalId, templateId: template?.id, media: mediaNow }),
+      body: JSON.stringify({
+        messages: modelMessages,
+        facts,
+        verticalId,
+        templateId: template?.id,
+        media: mediaNow,
+        conversationId: convIdRef.current,
+      }),
     });
     const ct = res.headers.get("content-type") ?? "";
     if (ct.includes("application/json")) {
@@ -473,7 +467,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       for (const c of chunks) {
         const line = c.trim();
         if (!line.startsWith("data:")) continue;
-        let obj: { t?: string; text?: string; message?: string } & Partial<TurnPayload>;
+        let obj: { t?: string; text?: string; message?: string; name?: string; label?: string } & Partial<TurnPayload>;
         try {
           obj = JSON.parse(line.slice(5));
         } catch {
@@ -481,11 +475,18 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         }
         if (obj.t === "think") {
           setThinking(true);
+        } else if (obj.t === "tool" && typeof obj.label === "string") {
+          // A tool started — show it as an inline status chip.
+          setThinking(false);
+          const label = obj.label;
+          setActiveTools((prev) => (prev.includes(label) ? prev : [...prev, label]));
         } else if (obj.t === "d" && typeof obj.text === "string") {
           if (!acc) {
             setTyping(false);
             setThinking(false);
           }
+          // The agent finished its tools and is answering — drop the chips.
+          setActiveTools([]);
           acc += obj.text;
           setMessages([...uiBase, { role: "assistant", content: acc }]);
         } else if (obj.t === "final") {
@@ -499,185 +500,10 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     return final;
   };
 
-  // -------------------------------------------------------------------------
-  // Instagram import (wave E): blocking pipeline over /api/ig-import (SSE).
-  // Runs behind `loading`; the result lands as ONE aggregated assistant
-  // message + facts/media merges, persisted in ONE awaited saveTurn (same
-  // lost-update reasoning as the photo-batch flow).
-  // -------------------------------------------------------------------------
-
-  type IgImportFinal = {
-    handle: string;
-    bio?: string;
-    items: BatchItem[];
-    extracted?: Partial<Pick<BusinessFacts, "businessName" | "city" | "about" | "services">>;
-  };
-
-  const runIgImport = async (
-    handle: string,
-    uiBase: ChatMsg[],
-    progressBefore: Set<string>,
-  ) => {
-    setImportCard({ stage: "profile", done: 0, total: 0 });
-    // Fail-open exit: a soft assistant bubble, conversation continues classic.
-    const softFail = async (text: string) => {
-      const next: ChatMsg[] = [...uiBase, { role: "assistant", content: text }];
-      setMessages(next);
-      if (convIdRef.current) {
-        await saveTurn(
-          convIdRef.current, next, facts, verticalId, ready, confirmed, template?.id, media,
-        ).catch(() => {});
-      }
-    };
-    try {
-      const res = await fetch("/api/ig-import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: convIdRef.current, handle }),
-      });
-      const ct = res.headers.get("content-type") ?? "";
-      if (ct.includes("application/json")) {
-        const j = (await res.json().catch(() => null)) as { message?: string } | null;
-        await softFail(
-          j?.message ?? "Імпорт з Instagram зараз недоступний — розкажіть про бізнес самі 🙂",
-        );
-        return;
-      }
-      if (!res.ok || !res.body) throw new Error(`ig import failed: ${res.status}`);
-
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buf = "";
-      let final: IgImportFinal | null = null;
-      let softError: string | null = null;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const chunks = buf.split("\n\n");
-        buf = chunks.pop() ?? "";
-        for (const c of chunks) {
-          const line = c.trim();
-          if (!line.startsWith("data:")) continue;
-          let obj: { t?: string; stage?: string; done?: number; total?: number; message?: string } & Partial<IgImportFinal>;
-          try {
-            obj = JSON.parse(line.slice(5));
-          } catch {
-            continue;
-          }
-          if (obj.t === "stage") {
-            setImportCard({ stage: obj.stage === "posts" ? "posts" : "profile", done: 0, total: 0 });
-          } else if (obj.t === "photos") {
-            setImportCard({ stage: "photos", done: obj.done ?? 0, total: obj.total ?? 0 });
-          } else if (obj.t === "final") {
-            final = obj as IgImportFinal;
-          } else if (obj.t === "error") {
-            softError = obj.message ?? null;
-          }
-        }
-      }
-      if (softError) {
-        await softFail(softError);
-        return;
-      }
-      if (!final) throw new Error("ig import ended without final event");
-
-      igImportedRef.current = true;
-
-      // Don't let an imported logo (usually the avatar) stomp one the owner
-      // already uploaded — drop logo-classified items in that case.
-      const items = media.logoUrl
-        ? final.items.filter(
-            (it) => it.failed || !(it.analysis.ok && it.analysis.analysis.kind === "logo"),
-          )
-        : final.items;
-      const routed = routeBatch(media, items);
-      const mediaNow = applyMediaLocal(routed.media);
-      if (routed.reviews.length) setPendingReviews((prev) => [...prev, ...routed.reviews]);
-
-      // User-typed facts always win over scraped candidates; the handle itself
-      // comes from the user's own link, so it lands unconditionally.
-      const ig = final.extracted ?? {};
-      const newFacts: Partial<BusinessFacts> = { ...ig, ...facts, instagram: final.handle };
-      setFacts(newFacts);
-
-      const factLines: string[] = [];
-      if (ig.businessName && !facts.businessName) factLines.push(`**Назва:** ${ig.businessName}`);
-      if (ig.city && !facts.city) factLines.push(`**Місто:** ${ig.city}`);
-      if (ig.about && !facts.about) factLines.push(`**Про вас:** ${ig.about}`);
-      if (ig.services?.length && !facts.services?.length) {
-        factLines.push(
-          `**Послуги:** ${ig.services.map((s) => (s.price ? `${s.name} — ${s.price}` : s.name)).join(", ")}`,
-        );
-      }
-      const gotAnyPhoto = items.some((it) => !it.failed);
-      const summary =
-        factLines.length || gotAnyPhoto
-          ? [
-              `Зазирнув у ваш Instagram (@${final.handle}) — ось що я дізнався:`,
-              ...factLines,
-              ...(gotAnyPhoto ? [routed.summary] : []),
-              "Все вірно? Далі спитаю лише те, чого бракує — виправити щось можна просто повідомленням.",
-            ].join("\n")
-          : `Профіль @${final.handle} виглядає порожнім або закритим — не зміг нічого витягнути. Нічого страшного: розкажіть про бізнес самі 🙂`;
-
-      const next: ChatMsg[] = [...uiBase, { role: "assistant", content: summary }];
-      setMessages(next);
-      if (factLines.length || gotAnyPhoto) setQuickReplies(["Все вірно", "Хочу виправити"]);
-
-      const newly = deriveProgress(newFacts)
-        .filter((p) => p.done && !progressBefore.has(p.label))
-        .map((p) => p.label);
-      setSavedNote(newly.length ? newly.join(", ") : null);
-
-      if (convIdRef.current) {
-        await saveTurn(
-          convIdRef.current,
-          next,
-          newFacts,
-          verticalId,
-          ready,
-          confirmed,
-          template?.id,
-          mediaNow,
-        ).catch(() => {});
-      }
-    } catch {
-      await softFail("Щось пішло не так з імпортом. Нічого страшного: розкажіть про бізнес самі 🙂");
-    } finally {
-      setImportCard(null);
-    }
-  };
-
-  // Mid-chat import button: the handle arrived as TEXT (the agent saved it to
-  // facts.instagram) — the deterministic pipeline still wants an explicit tap.
-  const handleIgImportClick = async () => {
-    const handle = normalizeIgHandle(facts.instagram);
-    if (!handle || loading) return;
-    setLoading(true);
-    setQuickReplies([]);
-    setSavedNote(null);
-    try {
-      if (convIdRef.current === null) {
-        const started = await startConversation();
-        if (started) {
-          convIdRef.current = started.conversationId;
-          localStorage.setItem("vitryna_conv_id", started.conversationId);
-        }
-      }
-      if (!convIdRef.current) {
-        setUploadError("Не вдалося запустити імпорт — спробуйте трохи пізніше.");
-        return;
-      }
-      const progressBefore = new Set(
-        deriveProgress(facts).filter((p) => p.done).map((p) => p.label),
-      );
-      await runIgImport(handle, messages, progressBefore);
-    } finally {
-      setLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  };
+  // Instagram is no longer a separate client pipeline: a pasted IG link is a
+  // normal chat message, and the onboarding agent calls its scrape_instagram
+  // tool itself (04 §3). The imported facts/photos arrive via the {t:"final"}
+  // media/facts merge, like any other agent turn.
 
   // Reset to a brand-new conversation (header ↺, confirm-gated). The old DB
   // row is simply abandoned — same as clearing the browser; nothing to delete
@@ -685,7 +511,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   const resetChat = () => {
     localStorage.removeItem("vitryna_conv_id");
     convIdRef.current = null;
-    igImportedRef.current = false;
     for (const p of pending) URL.revokeObjectURL(p.thumbUrl);
     setPending([]);
     setMessages([igImportEnabled ? IG_GREETING : GREETING]);
@@ -700,6 +525,8 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     setMedia({ photos: [] });
     setPendingReviews([]);
     setUploadError(null);
+    setActiveTools([]);
+    setDraft(null);
     setResetOpen(false);
     setTimeout(() => inputRef.current?.focus(), 50);
   };
@@ -716,6 +543,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     setUploadError(null);
     setSavedNote(null);
     setQuickReplies([]);
+    setActiveTools([]);
     setLoading(true);
 
     // Lazily create the DB row BEFORE any optimistic UI (plan review): photo
@@ -753,18 +581,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     setPending([]);
 
     try {
-      // Instagram-first (wave E): a pasted profile link runs the IMPORT instead
-      // of an agent turn — the link message stays in history and the aggregated
-      // summary answers it. Photo batches keep the normal path.
-      const igHandle =
-        igImportEnabled && !igImportedRef.current && batch.length === 0 && convIdRef.current
-          ? detectIgHandle(text)
-          : null;
-      if (igHandle) {
-        await runIgImport(igHandle, uiMessages, progressBefore);
-        return;
-      }
-
       if (batch.length > 0) {
         setBatchCard({ thumbs: batch.map((b) => b.thumbUrl), done: 0, total: batch.length });
         const settled = await Promise.all(
@@ -848,6 +664,21 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         setVerticalId(result.verticalId);
         setQuickReplies(result.quickReplies ?? []);
 
+        // Merge media the agent's tools produced this turn (scrape/analyze/
+        // set_media_role). The route returns the authoritative post-turn media
+        // (what the client sent + tool additions), so adopt it — but only when
+        // present (the non-stream fallback carries none). photoMeta is kept whole
+        // (text_source entries feed the dossier, not the gallery).
+        let effectiveMedia = mediaNow;
+        if (result.media) {
+          effectiveMedia = {
+            photos: result.media.photos.slice(0, MAX_PHOTOS),
+            ...(result.media.logoUrl && { logoUrl: result.media.logoUrl }),
+            ...(result.media.photoMeta?.length && { photoMeta: result.media.photoMeta }),
+          };
+          setMedia(effectiveMedia);
+        }
+
         // Last-wins: an existing pick must never be cleared by a result without
         // one (e.g. a later turn that doesn't touch the design).
         const nextTemplate =
@@ -875,7 +706,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
             result.ready,
             result.confirmed ?? false,
             nextTemplate?.id,
-            mediaNow,
+            effectiveMedia,
           );
         }
       };
@@ -884,10 +715,10 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         applyResult(await streamTurn(modelMessages, uiMessages, mediaNow));
       } catch {
         // Streaming path failed (network, SSE parse, server) → the proven
-        // non-stream server action still answers the turn.
+        // non-stream server action still answers the turn (degraded: no tools).
         setTyping(true);
         applyResult(
-          await onboardAction(modelMessages, facts, verticalId, template?.id, { ready, confirmed }, mediaNow),
+          await onboardAction(modelMessages, facts, verticalId, template?.id, { ready, confirmed }),
         );
       }
     } finally {
@@ -895,6 +726,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       setTyping(false);
       setThinking(false);
       setBatchCard(null);
+      setActiveTools([]);
       // Return focus to input so the owner can keep typing
       setTimeout(() => inputRef.current?.focus(), 50);
     }
@@ -1020,6 +852,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
 
   const declineReview = () => setPendingReviews(pendingReviews.slice(1));
 
+  // Media step → generate a DRAFT (login-gated) and show the preview (04 §2).
   const handleMediaNext = async () => {
     if (loading) return;
     setLoading(true);
@@ -1033,28 +866,23 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     } finally {
       setLoading(false);
     }
-    await handleFinalize();
+    await runGenerate();
   };
 
   // ---------------------------------------------------------------------------
-  // Finalize (A6) — the chat summary IS the confirmation; facts go to
-  // generation as-is. Required-field validation lives in the ready-gate
-  // (prompt + validators): the agent never sets ready without name/city/phone.
+  // Generation moved earlier (04 §2/§4): confirmed facts → a real DRAFT the
+  // owner previews, then publishes by hand (invariant 6). The chat summary IS
+  // the confirmation; the code-enforced ready-gate guarantees name/city/phone.
   // ---------------------------------------------------------------------------
 
-  const handleFinalize = async () => {
+  const runGenerate = async () => {
     const businessName = (facts.businessName ?? "").trim();
     const city = (facts.city ?? "").trim();
     const phone = (facts.phone ?? "").trim();
-    // Defense in depth — should be unreachable behind the code-enforced
-    // ready-gate (parseOnboardMessage). If it ever fires, say WHAT is missing
-    // and drop confirmed so the CTA hides — a silent bounce would loop forever.
+    // Defense in depth — should be unreachable behind the ready-gate. If it ever
+    // fires, say WHAT is missing and drop confirmed so the CTA hides.
     if (!businessName || !city || !phone) {
-      const missing = [
-        !businessName && "назва бізнесу",
-        !city && "місто",
-        !phone && "телефон",
-      ]
+      const missing = [!businessName && "назва бізнесу", !city && "місто", !phone && "телефон"]
         .filter(Boolean)
         .join(", ");
       setConfirmed(false);
@@ -1074,16 +902,14 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       businessName,
       city,
       phone,
-      ...(facts.services && {
-        services: facts.services.filter((s) => s.name.trim()),
-      }),
+      ...(facts.services && { services: facts.services.filter((s) => s.name.trim()) }),
     };
 
     setLoading(true);
     setPhase("generating");
 
     try {
-      const result = await finalizeAction(
+      const result = await generateDraftAction(
         fullFacts,
         verticalId,
         media,
@@ -1091,12 +917,35 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         template?.id,
       );
       if (result.ok) {
-        setSiteUrl(result.url);
-        setPhase("done");
-        // Conversation is complete — clear localStorage so next visit starts fresh
-        localStorage.removeItem("vitryna_conv_id");
+        setDraft({ host: result.host, previewUrl: result.previewUrl, editUrl: result.editUrl });
+        setPhase("preview");
       } else if (result.authRequired) {
         // Session lapsed between the gate check and submit — send them to sign in.
+        setPhase("gate");
+      } else {
+        setErrorMsg(result.error);
+        setPhase("error");
+      }
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Невідома помилка");
+      setPhase("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Preview → HUMAN publish (invariant 6): publish the draft, celebrate.
+  const handlePublish = async () => {
+    if (loading || !draft) return;
+    setLoading(true);
+    try {
+      const result = await finalizeAction(draft.host, convIdRef.current ?? undefined);
+      if (result.ok) {
+        setSiteUrl(result.url);
+        setPhase("done");
+        // Conversation is complete — clear localStorage so next visit starts fresh.
+        localStorage.removeItem("vitryna_conv_id");
+      } else if (result.authRequired) {
         setPhase("gate");
       } else {
         setErrorMsg(result.error);
@@ -1229,22 +1078,21 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               </div>
             )}
 
-            {importCard && (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-3 rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface px-4 py-3">
+            {/* Inline tool-status chips — the agent's tools running live (04 §2). */}
+            {activeTools.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {activeTools.map((label, i) => (
                   <span
-                    className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent"
-                    aria-hidden
-                  />
-                  <span className="text-[14px] font-semibold text-ink-muted">
-                    {importCard.stage === "profile" && "Відкриваю ваш Instagram…"}
-                    {importCard.stage === "posts" && "Читаю пости й фото…"}
-                    {importCard.stage === "photos" &&
-                      (importCard.total > 0
-                        ? `Розкладаю фото… ${Math.min(importCard.done + 1, importCard.total)} з ${importCard.total}`
-                        : "Розкладаю фото…")}
+                    key={`${label}-${i}`}
+                    className="flex items-center gap-2 rounded-full border-[1.5px] border-brand-soft bg-brand-soft px-3.5 py-2 text-[13px] font-bold text-brand"
+                  >
+                    <span
+                      className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent"
+                      aria-hidden
+                    />
+                    {label}
                   </span>
-                </div>
+                ))}
               </div>
             )}
 
@@ -1266,19 +1114,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               Додати фото й створити сайт →
             </button>
           )}
-
-          {igImportEnabled &&
-            !igImportedRef.current &&
-            !loading &&
-            media.photos.length === 0 &&
-            normalizeIgHandle(facts.instagram) && (
-              <button
-                onClick={() => void handleIgImportClick()}
-                className="mb-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[16px] border-[1.5px] border-brand bg-brand-soft px-5 text-[15px] font-bold text-brand transition-colors hover:bg-brand hover:text-white"
-              >
-                📸 Підтягнути фото й опис з Instagram
-              </button>
-            )}
 
           {quickReplies.length > 0 && !loading && (
             <div className="mb-3 flex flex-wrap gap-2">
@@ -1500,7 +1335,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               onClick={() => void handleMediaNext()}
               className="min-h-[60px] w-full text-[19px] shadow-[0_8px_24px_rgba(27,91,191,0.3)]"
             >
-              Створити сайт →
+              Згенерувати сайт →
             </Button>
             <Button
               variant="quiet"
@@ -1509,8 +1344,77 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               onClick={() => void handleMediaNext()}
               className="w-full"
             >
-              Створити без фото
+              Згенерувати без фото
             </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render — draft preview (04 §2): the generated draft, live, awaiting the
+  // owner's own «Опублікувати» tap (publish is human-only, invariant 6).
+  // ---------------------------------------------------------------------------
+
+  if (phase === "preview" && draft) {
+    return (
+      <div className={`flex min-h-[100dvh] flex-col ${rootBase}`}>
+        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
+        <header className="border-b border-line bg-surface">
+          <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 py-3.5">
+            <button
+              onClick={() => setPhase("chat")}
+              disabled={loading}
+              aria-label="Назад до розмови"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[20px] font-bold text-ink-muted hover:bg-sunken disabled:opacity-45"
+            >
+              ←
+            </button>
+            <div className="flex flex-col leading-tight">
+              <span className="text-[18px] font-extrabold text-ink">Ваш сайт готовий до публікації</span>
+              <span className="text-[13px] font-bold text-ink-muted">
+                Перегляньте — і опублікуйте, коли все влаштовує
+              </span>
+            </div>
+          </div>
+        </header>
+
+        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-5">
+          <div className="flex-1 overflow-hidden rounded-[18px] border-[1.5px] border-line bg-surface shadow-[0_8px_24px_rgba(23,36,47,0.06)]">
+            <iframe
+              src={draft.previewUrl}
+              title="Попередній перегляд сайту"
+              className="h-full min-h-[420px] w-full"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Button
+              size="lg"
+              disabled={loading}
+              onClick={() => void handlePublish()}
+              className="min-h-[60px] w-full text-[19px] shadow-[0_8px_24px_rgba(27,91,191,0.3)]"
+            >
+              {loading ? "Публікую…" : "Опублікувати сайт"}
+            </Button>
+            <div className="flex gap-2">
+              <Link
+                href={draft.editUrl}
+                className="flex h-[52px] flex-1 items-center justify-center rounded-[16px] border-[1.5px] border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
+              >
+                ✏️ Відредагувати
+              </Link>
+              <Button
+                variant="quiet"
+                size="md"
+                disabled={loading}
+                onClick={() => void runGenerate()}
+                className="flex-1"
+              >
+                Згенерувати ще раз
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -1690,7 +1594,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         <p className="mt-4 rounded-[14px] bg-danger-soft px-5 py-4 text-[15px] font-semibold leading-relaxed text-danger">
           {errorMsg}
         </p>
-        <Button size="lg" className="mt-6" onClick={() => void handleFinalize()}>
+        <Button size="lg" className="mt-6" onClick={() => void (draft ? handlePublish() : runGenerate())}>
           Спробувати ще раз
         </Button>
       </div>

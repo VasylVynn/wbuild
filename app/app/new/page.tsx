@@ -1,9 +1,10 @@
 import { OnboardChat } from "@/components/onboard/OnboardChat";
 import { isApifyConfigured } from "@/lib/ig/apify";
 
-// Server actions invoked from this page inherit its budget. finalizeAction runs
-// thinking-generation with one schema retry; 180s: generation with thinking retries once (2x ~45s) and the finalize
-// path must never 504 under it (live incident 2026-07-22).
+// Server actions invoked from this page inherit its budget. generateDraftAction
+// runs the full draft generation (Design-DNA + build_site + quality loop, 04 §2);
+// 180s so it never 504s (live incident 2026-07-22). finalizeAction (publish-only)
+// is fast.
 export const maxDuration = 180;
 
 /** Onboarding page (app.<root>/new). The chat drives fact collection → generate.
