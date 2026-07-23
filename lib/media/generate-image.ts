@@ -13,6 +13,13 @@ import { getVertical, HERO_PROMPT_SUFFIX } from "@/lib/verticals/registry";
  * NO retries (each call costs money) and NO throwing (the caller must not break).
  */
 
+/** True when hero/gallery image generation can actually run (has an API key).
+ *  Callers gate the shimmer-placeholder path on this — no key means the
+ *  placeholders would never resolve. */
+export function isImageGenConfigured(): boolean {
+  return Boolean(process.env.GEMINI_API_KEY);
+}
+
 const MODEL = "gemini-2.5-flash-image";
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 const BUCKET = "photos";
@@ -24,6 +31,42 @@ type GeminiPart = {
   inline_data?: { data?: string; mime_type?: string };
 };
 type GeminiResponse = { candidates?: { content?: { parts?: GeminiPart[] } }[] };
+
+/**
+ * Background site-image batch (owner decision, «сайт має бути гарний і без
+ * фото»): ONE hero + `galleryCount` atmospheric gallery images, generated in
+ * parallel off the critical path. Same honesty bounds as the hero (§4.8):
+ * abstractions/textures only — the prompt list varies angle/composition so the
+ * gallery doesn't read as one repeated image. Fail-open per image: nulls are
+ * dropped, a partial set is fine.
+ */
+export async function generateSiteImages(opts: {
+  verticalId?: string;
+  subject?: string;
+  palette?: { primary: string; background: string };
+  galleryCount: number;
+}): Promise<{ hero: string | null; gallery: string[] }> {
+  const { verticalId, subject, palette, galleryCount } = opts;
+  // Distinct composition twists keep N images from one subject visually varied.
+  const twists = [
+    "extreme close-up detail, macro texture",
+    "wide soft-focus composition with negative space",
+    "angled light and long soft shadows",
+    "overhead flat-lay perspective",
+  ];
+  // With a business subject: vary it by twist. Without one: undefined lets
+  // generateHeroImage draw from the vertical's own prompt pool (already
+  // suffix-bounded — passing it back as `subject` would double the suffix).
+  const gallerySubjects = Array.from({ length: Math.max(0, galleryCount) }, (_, i) =>
+    subject ? `${subject}, ${twists[i % twists.length]}` : undefined,
+  );
+
+  const [hero, ...gallery] = await Promise.all([
+    generateHeroImage({ verticalId, subject, palette }),
+    ...gallerySubjects.map((s) => generateHeroImage({ verticalId, subject: s, palette })),
+  ]);
+  return { hero, gallery: gallery.filter((u): u is string => Boolean(u)) };
+}
 
 export async function generateHeroImage(opts: {
   verticalId?: string;

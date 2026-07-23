@@ -12,6 +12,23 @@
 
 export const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "lvh.me:3000";
 
+/** Dev root domains that run on plain http with an explicit port. */
+const DEV_ROOTS = ["lvh.me", "localhost", "127.0.0.1"];
+
+/**
+ * The ONE public URL builder for a tenant host — every user-facing «Відкрити
+ * сайт» link goes through this. Dev roots (lvh.me/localhost) get http + the
+ * ROOT_DOMAIN port; everything else is https with no port. Client-safe
+ * (ROOT_DOMAIN is NEXT_PUBLIC_*, inlined at build time).
+ */
+export function publicSiteUrl(host: string): string {
+  const bare = stripPort(host);
+  const isDev = DEV_ROOTS.some((r) => bare === r || bare.endsWith(`.${r}`));
+  if (!isDev) return `https://${bare}`;
+  const port = ROOT_DOMAIN.split(":")[1];
+  return `http://${bare}${port ? `:${port}` : ""}`;
+}
+
 /** Subdomain labels reserved for the platform itself (never tenants). */
 const PLATFORM_SUBDOMAINS = ["www", "app"] as const;
 

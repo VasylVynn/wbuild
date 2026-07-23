@@ -167,6 +167,25 @@ export const blockLibrary: Record<BlockType, BlockLibraryEntry> = {
     inNav: true,
     navLabel: "Праці",
   },
+  map: {
+    label: "Карта",
+    description:
+      "Google-карта з адресою бізнесу та кнопкою «Прокласти маршрут». ЛИШЕ якщо у фактах є адреса " +
+      "(код підставляє її 1:1 і прибирає блок без адреси). Доречна для закладів, куди приходять клієнти.",
+    role: "middle",
+    maxPerPage: 1,
+    inNav: false,
+  },
+  instagram_cta: {
+    label: "Instagram",
+    description:
+      "Помітний заклик «Написати в Direct» + нік і кількість підписників. ЛИШЕ якщо у фактах є Instagram " +
+      "(код підставляє нік 1:1 і прибирає блок без ніку). ДОДАТОК до форми заявки, ніколи не замість неї — " +
+      "доречний для бізнесів, що живуть в Instagram.",
+    role: "middle",
+    maxPerPage: 1,
+    inNav: false,
+  },
 };
 
 /** Composition constraints (guided freedom — owner decision 2026-07-07). */

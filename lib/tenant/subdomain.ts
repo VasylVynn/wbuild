@@ -35,6 +35,14 @@ export function toSlug(input: string): string {
 
 /** A host that is not reserved and not already taken by another tenant. */
 export async function uniqueSubdomain(businessName: string): Promise<string> {
+  // A production deploy without NEXT_PUBLIC_ROOT_DOMAIN would silently mint
+  // tenants on the lvh.me dev fallback — permanent broken hosts in the prod DB
+  // (observed live). Fail loudly instead: this is a deploy misconfiguration.
+  if (process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_ROOT_DOMAIN) {
+    throw new Error(
+      "NEXT_PUBLIC_ROOT_DOMAIN is not set in production — refusing to mint a *.lvh.me tenant host",
+    );
+  }
   const root = stripPort(ROOT_DOMAIN);
   let base = toSlug(businessName);
   if (isReservedSubdomain(base)) base = `${base}-kvity`;

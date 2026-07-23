@@ -101,7 +101,7 @@ async function ensureBucket() {
  */
 export async function importExternalImage(
   url: string,
-  scope: { conversationId?: string; host?: string },
+  scope: { conversationId?: string; host?: string; tenantId?: string },
 ): Promise<string | null> {
   // Idempotent: an already-imported (our-bucket) URL passes straight through.
   if (isStorageUrl(url)) return url;
@@ -122,9 +122,15 @@ export async function importExternalImage(
     // Resolve the owning tenant BEFORE the network fetch — no tenant, no point
     // downloading. Mirrors the upload route's resolution exactly.
     let tenantId: string | null = null;
+    const directTenantId = scope.tenantId?.trim();
     const conversationId = scope.conversationId?.trim();
     const host = scope.host?.trim();
-    if (conversationId) {
+    if (directTenantId) {
+      // Editor deep-refresh (refactor §3.3) knows the tenant directly — no
+      // conversation or host to resolve through.
+      if (!UUID_RE.test(directTenantId)) return fail("bad tenant id");
+      tenantId = directTenantId;
+    } else if (conversationId) {
       if (!UUID_RE.test(conversationId)) return fail("bad conversation id");
       const { data: conv } = await sb
         .from("conversations")

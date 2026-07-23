@@ -19,6 +19,9 @@ type FactsState = {
   templateId?: string;
   // Owner-uploaded logo/photos (§4.8). Optional so pre-media rows stay valid.
   media?: SiteMedia;
+  // Refactor 04 §2: the DRAFT host minted at generateDraftAction (draft-then-
+  // publish flow). Persisted so a reload before publish can resume the preview.
+  host?: string;
 };
 
 export type ConversationData = {
@@ -31,6 +34,8 @@ export type ConversationData = {
   /** Resolved server-side so the client never bundles the template registry. */
   templateLabel?: string;
   media: SiteMedia;
+  /** Draft host, if a draft was already generated (draft-then-publish flow). */
+  host?: string;
 };
 
 /**
@@ -124,6 +129,10 @@ export async function saveTurn(
   const prevTemplateId = (prev?.facts_state as FactsState | null)?.templateId;
   const cleanTemplateId = getTemplate(templateId) ? templateId : prevTemplateId;
 
+  // The draft host is written out-of-band by saveDraftHost; a plain turn write
+  // must preserve it (same reasoning as media above).
+  const prevHost = (prev?.facts_state as FactsState | null)?.host;
+
   const factsState: FactsState = {
     facts,
     verticalId,
@@ -131,6 +140,7 @@ export async function saveTurn(
     confirmed,
     ...(cleanTemplateId && { templateId: cleanTemplateId }),
     ...(mediaFinal && { media: mediaFinal }),
+    ...(prevHost && { host: prevHost }),
   };
 
   const { error } = await db
@@ -186,6 +196,35 @@ export async function saveMediaAction(
 }
 
 /**
+ * Persists the DRAFT host into facts_state (draft-then-publish flow, 04 §2).
+ * Merged so it survives later saveTurn writes; called by generateDraftAction
+ * after the draft is generated. Best-effort, like the rest of persistence.
+ */
+export async function saveDraftHost(
+  conversationId: string,
+  host: string,
+): Promise<{ ok: boolean }> {
+  if (!isSupabaseConfigured()) return { ok: false };
+  const db = getServiceClient();
+  const { data, error: readErr } = await db
+    .from("conversations")
+    .select("facts_state")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (readErr || !data) return { ok: false };
+  const fs = (data.facts_state as FactsState | null) ?? {
+    facts: {},
+    verticalId: undefined,
+    ready: false,
+  };
+  const { error } = await db
+    .from("conversations")
+    .update({ facts_state: { ...fs, host } })
+    .eq("id", conversationId);
+  return { ok: !error };
+}
+
+/**
  * Loads a persisted conversation by id. Returns null when Supabase is
  * unconfigured or the row is missing.
  */
@@ -216,5 +255,6 @@ export async function loadConversation(
     confirmed: fs?.confirmed ?? false,
     ...(templateId && { templateId, templateLabel: templateDisplayName(templateId) }),
     media: fs?.media ?? { photos: [] },
+    ...(fs?.host && { host: fs.host }),
   };
 }

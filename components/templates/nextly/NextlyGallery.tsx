@@ -1,4 +1,7 @@
+"use client";
+
 import type { BlockProps } from "@/lib/blocks/schema";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * Gallery — nextly-style header (indigo eyebrow + bold heading) above a
@@ -9,6 +12,7 @@ import type { BlockProps } from "@/lib/blocks/schema";
  */
 export default function NextlyGallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const { open, overlay } = useLightbox(d.images);
 
   return (
     <section className="bg-white py-16 dark:bg-neutral-900 lg:py-20">
@@ -30,27 +34,35 @@ export default function NextlyGallery({ data }: { data: unknown }) {
               key={i}
               className="group relative overflow-hidden rounded-2xl bg-gray-50 shadow-sm transition-shadow duration-300 hover:shadow-lg dark:bg-neutral-800"
             >
-              <img
-                src={img.url}
-                alt={img.alt ?? img.title ?? ""}
-                className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110"
-              />
-              {(img.title || img.category) && (
-                <div className="absolute inset-x-0 bottom-0 translate-y-full bg-white/95 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0 dark:bg-neutral-900/95">
-                  {img.title && (
-                    <p className="text-sm font-bold text-gray-800 dark:text-white">{img.title}</p>
-                  )}
-                  {img.category && (
-                    <span className="mt-1 inline-block rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300">
-                      {img.category}
-                    </span>
-                  )}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => open(i)}
+                aria-label={img.alt || img.title || "Переглянути фото"}
+                className="relative block w-full cursor-pointer text-left"
+              >
+                <img
+                  src={img.url}
+                  alt={img.alt ?? img.title ?? ""}
+                  className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                />
+                {(img.title || img.category) && (
+                  <div className="absolute inset-x-0 bottom-0 translate-y-full bg-white/95 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0 dark:bg-neutral-900/95">
+                    {img.title && (
+                      <p className="text-sm font-bold text-gray-800 dark:text-white">{img.title}</p>
+                    )}
+                    {img.category && (
+                      <span className="mt-1 inline-block rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300">
+                        {img.category}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </button>
             </div>
           ))}
         </div>
       </div>
+      {overlay}
     </section>
   );
 }

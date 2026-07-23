@@ -3,6 +3,7 @@
 import type { BlockProps } from "@/lib/blocks/schema";
 import { RevealStagger, RevealItem } from "./Reveal";
 import { SectionHeading } from "./SectionHeading";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * FerriGalleryAlt — alternate layout for the ferri gallery block. Where the
@@ -14,6 +15,7 @@ import { SectionHeading } from "./SectionHeading";
 export default function FerriGalleryAlt({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
   const [feature, ...rest] = d.images;
+  const { open, overlay } = useLightbox(d.images);
 
   return (
     <section className="border-t border-gold-500/8 py-14 sm:py-20 lg:py-24">
@@ -24,23 +26,30 @@ export default function FerriGalleryAlt({ data }: { data: unknown }) {
           <RevealStagger className="grid gap-4 lg:grid-cols-[2fr_1fr]">
             <RevealItem>
               <div className="group relative overflow-hidden border border-gold-500/12">
-                <img
-                  src={feature.url}
-                  alt={feature.alt ?? feature.title ?? ""}
-                  className="h-80 w-full object-cover grayscale-[15%] transition-all duration-500 group-hover:grayscale-0 group-hover:scale-105 sm:h-[28rem] lg:h-full"
-                />
-                {(feature.title || feature.category) && (
-                  <div className="absolute inset-x-0 bottom-0 bg-navy-950/80 p-5 backdrop-blur-sm">
-                    {feature.title && (
-                      <p className="font-[family-name:var(--ferri-display)] text-xl text-cream-100">
-                        {feature.title}
-                      </p>
-                    )}
-                    {feature.category && (
-                      <p className="text-xs uppercase tracking-[2px] text-gold-500">{feature.category}</p>
-                    )}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => open(0)}
+                  aria-label={feature.alt || feature.title || "Переглянути фото"}
+                  className="relative block w-full cursor-pointer text-left"
+                >
+                  <img
+                    src={feature.url}
+                    alt={feature.alt ?? feature.title ?? ""}
+                    className="h-80 w-full object-cover grayscale-[15%] transition-all duration-500 group-hover:grayscale-0 group-hover:scale-105 sm:h-[28rem] lg:h-full"
+                  />
+                  {(feature.title || feature.category) && (
+                    <div className="absolute inset-x-0 bottom-0 bg-navy-950/80 p-5 backdrop-blur-sm">
+                      {feature.title && (
+                        <p className="font-[family-name:var(--ferri-display)] text-xl text-cream-100">
+                          {feature.title}
+                        </p>
+                      )}
+                      {feature.category && (
+                        <p className="text-xs uppercase tracking-[2px] text-gold-500">{feature.category}</p>
+                      )}
+                    </div>
+                  )}
+                </button>
               </div>
             </RevealItem>
 
@@ -49,23 +58,30 @@ export default function FerriGalleryAlt({ data }: { data: unknown }) {
                 {rest.map((img, i) => (
                   <RevealItem key={i}>
                     <div className="group relative overflow-hidden border border-gold-500/12">
-                      <img
-                        src={img.url}
-                        alt={img.alt ?? img.title ?? ""}
-                        className="h-32 w-full object-cover grayscale-[15%] transition-all duration-500 group-hover:grayscale-0 group-hover:scale-105 sm:h-40 lg:h-[9.5rem]"
-                      />
-                      {(img.title || img.category) && (
-                        <div className="absolute inset-x-0 bottom-0 bg-navy-950/80 p-3 backdrop-blur-sm">
-                          {img.title && (
-                            <p className="font-[family-name:var(--ferri-display)] text-sm text-cream-100">
-                              {img.title}
-                            </p>
-                          )}
-                          {img.category && (
-                            <p className="text-[10px] uppercase tracking-[1.5px] text-gold-500">{img.category}</p>
-                          )}
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => open(i + 1)}
+                        aria-label={img.alt || img.title || "Переглянути фото"}
+                        className="relative block w-full cursor-pointer text-left"
+                      >
+                        <img
+                          src={img.url}
+                          alt={img.alt ?? img.title ?? ""}
+                          className="h-32 w-full object-cover grayscale-[15%] transition-all duration-500 group-hover:grayscale-0 group-hover:scale-105 sm:h-40 lg:h-[9.5rem]"
+                        />
+                        {(img.title || img.category) && (
+                          <div className="absolute inset-x-0 bottom-0 bg-navy-950/80 p-3 backdrop-blur-sm">
+                            {img.title && (
+                              <p className="font-[family-name:var(--ferri-display)] text-sm text-cream-100">
+                                {img.title}
+                              </p>
+                            )}
+                            {img.category && (
+                              <p className="text-[10px] uppercase tracking-[1.5px] text-gold-500">{img.category}</p>
+                            )}
+                          </div>
+                        )}
+                      </button>
                     </div>
                   </RevealItem>
                 ))}
@@ -74,6 +90,7 @@ export default function FerriGalleryAlt({ data }: { data: unknown }) {
           </RevealStagger>
         )}
       </div>
+      {overlay}
     </section>
   );
 }

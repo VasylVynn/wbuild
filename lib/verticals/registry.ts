@@ -103,6 +103,24 @@ export const verticals: Record<string, VerticalConfig> = {
       heroPrompt("abstract reflections on polished metal surfaces under cool industrial light and depth"),
     ],
   },
+  "pet-grooming": {
+    id: "pet-grooming",
+    label: "Грумінг / догляд за тваринами",
+    aliases: ["грумінг", "грумер", "тварин", "собак", "котів", "зоо"],
+    personaHint: "власник грумінг-салону або майстер з догляду за тваринами",
+    genHint:
+      "тепло, дбайливо й з любов'ю до хвостатих; акценти на послугах, фото робіт «до/після» і турботі про комфорт тварини",
+    advisorGuidance:
+      "Порадь вказати послуги (напр. комплексний грумінг, стрижка, купання, тримінг, гігієнічні процедури) з орієнтовними цінами за розміром/породою, для кого працює (собаки, коти), як записатися та адресу. Якщо не знає — запропонуй типове для грумінг-салону й уточни, з якими тваринами працює.",
+    fields: { ...baseFields, services: { label: "Послуги (напр. стрижка, купання)", fact: true } },
+    priceRange: { min: 100, max: 10000 },
+    themePresetIds: ["peach-soft", "sage-minimal", "lavender-provence", "honey-mustard"],
+    exampleServices: ["Комплексний грумінг", "Гігієнічна стрижка", "Купання та сушка", "Тримінг"],
+    imagePrompts: [
+      heroPrompt("soft pastel towels and gentle foam bubbles in warm cozy light, fluffy textures"),
+      heroPrompt("out-of-focus soft fur textures and pastel grooming ribbons in airy morning light"),
+    ],
+  },
   generic: {
     id: "generic",
     label: "Бізнес / послуги",
@@ -128,8 +146,28 @@ export function getVertical(id?: string | null): VerticalConfig {
   return (id && verticals[id]) || verticals.generic;
 }
 
-/** Keyword fallback classifier (the agent also returns its own guess). */
-export function classifyVertical(text: string): string {
+// Instagram businessCategoryName → vertical (refactor 03 §2.5): the scraped
+// category is the strongest classification signal we have (a groomer whose
+// text mentions «краса» must still land on pet-grooming). Substring matched,
+// case-insensitive, checked BEFORE the alias fallback.
+const IG_CATEGORY_MAP: Record<string, string> = {
+  "pet groomer": "pet-grooming",
+  "pet service": "pet-grooming",
+  bakery: "bakery",
+  florist: "florist",
+  lawyer: "lawyer",
+  automotive: "autoservice",
+};
+
+/** Keyword fallback classifier (the agent also returns its own guess).
+ *  `opts.igCategory` — IG businessCategoryName; matched first when given. */
+export function classifyVertical(text: string, opts?: { igCategory?: string }): string {
+  const cat = opts?.igCategory?.toLowerCase();
+  if (cat) {
+    for (const [needle, id] of Object.entries(IG_CATEGORY_MAP)) {
+      if (cat.includes(needle)) return id;
+    }
+  }
   const t = text.toLowerCase();
   for (const v of Object.values(verticals)) {
     if (v.id === "generic") continue;

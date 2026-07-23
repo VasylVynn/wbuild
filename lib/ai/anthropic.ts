@@ -7,16 +7,18 @@ import Anthropic from "@anthropic-ai/sdk";
  * are exercised.
  *
  * Models are single constants so the tier is an explicit owner decision. Owner
- * chose Sonnet 4.6 (2026-07-07): ~3× cheaper than Opus, strong enough for
- * structured generation and slot-filling chat. Bump to claude-opus-4-8 if
- * first-generation quality needs it.
+ * chose Sonnet 5 for EVERY call (2026-07-22, refactor 03 §0.1): chat, generation,
+ * consistency post-pass and photo intelligence all run on one tier for uniform
+ * quality. Sonnet 5 vision is ~3× Haiku per call but still cents per onboarding,
+ * and the better OCR/extractedInfo directly feeds the dossier (03 §1.4). Bump the
+ * generation call to claude-opus-4-8 (xhigh) only if first-generation quality
+ * plateaus. API-surface constraints of this tier (adaptive thinking, no
+ * budget_tokens, no non-default sampling, nested output_config.effort) are
+ * handled at each call site.
  */
-export const GEN_MODEL = "claude-sonnet-4-6"; // site generation (Phase 2)
-export const CHAT_MODEL = "claude-sonnet-4-6"; // onboarding agent (Phase 3)
-// Photo classification/alt/OCR is a bounded task — Haiku is 3-4x cheaper and
-// ~2x faster than Sonnet with no practical quality loss here: OCR results
-// always pass through a human confirmation card before becoming facts.
-export const VISION_MODEL = "claude-haiku-4-5-20251001"; // photo intelligence (wave G)
+export const GEN_MODEL = "claude-sonnet-5"; // site generation (Phase 2)
+export const CHAT_MODEL = "claude-sonnet-5"; // onboarding + editor agent (Phase 3)
+export const VISION_MODEL = "claude-sonnet-5"; // photo intelligence (wave G / refactor §1.4)
 
 let cached: Anthropic | null = null;
 

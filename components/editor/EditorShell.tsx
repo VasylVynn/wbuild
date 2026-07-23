@@ -12,6 +12,7 @@ import {
   type EditorData,
 } from "@/app/app/(protected)/edit/actions";
 import { switchDesignPack } from "@/app/app/(protected)/edit/design-actions";
+import { publicSiteUrl } from "@/lib/config";
 import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-actions";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
@@ -248,9 +249,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     const res = await publishSite(host);
     setPublishing(false);
     if (res.ok) {
-      const url = `${location.protocol}//${host}${
-        location.port && location.hostname.endsWith("lvh.me") ? ":" + location.port : ""
-      }`;
+      const url = publicSiteUrl(host);
       setDirty(false);
       notify({ text: "Опубліковано! Зміни вже на сайті", href: url });
     } else {

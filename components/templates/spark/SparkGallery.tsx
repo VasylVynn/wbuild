@@ -1,4 +1,7 @@
+"use client";
+
 import type { BlockProps } from "@/lib/blocks/schema";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * Gallery — a clean image grid: hairline-framed tiles that lift on hover and
@@ -7,6 +10,7 @@ import type { BlockProps } from "@/lib/blocks/schema";
  */
 export default function SparkGallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const { open, overlay } = useLightbox(d.images);
 
   return (
     <section id="gallery" className="bg-[var(--spark-bg)] px-4 py-16 sm:px-6 md:py-24 lg:px-8">
@@ -23,25 +27,33 @@ export default function SparkGallery({ data }: { data: unknown }) {
               key={i}
               className="group relative overflow-hidden rounded-[var(--spark-radius)] border border-[var(--spark-border)] bg-[var(--spark-card)]"
             >
-              <img
-                src={img.url}
-                alt={img.alt ?? img.title ?? ""}
-                className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              />
-              {(img.title || img.category) && (
-                <div className="absolute inset-x-0 bottom-0 translate-y-full bg-[var(--spark-bg)]/90 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0">
-                  {img.title && <p className="text-sm font-medium text-[var(--spark-fg)]">{img.title}</p>}
-                  {img.category && (
-                    <span className="spark-mono mt-1 inline-block text-xs uppercase tracking-wide text-[var(--spark-muted-fg)]">
-                      {img.category}
-                    </span>
-                  )}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => open(i)}
+                aria-label={img.alt || img.title || "Переглянути фото"}
+                className="relative block w-full cursor-pointer text-left"
+              >
+                <img
+                  src={img.url}
+                  alt={img.alt ?? img.title ?? ""}
+                  className="h-64 w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+                {(img.title || img.category) && (
+                  <div className="absolute inset-x-0 bottom-0 translate-y-full bg-[var(--spark-bg)]/90 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0">
+                    {img.title && <p className="text-sm font-medium text-[var(--spark-fg)]">{img.title}</p>}
+                    {img.category && (
+                      <span className="spark-mono mt-1 inline-block text-xs uppercase tracking-wide text-[var(--spark-muted-fg)]">
+                        {img.category}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </button>
             </div>
           ))}
         </div>
       </div>
+      {overlay}
     </section>
   );
 }
@@ -52,6 +64,7 @@ export default function SparkGallery({ data }: { data: unknown }) {
  */
 export function SparkGalleryMasonry({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const { open, overlay } = useLightbox(d.images);
 
   return (
     <section id="gallery" className="bg-[var(--spark-bg)] px-4 py-16 sm:px-6 md:py-24 lg:px-8">
@@ -68,25 +81,33 @@ export function SparkGalleryMasonry({ data }: { data: unknown }) {
               key={i}
               className="group relative block break-inside-avoid overflow-hidden rounded-[var(--spark-radius)] border border-[var(--spark-border)] bg-[var(--spark-card)]"
             >
-              <img
-                src={img.url}
-                alt={img.alt ?? img.title ?? ""}
-                className="w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              />
-              {(img.title || img.category) && (
-                <div className="absolute inset-x-0 bottom-0 translate-y-full bg-[var(--spark-bg)]/90 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0">
-                  {img.title && <p className="text-sm font-medium text-[var(--spark-fg)]">{img.title}</p>}
-                  {img.category && (
-                    <span className="spark-mono mt-1 inline-block text-xs uppercase tracking-wide text-[var(--spark-muted-fg)]">
-                      {img.category}
-                    </span>
-                  )}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => open(i)}
+                aria-label={img.alt || img.title || "Переглянути фото"}
+                className="relative block w-full cursor-pointer text-left"
+              >
+                <img
+                  src={img.url}
+                  alt={img.alt ?? img.title ?? ""}
+                  className="w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+                {(img.title || img.category) && (
+                  <div className="absolute inset-x-0 bottom-0 translate-y-full bg-[var(--spark-bg)]/90 p-4 backdrop-blur-sm transition-transform duration-300 group-hover:translate-y-0">
+                    {img.title && <p className="text-sm font-medium text-[var(--spark-fg)]">{img.title}</p>}
+                    {img.category && (
+                      <span className="spark-mono mt-1 inline-block text-xs uppercase tracking-wide text-[var(--spark-muted-fg)]">
+                        {img.category}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </button>
             </div>
           ))}
         </div>
       </div>
+      {overlay}
     </section>
   );
 }

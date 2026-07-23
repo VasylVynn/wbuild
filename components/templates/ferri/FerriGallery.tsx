@@ -3,6 +3,7 @@
 import type { BlockProps } from "@/lib/blocks/schema";
 import { RevealStagger, RevealItem } from "./Reveal";
 import { SectionHeading } from "./SectionHeading";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * Gallery — port of the source card-grid treatment (PUBLICAÇÕES/photo
@@ -17,6 +18,7 @@ import { SectionHeading } from "./SectionHeading";
  */
 export default function FerriGallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const { open, overlay } = useLightbox(d.images);
 
   return (
     <section className="border-t border-gold-500/8 py-14 sm:py-20 lg:py-24">
@@ -27,28 +29,36 @@ export default function FerriGallery({ data }: { data: unknown }) {
           {d.images.map((img, i) => (
             <RevealItem key={i}>
               <div className="group relative overflow-hidden border border-gold-500/12">
-                <img
-                  src={img.url}
-                  alt={img.alt ?? img.title ?? ""}
-                  className="h-64 w-full object-cover grayscale-[15%] transition-all duration-500 group-hover:grayscale-0 group-hover:scale-105"
-                />
-                {(img.title || img.category) && (
-                  <div className="absolute inset-x-0 bottom-0 bg-navy-950/80 p-4 backdrop-blur-sm">
-                    {img.title && (
-                      <p className="font-[family-name:var(--ferri-display)] text-lg text-cream-100">
-                        {img.title}
-                      </p>
-                    )}
-                    {img.category && (
-                      <p className="text-xs uppercase tracking-[2px] text-gold-500">{img.category}</p>
-                    )}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => open(i)}
+                  aria-label={img.alt || img.title || "Переглянути фото"}
+                  className="relative block w-full cursor-pointer text-left"
+                >
+                  <img
+                    src={img.url}
+                    alt={img.alt ?? img.title ?? ""}
+                    className="h-64 w-full object-cover grayscale-[15%] transition-all duration-500 group-hover:grayscale-0 group-hover:scale-105"
+                  />
+                  {(img.title || img.category) && (
+                    <div className="absolute inset-x-0 bottom-0 bg-navy-950/80 p-4 backdrop-blur-sm">
+                      {img.title && (
+                        <p className="font-[family-name:var(--ferri-display)] text-lg text-cream-100">
+                          {img.title}
+                        </p>
+                      )}
+                      {img.category && (
+                        <p className="text-xs uppercase tracking-[2px] text-gold-500">{img.category}</p>
+                      )}
+                    </div>
+                  )}
+                </button>
               </div>
             </RevealItem>
           ))}
         </RevealStagger>
       </div>
+      {overlay}
     </section>
   );
 }

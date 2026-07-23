@@ -2,7 +2,9 @@
 
 import { motion } from "framer-motion";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { PendingTile, pendingTileCount } from "@/components/blocks/gallery-pending";
 import { ScrollReveal } from "./ScrollReveal";
+import { useLightbox } from "@/components/blocks/GalleryLightbox";
 
 /*
  * Gallery (alt layout) — uniform rounded grid instead of the default's
@@ -11,6 +13,9 @@ import { ScrollReveal } from "./ScrollReveal";
  */
 export default function SalonGalleryAlt({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
+  const pending = pendingTileCount(d.images, d.pendingImages);
+  const { open, overlay } = useLightbox(d.images);
+  if (d.images.length === 0 && pending === 0) return null;
 
   return (
     <section className="py-16 sm:py-20 lg:py-24 bg-background dark:bg-black relative overflow-hidden transition-colors duration-500">
@@ -35,37 +40,50 @@ export default function SalonGalleryAlt({ data }: { data: unknown }) {
                 transition={{ duration: 0.4, ease: "easeOut" }}
                 className="group relative overflow-hidden rounded-3xl cursor-pointer aspect-square"
               >
-                <img
-                  src={img.url}
-                  alt={img.alt ?? img.title ?? ""}
-                  className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-125"
-                />
+                <button
+                  type="button"
+                  onClick={() => open(index)}
+                  aria-label={img.alt || img.title || "Переглянути фото"}
+                  className="absolute inset-0 block h-full w-full cursor-pointer text-left"
+                >
+                  <img
+                    src={img.url}
+                    alt={img.alt ?? img.title ?? ""}
+                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-125"
+                  />
 
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-6">
-                  {(img.title || img.category) && (
-                    <motion.div
-                      initial={{ y: 16, opacity: 0 }}
-                      whileHover={{ y: 0, opacity: 1 }}
-                      transition={{ duration: 0.4 }}
-                      className="space-y-1"
-                    >
-                      {img.title && (
-                        <h3 className="font-display text-lg font-semibold text-white">{img.title}</h3>
-                      )}
-                      {img.category && (
-                        <p className="text-accent text-[11px] tracking-[0.2em] uppercase font-medium">
-                          {img.category}
-                        </p>
-                      )}
-                    </motion.div>
-                  )}
-                </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-6">
+                    {(img.title || img.category) && (
+                      <motion.div
+                        initial={{ y: 16, opacity: 0 }}
+                        whileHover={{ y: 0, opacity: 1 }}
+                        transition={{ duration: 0.4 }}
+                        className="space-y-1"
+                      >
+                        {img.title && (
+                          <h3 className="font-display text-lg font-semibold text-white">{img.title}</h3>
+                        )}
+                        {img.category && (
+                          <p className="text-accent text-[11px] tracking-[0.2em] uppercase font-medium">
+                            {img.category}
+                          </p>
+                        )}
+                      </motion.div>
+                    )}
+                  </div>
+                </button>
 
                 <div className="absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/10 group-hover:ring-accent/40 transition-all duration-500 pointer-events-none" />
               </motion.div>
             </ScrollReveal>
           ))}
+          {Array.from({ length: pending }, (_, i) => (
+            <ScrollReveal key={`pending-${i}`} delay={i * 0.05}>
+              <PendingTile className="aspect-square w-full rounded-3xl" />
+            </ScrollReveal>
+          ))}
         </div>
+        {overlay}
 
         <ScrollReveal delay={0.6}>
           <div className="text-center mt-20">
