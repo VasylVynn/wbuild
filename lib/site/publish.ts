@@ -467,19 +467,49 @@ export async function publishDraft(host: string): Promise<{ ok: boolean; url: st
     // published_content carries blocks + seo, never the pocket (editor-only).
     // genToken rides along so a still-running image job can patch the published
     // copy too (it was generated for THIS token).
+    const buildPublished = (d: typeof draft) => ({
+      blocks: d.blocks,
+      ...(d.genToken && { genToken: d.genToken }),
+      ...(d.generatedHero && { generatedHero: d.generatedHero }),
+      ...(d.seo && { seo: d.seo }),
+    });
     const { error: pUpdErr } = await sb
       .from("pages")
-      .update({
-        published_content: {
-          blocks: draft.blocks,
-          ...(draft.genToken && { genToken: draft.genToken }),
-          ...(draft.generatedHero && { generatedHero: draft.generatedHero }),
-          ...(draft.seo && { seo: draft.seo }),
-        },
-        is_published: true,
-      })
+      .update({ published_content: buildPublished(draft), is_published: true })
       .eq("id", page.id);
     if (pUpdErr) throw new Error(`page publish failed: ${pUpdErr.message}`);
+
+    // Self-correction for the publish-vs-deferred-image race: if we copied a
+    // draft whose gallery was still a pending placeholder, the image job may
+    // have resolved the DRAFT (real images) right after our read but skipped
+    // OUR published copy (it didn't exist when the job's published-CAS ran). We
+    // are the last writer, so re-read the draft and, if it is now resolved,
+    // re-copy — otherwise the job's later published-CAS fills it (published now
+    // carries this token). Between them every interleaving resolves; a fresh
+    // read gated by CAS on the token means we never clobber a newer generation.
+    const publishedPending = (draft.blocks ?? []).some(
+      (b) => b.type === "gallery" && (b.props.pendingImages ?? 0) > 0,
+    );
+    if (publishedPending && draft.genToken) {
+      const { data: fresh } = await sb
+        .from("pages")
+        .select("draft_content")
+        .eq("id", page.id)
+        .maybeSingle();
+      const freshDraft = (fresh?.draft_content ?? {}) as typeof draft;
+      const nowResolved =
+        freshDraft.genToken === draft.genToken &&
+        !(freshDraft.blocks ?? []).some(
+          (b) => b.type === "gallery" && (b.props.pendingImages ?? 0) > 0,
+        );
+      if (nowResolved) {
+        await sb
+          .from("pages")
+          .update({ published_content: buildPublished(freshDraft) })
+          .eq("id", page.id)
+          .eq("published_content->>genToken", draft.genToken);
+      }
+    }
 
     await revalidateTenant(host); // §5.5 / §9.1 purge-on-publish
     return { ok: true, url };
