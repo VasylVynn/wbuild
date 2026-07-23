@@ -391,32 +391,49 @@ async function patchGeneratedImages(opts: {
     | ({ blocks?: StoredBlock[]; genToken?: string } & Record<string, unknown>)
     | null;
 
-  // Per-content token gate: patch draft ONLY while it still belongs to THIS
-  // generation; likewise the published copy independently (it may be an older
-  // generation the owner published before this job's regenerate). A stale job
-  // matches neither → no-op, so it can't erase a newer generation's pending
-  // gallery (codex review).
-  const draftOwned = draft.genToken === genToken;
-  const pubOwned = pub?.genToken === genToken;
+  // ATOMIC compare-and-swap on the token (codex review): the read above is
+  // stale by the time we write, so the token filter lives in the UPDATE's WHERE
+  // — Postgres re-checks it at write time in a single statement. If a newer
+  // «Згенерувати ще раз» replaced the content's token between our read and
+  // write, zero rows match and we clobber nothing. `.select()` returns the rows
+  // actually written, so we know whether this job owned the content.
+  let ownedAnything = false;
 
-  const update: Record<string, unknown> = {};
-  if (draftOwned && Array.isArray(draft.blocks)) {
-    update.draft_content = { ...draft, blocks: patchBlocks(draft.blocks) };
-  }
-  if (page.is_published && pubOwned && pub && Array.isArray(pub.blocks)) {
-    update.published_content = { ...pub, blocks: patchBlocks(pub.blocks) };
-  }
-  // Nothing this job owns → don't touch content OR brand (a stale job must
-  // leave the newer generation's brand.generatedHero/Gallery intact).
-  if (!draftOwned && !pubOwned) return;
-
-  if (Object.keys(update).length) {
-    const { error } = await sb.from("pages").update(update).eq("id", page.id);
+  if (Array.isArray(draft.blocks) && draft.genToken === genToken) {
+    const next = { ...draft, blocks: patchBlocks(draft.blocks) };
+    const { data: rows, error } = await sb
+      .from("pages")
+      .update({ draft_content: next })
+      .eq("id", page.id)
+      .eq("draft_content->>genToken", genToken)
+      .select("id");
     if (error) {
-      console.warn(`[publish] image patch page update failed: ${error.message}`);
-      return;
+      console.warn(`[publish] draft image patch failed: ${error.message}`);
+    } else if (rows?.length) {
+      ownedAnything = true;
     }
   }
+
+  let patchedPublished = false;
+  if (page.is_published && pub && Array.isArray(pub.blocks) && pub.genToken === genToken) {
+    const next = { ...pub, blocks: patchBlocks(pub.blocks) };
+    const { data: rows, error } = await sb
+      .from("pages")
+      .update({ published_content: next })
+      .eq("id", page.id)
+      .eq("published_content->>genToken", genToken)
+      .select("id");
+    if (error) {
+      console.warn(`[publish] published image patch failed: ${error.message}`);
+    } else if (rows?.length) {
+      ownedAnything = true;
+      patchedPublished = true;
+    }
+  }
+
+  // Nothing this job owned (a newer generation won the race) → leave brand and
+  // cache alone. Only stamp brand.generated* when we actually patched content.
+  if (!ownedAnything) return;
 
   const brand = {
     ...((tenant.brand ?? {}) as Record<string, unknown>),
@@ -425,7 +442,9 @@ async function patchGeneratedImages(opts: {
   };
   await sb.from("tenants").update({ brand }).eq("id", tenant.id);
 
-  if (page.is_published) await revalidateTenant(host);
+  // Purge only when the LIVE copy actually changed (a draft-only patch never
+  // affects what visitors see, §5.5).
+  if (patchedPublished) await revalidateTenant(host);
 }
 
 /**
