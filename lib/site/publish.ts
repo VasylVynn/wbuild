@@ -282,17 +282,28 @@ export async function generateDraft(opts: {
       const verticalIdForGen = vertical.id;
       const altBase = facts.city ? `${facts.businessName}, ${facts.city}` : facts.businessName;
       after(async () => {
+        let hero: string | null = null;
+        let gallery: string[] = [];
         try {
-          const { hero, gallery } = await generateSiteImages({
+          const gen = await generateSiteImages({
             verticalId: verticalIdForGen,
             subject,
             palette,
             galleryCount: GENERATED_GALLERY_COUNT,
           });
-          if (!hero && gallery.length === 0) return;
-          await patchGeneratedImages({ host, hero, gallery, altBase });
+          hero = gen.hero;
+          gallery = gen.gallery;
         } catch (e) {
           console.warn(`[publish] deferred image gen failed: ${e instanceof Error ? e.message : e}`);
+        }
+        // ALWAYS patch — even on total failure (hero=null, gallery=[]). The
+        // pending gallery MUST be resolved: real images when we have them, an
+        // empty (self-hiding) gallery otherwise. Skipping this would strand the
+        // shimmer placeholders in stored draft_content forever (codex review).
+        try {
+          await patchGeneratedImages({ host, hero, gallery, altBase });
+        } catch (e) {
+          console.warn(`[publish] deferred image patch failed: ${e instanceof Error ? e.message : e}`);
         }
       });
     }
