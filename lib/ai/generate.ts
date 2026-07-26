@@ -30,6 +30,7 @@ import {
 import { blockLibrary, COMPOSITION_RULES } from "@/lib/blocks/library";
 import {
   getTemplate,
+  shortlistTemplates,
   siteTemplates,
   TEMPLATE_IDS,
   type SiteTemplate,
@@ -298,6 +299,11 @@ export async function generateSite(
   // stable call shape (underscore quiets the linter, not the contract).
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _rng?: () => number,
+  // Seeded PRNG for the template shortlist (spec 2026-07-25 §4.3). A SEPARATE
+  // stream from `_rng` on purpose: drawing from the caller's design-DNA stream
+  // would shift every later draw in publish.ts and replay stored nonces to a
+  // different site. Absent → the full catalog (regenerateSite's fail-open path).
+  tplRng?: () => number,
 ): Promise<GeneratedSite> {
   const client = getAnthropic();
   const vertical = getVertical(verticalId);
@@ -317,7 +323,13 @@ export async function generateSite(
   }
   const facts = factsParsed.data;
 
-  const offeredTemplates = forcedTemplate ? [forcedTemplate] : Object.values(siteTemplates);
+  // Pinned wins; otherwise a seeded shortlist when the caller supplied a stream,
+  // and the full catalog when it did not (spec 2026-07-25 §4.3, §10.1).
+  const offeredTemplates = forcedTemplate
+    ? [forcedTemplate]
+    : tplRng
+      ? shortlistTemplates(tplRng)
+      : Object.values(siteTemplates);
 
   // Prompt order is cache-friendly (04 §2): the static catalog docs (library /
   // themes / template menus) come FIRST and stay byte-stable per vertical +

@@ -131,6 +131,10 @@ export async function generateDraft(opts: {
       logoFamily,
     });
     const rng = mulberry32(dnaSeed(host, dna.designNonce));
+    // The template shortlist draws from its OWN named stream (spec 2026-07-25
+    // §4.3). Sharing `rng` would shift the four draws below and replay stored
+    // nonces to a different design — the DNA-3 review caught that exact bug.
+    const tplRng = mulberry32(dnaSeed(`${host}:tpl`, dna.designNonce));
 
     // Background image generation (owner decision: «сайт має бути гарний і без
     // фото»): with zero owner photos the site ships IMMEDIATELY — hero text-only,
@@ -145,7 +149,7 @@ export async function generateDraft(opts: {
     }
 
     const dossier = opts.dossier ?? buildDossier({ facts, media: media ?? null });
-    const site = await generateSite(dossier, vertical.id, media, templateId, rng);
+    const site = await generateSite(dossier, vertical.id, media, templateId, rng, tplRng);
 
     // Template sites (DNA-2c): the composition axis — every section with
     // layout variants gets a SEEDED variant (repeats never share one, wave-C
