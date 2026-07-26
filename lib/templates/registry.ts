@@ -14,6 +14,7 @@ import { restaurantMeta, restaurantSections } from "@/components/templates/resta
 import { sparkMeta, sparkSections } from "@/components/templates/spark";
 import { belezaMeta, belezaSections } from "@/components/templates/beleza";
 import { launchMeta, launchSections } from "@/components/templates/launch";
+import { pickN } from "./shortlist";
 
 /**
  * Site templates — the owner mandate (2026-07): a generated site must BE a
@@ -244,4 +245,23 @@ export function templatesFor(verticalId?: string): SiteTemplate[] {
   return Object.values(siteTemplates).filter(
     (t) => verticalId != null && t.verticalIds.includes(verticalId),
   );
+}
+
+/** How many templates the onboarding agent is offered (spec 2026-07-25 §10.2). */
+export const SHORTLIST_SIZE = 4;
+
+/**
+ * A seeded subset of the catalog — what the onboarding agent gets to choose
+ * from instead of all eleven templates (spec 2026-07-25 §4.2).
+ *
+ * The `rng` is a PARAMETER, not built here: this module is deliberately not
+ * `server-only` (the render path and the admin previews import it across the
+ * client boundary), so the caller owns seeding. Callers must use a stream
+ * dedicated to this draw — see §4.3 of the spec.
+ */
+export function shortlistTemplates(
+  rng: () => number,
+  k: number = SHORTLIST_SIZE,
+): SiteTemplate[] {
+  return pickN(rng, Object.values(siteTemplates), k);
 }
