@@ -13,7 +13,10 @@ import {
   getTemplate,
   templateDisplayName,
   TEMPLATE_IDS,
+  shortlistTemplates,
+  type SiteTemplate,
 } from "@/lib/templates/registry";
+import { dnaSeed, mulberry32 } from "@/lib/theme/dna";
 import { isApifyConfigured } from "@/lib/ig/apify";
 import { PHOTO_ROLES } from "@/lib/media/media";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
@@ -248,10 +251,13 @@ function fieldList(v: VerticalConfig): string {
     .join("\n");
 }
 
-/** B1: the design catalog the agent knows from the FIRST message (one-registry). */
-function buildDesignCatalog(vertical: VerticalConfig): string {
+/** B1: the design catalog the agent knows from the FIRST message (one-registry).
+ *  `offered` narrows it to this conversation's seeded shortlist (spec 2026-07-25
+ *  §4.2); absent or empty keeps every template — fail-open. */
+function buildDesignCatalog(vertical: VerticalConfig, offered?: SiteTemplate[]): string {
   const affine = new Set(templatesFor(vertical.id).map((t) => t.id));
-  return Object.values(siteTemplates)
+  const list = offered?.length ? offered : Object.values(siteTemplates);
+  return list
     .map(
       (t) =>
         `- ${t.id} — ${t.label}: ${t.description}${affine.has(t.id) ? " (типовий вибір для цієї ніші)" : ""}`,
@@ -266,8 +272,11 @@ export function buildOnboardSystem(args: {
   dossier: Dossier | null;
   issues: string[];
   apifyEnabled: boolean;
+  /** Seeds this conversation's design shortlist (spec 2026-07-25 §4.1). Stable
+   *  across turns and across resume; absent → the full catalog, fail-open. */
+  conversationId?: string;
 }): string {
-  const { vertical, facts, templateId, dossier, issues, apifyEnabled } = args;
+  const { vertical, facts, templateId, dossier, issues, apifyEnabled, conversationId } = args;
 
   const igLine = apifyEnabled
     ? "- Заглянути в Instagram бізнесу за посиланням чи нікнеймом — сам витягну опис, категорію, контакти-кандидати й фото (інструмент scrape_instagram). Можу зробити це повторно на прохання («пошукай ще раз телефон»)."
@@ -279,6 +288,13 @@ export function buildOnboardSystem(args: {
   const templateLine = getTemplate(templateId)
     ? `\nПоточний обраний дизайн: ${templateId} (можеш змінити, передавши інший templateId).`
     : "";
+
+  // Nonce is fixed at 0: one conversation must always see the SAME four designs,
+  // or the template the agent already picked could vanish from the list mid-chat
+  // (spec §4.1, §10.3).
+  const offeredTemplates = conversationId
+    ? shortlistTemplates(mulberry32(dnaSeed(conversationId, 0)))
+    : undefined;
 
   const issuesBlock = issues.length
     ? `\n\nПЕРЕВІР непевні дані (МАКСИМУМ ОДНЕ мʼяке підтверджувальне питання за хід, природним відлунням):\n${issues.map((n) => `- ${n}`).join("\n")}`
@@ -306,7 +322,7 @@ ${igToolLine ? igToolLine + "\n" : ""}- Хочеш роздивитись фот
 ${fieldList(vertical)}
 
 ДОСТУПНІ ДИЗАЙНИ (ти знаєш їх з першого повідомлення):
-${buildDesignCatalog(vertical)}
+${buildDesignCatalog(vertical, offeredTemplates)}
 ВИБІР ДИЗАЙНУ — твоя робота як дизайнера: щойно відчув ХАРАКТЕР бізнесу, обери і передай templateId у save_facts; можеш змінити будь-якого ходу (діє останній). Скажи одним теплим реченням, який стиль обрав і чому, без термінів. Не проси дозволу — власник змінить після генерації.
 
 СКІЛЬКИ ПИТАТИ (ціль — ≤2 змістовні ходи):
@@ -436,6 +452,7 @@ export async function onboardTurn(
   currentFacts: Partial<BusinessFacts>,
   currentVerticalId?: string,
   currentTemplateId?: string,
+  conversationId?: string,
 ): Promise<OnboardTurnResult> {
   const vertical = getVertical(currentVerticalId);
   const messages = historyToMessages(history);
@@ -459,6 +476,7 @@ export async function onboardTurn(
     dossier: null,
     issues,
     apifyEnabled: isApifyConfigured(),
+    conversationId,
   });
 
   const client = getAnthropic();

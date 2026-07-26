@@ -38,7 +38,9 @@ export async function onboardAction(
   templateId?: string,
   // Client-held flags, echoed back on refusals only (codex review): a
   // rate-limited fallback turn must not wipe ready/confirmed/template state.
-  current?: { ready?: boolean; confirmed?: boolean },
+  // `conversationId` seeds the design shortlist (spec 2026-07-25 §4.2) — carried
+  // here rather than as a sixth positional parameter.
+  current?: { ready?: boolean; confirmed?: boolean; conversationId?: string },
 ): Promise<OnboardTurnResult> {
   const cleanTemplateId = getTemplate(templateId) ? templateId : undefined;
   const refuse = (message: string): OnboardTurnResult => ({
@@ -62,7 +64,7 @@ export async function onboardAction(
   const limit = await checkRateLimit("chat_turn", ipFromHeaders(await headers()));
   if (!limit.ok) return refuse(rateLimitMessage(limit.retryAfterSec));
 
-  return onboardTurn(history, facts, verticalId, templateId);
+  return onboardTurn(history, facts, verticalId, templateId, current?.conversationId);
 }
 
 /** Session state for the chat UI's login gate (journal #43). */

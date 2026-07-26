@@ -337,6 +337,7 @@ export async function POST(req: Request): Promise<Response> {
             dossier,
             issues: validateFacts(accum.facts, vertical).map((i) => i.note),
             apifyEnabled,
+            conversationId,
           });
           lastSystem = system;
 

@@ -751,7 +751,11 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         // non-stream server action still answers the turn (degraded: no tools).
         setTyping(true);
         applyResult(
-          await onboardAction(modelMessages, facts, verticalId, template?.id, { ready, confirmed }),
+          await onboardAction(modelMessages, facts, verticalId, template?.id, {
+            ready,
+            confirmed,
+            conversationId: convIdRef.current ?? undefined,
+          }),
         );
       }
     } finally {
