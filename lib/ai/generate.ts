@@ -186,8 +186,12 @@ function buildThemeDoc(vertical: VerticalConfig): string {
 /**
  * Template menu for the model: every offered template with its section list
  * (id — label — description — «контент за схемою блоку X»). Lives in the USER
- * message's static prefix (before the volatile dossier tail) so the whole
- * prefix stays byte-stable and cache-friendly (04 §2).
+ * message's static prefix, before the volatile dossier tail (04 §2).
+ *
+ * Byte-stability depends on which templates are offered: pinned and
+ * no-shortlist calls stay stable per vertical+template, while the seeded
+ * shortlist path (spec 2026-07-25 §4.3) varies the menu per host+nonce. That
+ * cost was accepted in §4.5 — the unpinned path runs at most once per site.
  */
 function buildTemplateDoc(templates: SiteTemplate[]): string {
   return templates
@@ -296,8 +300,9 @@ export async function generateSite(
   templateId?: string,
   // Seeded PRNG from the caller's design-DNA (wave DNA-1). Unused since the
   // design-pack fallback was deleted; accepted so DNA-seeded callers keep a
-  // stable call shape (underscore quiets the linter, not the contract).
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // stable call shape. No lint suppression needed: `no-unused-vars` defaults to
+  // `args: "after-used"`, and the used `tplRng` below exempts it. If `tplRng`
+  // ever goes away, this parameter starts warning again — that is the signal.
   _rng?: () => number,
   // Seeded PRNG for the template shortlist (spec 2026-07-25 §4.3). A SEPARATE
   // stream from `_rng` on purpose: drawing from the caller's design-DNA stream
@@ -332,8 +337,11 @@ export async function generateSite(
       : Object.values(siteTemplates);
 
   // Prompt order is cache-friendly (04 §2): the static catalog docs (library /
-  // themes / template menus) come FIRST and stay byte-stable per vertical +
-  // template; the volatile per-business dossier is the LAST thing in the turn.
+  // themes / template menus) come FIRST, the volatile per-business dossier LAST.
+  // The library and theme docs are byte-stable per vertical; the template menu is
+  // too when the template is pinned or no shortlist stream was supplied, but on
+  // the seeded-shortlist path it varies per host+nonce — a cost accepted in spec
+  // 2026-07-25 §4.5, since that path runs at most once per site.
   const userPrompt = `Бібліотека блоків:
 ${buildLibraryDoc()}
 
