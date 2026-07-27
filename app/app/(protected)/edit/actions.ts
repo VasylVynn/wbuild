@@ -13,6 +13,9 @@ import type { BusinessFacts } from "@/lib/verticals/schema";
 import { type PageSeo } from "@/lib/tenant/types";
 import type { PageContent } from "@/lib/site/page-content";
 import { publishDraft } from "@/lib/site/publish";
+import { runStyleAudit } from "@/lib/design/style-audit";
+import { buildSectionDigest } from "@/lib/site/inspect";
+import type { StyleAuditReport } from "@/lib/site/page-content";
 
 /**
  * Editor server actions (§3 + §5.5): the editor reads/writes DRAFT only;
@@ -304,23 +307,38 @@ export async function regenerateSite(
     // new composition degrades gracefully — every section styles through the
     // same `wire-*` class contract — so it is a genuinely better fallback than
     // nothing.
+    const brief = [
+      `${t.facts.businessName}, ${t.facts.city}.`,
+      t.facts.about ?? "",
+      t.facts.services?.length
+        ? `Послуги: ${t.facts.services.map((s: { name: string }) => s.name).slice(0, 8).join(", ")}.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const hue = Math.floor(mulberry32(designSeed(`${host}:hue`, designNonce))() * 360);
     try {
-      const brief = [
-        `${t.facts.businessName}, ${t.facts.city}.`,
-        t.facts.about ?? "",
-        t.facts.services?.length
-          ? `Послуги: ${t.facts.services.map((s: { name: string }) => s.name).slice(0, 8).join(", ")}.`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      const hue = Math.floor(mulberry32(designSeed(`${host}:hue`, designNonce))() * 360);
       wireCss = (await generateWireStyle(brief, { hue })).css;
     } catch (e) {
       console.error(
         `[regenerate] styling failed for ${host}: ${e instanceof Error ? e.message : e}`,
       );
     }
+
+    // Style QA gate (spec 2026-07-28): the redesign action is the only editor
+    // path that mints new CSS, so it gets the same audit as generation.
+    let styleAudit: StyleAuditReport | undefined;
+    if (wireCss) {
+      const audited = await runStyleAudit({
+        css: wireCss,
+        sectionDigest: buildSectionDigest(site.blocks),
+        brief,
+        hue,
+      });
+      wireCss = audited.css;
+      styleAudit = audited.report;
+    }
+
     // Regeneration produces fresh SEO meta with the fresh content; keep the
     // previous meta only when the model returned none.
     const seo = site.seo ?? oldDraft?.seo;
@@ -334,6 +352,7 @@ export async function regenerateSite(
           // the only moment the live site's look changes (invariant 6).
           templateId: site.templateId,
           ...(wireCss && { wireCss }),
+          ...(styleAudit && { styleAudit }),
           // Carry the generated hero forward so the NEXT regeneration reuses it
           // (new sites no longer keep a brand copy — draft_content is the home).
           ...(media.generatedHero && { generatedHero: media.generatedHero }),
