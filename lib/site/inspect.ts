@@ -145,6 +145,11 @@ function sectionDigest(entries: SectionEntry[]): string {
     .join("\n");
 }
 
+/** Visible-text digest for consumers outside the loop (style audit). */
+export function buildSectionDigest(blocks: StoredBlock[]): string {
+  return sectionDigest(sectionEntries(blocks));
+}
+
 // ---------------------------------------------------------------------------
 // Deterministic requisite check (no model): rendered phone/address/handle must
 // equal the confirmed facts 1:1 (§4.4). Merged into every inspect report.
