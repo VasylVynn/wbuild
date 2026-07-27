@@ -17,9 +17,9 @@ import UnknownBlock from "@/components/blocks/UnknownBlock";
  * through the template's section component, keyed by `block.section` (falling back
  * to the block type, then to the default block registry — which keeps legacy/
  * sectionless blocks and unmapped types alive). Without a template, the classic
- * registry path renders each block with its skin.
+ * registry path renders each block with its default layout.
  *
- * Generation stays strict elsewhere (pageContentSchema.parse rejects invalid
+ * Generation stays strict elsewhere (the generation schema rejects invalid
  * AI output); this render path is deliberately resilient for stored data.
  */
 export function PageRenderer({
@@ -48,9 +48,8 @@ export function PageRenderer({
       if (!parsed.ok) {
         return <UnknownBlock key={i} type={block.type} />;
       }
-      // On a template site the section id IS the template section id (so the
-      // template's nav anchors like #features/#pricing resolve); pack/legacy
-      // sites key on the block's own anchor.
+      // The section id IS the template section id, so the chrome's nav anchors
+      // resolve; without one, key on the block's own anchor.
       const baseId = template && block.section ? block.section : block.anchor?.replace(/^#/, "");
       let id = baseId;
       if (baseId) {
@@ -80,14 +79,14 @@ export function PageRenderer({
       }
 
       const Component = blockRegistry[parsed.type] as
-        | ComponentType<{ data: unknown; skin?: string }>
+        | ComponentType<{ data: unknown }>
         | undefined;
-      // Template-only block types have no default component — off a template
-      // (pack/legacy path) they can't render, so fall back rather than crash.
+      // Template-only block types have no default component — without a
+      // template they can't render, so fall back rather than crash.
       if (!Component) return <UnknownBlock key={i} type={block.type} />;
       return (
         <section key={i} id={id}>
-          <Component data={parsed.props} skin={block.skin} />
+          <Component data={parsed.props} />
         </section>
       );
     });

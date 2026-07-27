@@ -14,7 +14,6 @@ export default function BlockSheet({
   host,
   saving,
   onSave,
-  onSkinChange,
   onClose,
 }: {
   block: StoredBlock;
@@ -22,7 +21,6 @@ export default function BlockSheet({
   host: string;
   saving: boolean;
   onSave: (props: unknown) => void;
-  onSkinChange?: (skin: string) => void;
   onClose: () => void;
 }) {
   return (
@@ -61,7 +59,6 @@ export default function BlockSheet({
           host={host}
           saving={saving}
           onSave={onSave}
-          onSkinChange={onSkinChange}
           onClose={onClose}
         />
       </div>

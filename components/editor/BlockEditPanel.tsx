@@ -8,7 +8,6 @@ import {
   type FieldDescriptor,
 } from "@/lib/blocks/fields";
 import type { StoredBlock } from "@/lib/blocks/schema";
-import { skinsFor } from "@/lib/blocks/skins";
 import { Button, Input, Select, Textarea } from "@/components/ui";
 import { aiEditBlockAction } from "@/app/app/(protected)/edit/actions";
 import PhotoField from "./PhotoField";
@@ -44,19 +43,15 @@ export default function BlockEditPanel({
   host,
   saving,
   onSave,
-  onSkinChange,
   onClose,
 }: {
   block: StoredBlock;
   host: string;
   saving: boolean;
   onSave: (props: unknown) => void;
-  onSkinChange?: (skin: string) => void;
   onClose: () => void;
 }) {
   const fields = getBlockFields(block.type);
-  const skins = skinsFor(block.type);
-  const currentSkin = block.skin ?? "";
   const [draft, setDraft] = useState<Draft>(() =>
     JSON.parse(JSON.stringify(block.props)) as Draft,
   );
@@ -254,31 +249,6 @@ export default function BlockEditPanel({
   return (
     <>
       <div className="flex flex-col gap-5 overflow-auto px-5 py-6">
-        {/* Вигляд — layout skin picker (content stays; only layout changes). */}
-        {skins.length > 0 && onSkinChange && (
-          <div className="flex flex-col gap-2">
-            <span className="text-[15px] font-semibold text-ink">Вигляд</span>
-            <div className="flex flex-wrap gap-2">
-              {skins.map((opt) => {
-                const active = currentSkin === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => onSkinChange(opt.id)}
-                    className={`inline-flex min-h-9 items-center rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${
-                      active
-                        ? "border-brand bg-brand-soft text-brand"
-                        : "border-line bg-surface text-ink-muted hover:bg-sunken"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
         {fields.length === 0 ? (
           <p className="text-[15px] text-ink-muted">Ця секція не має полів для редагування.</p>
         ) : (

@@ -1,0 +1,194 @@
+/*
+ * salonwire — the WIREFRAME base (design spike, 2026-07-27).
+ *
+ * A structural skeleton copied from the `salon` template's layout logic with
+ * every visual decision removed. Greys only, no shadows, no radii, no
+ * gradients, no motion. Its whole purpose is to be styled by a model at
+ * generation time: the AI writes a scoped stylesheet against the class contract
+ * below, and that stylesheet is stored per tenant.
+ *
+ * ── THE CONTRACT ────────────────────────────────────────────────────────────
+ * Rules in this file are LOCKED. They own layout and responsiveness:
+ *   display · flex-direction · grid-template-* · width/max-width · overflow
+ *   the container ladder · the breakpoints
+ * The generated stylesheet owns SURFACE:
+ *   color · background · border · border-radius · box-shadow · letter-spacing
+ *   font-weight/size · padding/margin within a section · align-items ·
+ *   justify-content · text-align · pseudo-elements · transitions
+ *
+ * Everything here is authored so the generated sheet never has to fight
+ * specificity: single-class selectors, no !important, no Tailwind colour
+ * utilities anywhere in the components.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+
+.tpl-salonwire {
+  --wire-ink: #3f3f46;
+  --wire-ink-soft: #71717a;
+  --wire-line: #d4d4d8;
+  --wire-surface: #fafafa;
+  --wire-block: #e4e4e7;
+
+  min-height: 100vh;
+  background: var(--wire-surface);
+  color: var(--wire-ink);
+  font-family: var(--font-body, ui-sans-serif, system-ui, sans-serif);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Container ladder — LOCKED ─────────────────────────────────────────── */
+
+.wire-section {
+  padding-block: 3rem;
+}
+
+.wire-container {
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .wire-section { padding-block: 4rem; }
+  .wire-container { padding-inline: 2rem; }
+}
+
+@media (min-width: 1024px) {
+  .wire-section { padding-block: 5.5rem; }
+  .wire-container { padding-inline: 3rem; }
+}
+
+/* ── Type scale — sizes are surface, the CASCADE is structure ──────────── */
+
+.wire-eyebrow { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.2em; color: var(--wire-ink-soft); }
+.wire-title { font-size: 1.875rem; font-weight: 600; line-height: 1.15; font-family: var(--font-heading, inherit); }
+.wire-subtitle { font-size: 1rem; color: var(--wire-ink-soft); max-width: 46ch; }
+.wire-heading { font-size: 1.25rem; font-weight: 600; font-family: var(--font-heading, inherit); }
+.wire-text { font-size: 0.9375rem; color: var(--wire-ink-soft); }
+.wire-price { font-size: 1.125rem; font-weight: 600; }
+
+@media (min-width: 640px) { .wire-title { font-size: 2.5rem; } }
+@media (min-width: 1024px) { .wire-title { font-size: 3.25rem; } }
+
+/* ── Primitives ────────────────────────────────────────────────────────── */
+
+.wire-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid var(--wire-line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.wire-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  border: 1px solid var(--wire-line);
+  background: #fff;
+}
+
+.wire-media {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--wire-block);
+}
+
+.wire-stack { display: flex; flex-direction: column; gap: 1rem; }
+.wire-row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+
+/* ── Grids — LOCKED. The generated sheet must not change these. ────────── */
+
+.wire-grid-2,
+.wire-grid-3,
+.wire-grid-4 { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+
+@media (min-width: 640px) {
+  .wire-grid-2, .wire-grid-3, .wire-grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1024px) {
+  .wire-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wire-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Split: stacked on mobile, two columns from lg. `--wire-split-order` lets the
+   generated sheet flip which side the media sits on WITHOUT touching
+   flex-direction — the one alignment freedom that cannot break the layout. */
+.wire-split { display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: center; }
+.wire-split__media { order: var(--wire-split-order, 0); }
+
+@media (min-width: 1024px) {
+  .wire-split { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; }
+}
+
+/* ── Nav ───────────────────────────────────────────────────────────────── */
+
+.wire-nav { position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--wire-line); background: var(--wire-surface); }
+.wire-nav__inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 1rem; }
+.wire-nav__brand { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wire-nav__links { display: none; gap: 1.5rem; }
+.wire-nav__link { text-decoration: none; color: inherit; white-space: nowrap; }
+
+@media (min-width: 768px) { .wire-nav__links { display: flex; } }
+
+/* ── Hero ──────────────────────────────────────────────────────────────── */
+
+.wire-hero__inner { display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: center; }
+.wire-hero__media { width: 100%; }
+
+@media (min-width: 1024px) {
+  .wire-hero__inner { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; }
+}
+
+/* ── Footer ────────────────────────────────────────────────────────────── */
+
+.wire-footer { border-top: 1px solid var(--wire-line); }
+.wire-footer__inner { display: grid; grid-template-columns: 1fr; gap: 2rem; padding-block: 2.5rem; }
+
+@media (min-width: 640px) { .wire-footer__inner { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .wire-footer__inner { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* ── Form ──────────────────────────────────────────────────────────────── */
+
+.wire-field { display: flex; flex-direction: column; gap: 0.375rem; }
+.wire-input,
+.wire-textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--wire-line);
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+.wire-textarea { min-height: 7rem; resize: vertical; }
+
+/* ── Stats ─────────────────────────────────────────────────────────────── */
+
+.wire-stat { display: flex; flex-direction: column; gap: 0.25rem; }
+.wire-stat__value { font-size: 2rem; font-weight: 700; font-family: var(--font-heading, inherit); }
+.wire-stat__label { font-size: 0.875rem; color: var(--wire-ink-soft); }
+
+/* ── Marquee ───────────────────────────────────────────────────────────── */
+
+.wire-marquee__list { list-style: none; margin: 0; padding: 0; }
+.wire-marquee__item { padding: 0.5rem 1rem; border: 1px solid var(--wire-line); }
+
+/* ── Map ───────────────────────────────────────────────────────────────── */
+
+.wire-map__canvas { aspect-ratio: 16 / 7; }
+
+/* ── FAQ ───────────────────────────────────────────────────────────────── */
+
+.wire-faq__item { border-bottom: 1px solid var(--wire-line); padding-block: 1rem; }
+.wire-faq__q { font-weight: 600; cursor: pointer; }
+.wire-faq__a { margin-top: 0.5rem; color: var(--wire-ink-soft); }

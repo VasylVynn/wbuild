@@ -160,8 +160,6 @@ body {
   color-scheme: dark;
 }
 
-/* DNA-2b: the rolled pair (shell-provided --font-heading/--font-body) wins;
-   absent pair -> the template's own fonts, byte-identical to before. */
 .tpl-salon { --font-display: var(--font-heading, var(--font-playfair), "Playfair Display", Georgia, serif); }
 .tpl-salon .font-display { font-family: var(--font-display); }
 .tpl-salon .font-body { font-family: var(--font-body, var(--font-poppins), ui-sans-serif, system-ui, sans-serif); }
@@ -462,25 +460,4 @@ body {
 }
 .tpl-restaurant .font-display {
   font-family: var(--font-heading, var(--font-restaurant-display), Georgia, serif);
-}
-
-/* Design-DNA motion presets (wave DNA-1). Sections render visible by default
-   (no-JS honesty, H5); MotionDriver arms only below-fold sections after
-   hydration. `stagger` adds a small per-sibling delay. */
-[data-motion="fade-up"] main section.mo-armed,
-[data-motion="stagger"] main section.mo-armed {
-  opacity: 0.001;
-  transform: translateY(16px);
-}
-[data-motion="fade-up"] main section,
-[data-motion="stagger"] main section {
-  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-}
-@media (prefers-reduced-motion: reduce) {
-  [data-motion] main section,
-  [data-motion] main section.mo-armed {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
 }

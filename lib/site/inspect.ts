@@ -8,7 +8,7 @@ import type { BusinessFacts } from "@/lib/verticals/schema";
 import type { SiteMedia } from "@/lib/media/media";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
 import { getServiceClient } from "@/lib/supabase/server";
-import type { PageSeo } from "@/lib/tenant/types";
+import type { PageContent } from "@/lib/site/page-content";
 
 /**
  * Draft self-validation cycle (refactor 04 §4): after generation lands in the
@@ -420,14 +420,10 @@ export async function runDraftQualityLoop(opts: {
       .eq("slug", "")
       .maybeSingle();
     if (!page) return;
-    const draft = (page.draft_content ?? {}) as {
-      blocks?: StoredBlock[];
-      pocket?: StoredBlock[];
-      seo?: PageSeo;
-      // Per-generation token (publish.ts): preserved on re-save so the deferred
-      // image job's token check still matches after the quality loop rewrites.
-      genToken?: string;
-    };
+    // Read as PageContent and re-save by SPREAD: this loop only rewrites the
+    // blocks, so every other field (design, genToken, seo, pocket) must survive
+    // untouched. Listing them by hand is how templateId/wireCss got lost here.
+    const draft = (page.draft_content ?? {}) as PageContent;
     let blocks = draft.blocks ?? [];
     if (!blocks.length) return;
 
@@ -494,14 +490,7 @@ export async function runDraftQualityLoop(opts: {
       if (dirty) {
         await sb
           .from("pages")
-          .update({
-            draft_content: {
-              blocks,
-              pocket: draft.pocket ?? [],
-              ...(draft.genToken && { genToken: draft.genToken }),
-              ...(draft.seo && { seo: draft.seo }),
-            },
-          })
+          .update({ draft_content: { ...draft, blocks } })
           .eq("id", page.id);
       }
     }

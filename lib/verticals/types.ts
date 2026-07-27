@@ -1,4 +1,3 @@
-import type { ThemePresetId } from "@/lib/theme/presets";
 import type { BusinessFactKey } from "./schema";
 
 /** Per-field metadata for the onboarding form + prompt (labels, grounding). */
@@ -33,8 +32,6 @@ export interface VerticalConfig {
   fields: Partial<Record<BusinessFactKey, FieldMeta>>;
   /** Plausible price range (UAH) for ONE service — validation flags outliers. */
   priceRange: { min: number; max: number };
-  /** Theme presets that fit this vertical (generation picks among these). */
-  themePresetIds: ThemePresetId[];
   /** Example service names to hint the agent (NOT facts — never inserted). */
   exampleServices: string[];
   /**

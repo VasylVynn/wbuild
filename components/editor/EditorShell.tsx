@@ -2,31 +2,26 @@
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import Link from "next/link";
-import { Palette, ImageIcon, RefreshCw, Monitor, Tablet, Smartphone, Sparkles, Undo2 } from "lucide-react";
+import { ImageIcon, RefreshCw, Monitor, Tablet, Smartphone, Sparkles, Undo2 } from "lucide-react";
 import {
   saveDraftBlocks,
-  switchTheme,
   regenerateSite,
   publishSite,
   customRequestAction,
   type EditorData,
 } from "@/app/app/(protected)/edit/actions";
-import { switchDesignPack } from "@/app/app/(protected)/edit/design-actions";
 import { publicSiteUrl } from "@/lib/config";
 import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-actions";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
 import { getTemplate, type SiteTemplate, type TemplateBrand } from "@/lib/templates/registry";
 import type { StoredBlock } from "@/lib/blocks/schema";
-import { themeToCssVars, type Theme } from "@/lib/theme/tokens";
 import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/components/ui";
 import EditableSection from "./EditableSection";
 import BlockSheet from "./BlockSheet";
 import BlockEditPanel from "./BlockEditPanel";
 import EditorChat from "./EditorChat";
 import PhotoField from "./PhotoField";
-import LogoDisplayPanel from "./LogoDisplayPanel";
-import ThemePicker from "./ThemePicker";
 
 /** Device modes: «Компʼютер» edits inline; tablet/mobile render the draft in an
  * iframe whose width IS the simulated viewport (frame route), read-only. */
@@ -49,7 +44,7 @@ function useIsDesktop(): boolean {
 /**
  * The site EDITOR (§3): the owner sees their DRAFT rendered with the live theme,
  * taps a section to edit its fields, reorders/hides sections, swaps the design
- * preset, regenerates from facts, and publishes. The chrome is the calm neutral
+ * regenerates from facts, and publishes. The chrome is the calm neutral
  * «Небо і мед» product system (paper + blue) wrapped around the framed themed
  * preview so the two never clash; everything is Ukrainian and tuned for a
  * non-technical 50+ owner (big tap targets, plain wording).
@@ -65,11 +60,11 @@ const STATUS_LABELS: Record<string, string> = {
 const statusTone = (s: string): "ok" | "warn" | "neutral" =>
   s === "published" ? "ok" : s === "draft" ? "warn" : "neutral";
 
-// Render one block. On a TEMPLATE site, mirror PageRenderer: render through the
-// template's own section component (honouring the block's `variant`), keyed by
-// `section` and gated on the section actually accepting this block type — so the
-// editor preview matches the published site. Otherwise (pack/legacy sites) use
-// the shared registry with the block's skin. Props were validated on save.
+// Render one block, mirroring PageRenderer: through the wireframe's own section
+// component (honouring the block's `variant`), keyed by `section` and gated on
+// the section actually accepting this block type — so the editor preview matches
+// the published site. A block the wireframe has no section for falls back to the
+// shared registry component. Props were validated on save.
 function BlockView({ block, template }: { block: StoredBlock; template?: SiteTemplate }) {
   if (template) {
     const def = template.sections[block.section ?? block.type];
@@ -81,11 +76,8 @@ function BlockView({ block, template }: { block: StoredBlock; template?: SiteTem
       return <S data={block.props} />;
     }
   }
-  const Comp = blockRegistry[block.type] as unknown as ComponentType<{
-    data: unknown;
-    skin?: string;
-  }>;
-  return <Comp data={block.props} skin={block.skin} />;
+  const Comp = blockRegistry[block.type] as unknown as ComponentType<{ data: unknown }>;
+  return <Comp data={block.props} />;
 }
 
 type Toast = { text: string; href?: string };
@@ -93,7 +85,7 @@ type Toast = { text: string; href?: string };
 /** Immutably patch a stored block (props and/or hidden), keeping its type. */
 function patchBlock(
   block: StoredBlock,
-  patch: Partial<{ props: unknown; hidden: boolean; skin: string }>,
+  patch: Partial<{ props: unknown; hidden: boolean }>,
 ): StoredBlock {
   return { ...block, ...patch } as unknown as StoredBlock;
 }
@@ -101,14 +93,11 @@ function patchBlock(
 export default function EditorShell({ initial }: { initial: EditorData }) {
   const { host } = initial;
   const [blocks, setBlocks] = useState<StoredBlock[]>(initial.blocks);
-  const [theme, setTheme] = useState<Theme>(initial.theme);
-  const [packId, setPackId] = useState<string | undefined>(initial.packId);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [themeOpen, setThemeOpen] = useState(false);
   const [regenConfirmOpen, setRegenConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [busyLabel, setBusyLabel] = useState<string | null>(null); // theme / regenerate
+  const [busyLabel, setBusyLabel] = useState<string | null>(null); // regenerate
   const [dirty, setDirty] = useState(false); // unpublished draft changes
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,49 +171,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     void persist(next);
   };
 
-  // Switch a block's layout skin (content untouched); mirrors hide/reorder —
-  // update local state and persist to the draft, no save button needed.
-  const handleSkinChange = (index: number, skin: string) => {
-    const next = blocks.map((b, i) => (i === index ? patchBlock(b, { skin }) : b));
-    setBlocks(next);
-    setDirty(true);
-    void persist(next);
-  };
 
-  const pickTheme = async (id: string) => {
-    setBusyLabel("theme");
-    const res = await switchTheme(host, id);
-    setBusyLabel(null);
-    if (res.ok && res.theme) {
-      setTheme(res.theme);
-      setDirty(true);
-      setThemeOpen(false);
-      setFrameVersion((v) => v + 1);
-      notify({ text: "Оформлення змінено" });
-    } else {
-      notify({ text: `Не вдалося змінити оформлення: ${res.error ?? "помилка"}` });
-    }
-  };
-
-  // Switch a whole design pack — theme AND every section's skin at once. Like
-  // pickTheme this persists the draft server-side, so we mirror its after-effects
-  // (dirty flag, close the sheet, toast) and also swap the previewed blocks.
-  const pickPack = async (id: string) => {
-    setBusyLabel("theme");
-    const res = await switchDesignPack(host, id);
-    setBusyLabel(null);
-    if (res.ok && res.theme && res.blocks) {
-      setTheme(res.theme);
-      setBlocks(res.blocks);
-      setPackId(id);
-      setDirty(true);
-      setThemeOpen(false);
-      setFrameVersion((v) => v + 1);
-      notify({ text: "Дизайн змінено" });
-    } else {
-      notify({ text: `Не вдалося змінити дизайн: ${res.error ?? "помилка"}` });
-    }
-  };
 
   // Rebuild the site from the owner's facts. Gated behind a confirm dialog; the
   // current draft is kept server-side, so nothing is lost (§5.5).
@@ -235,7 +182,6 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     setRegenConfirmOpen(false);
     if (res.ok && res.blocks) {
       setBlocks(res.blocks);
-      if (res.theme) setTheme(res.theme);
       setDirty(true);
       setFrameVersion((v) => v + 1);
       notify({ text: "Сайт зібрано наново" });
@@ -321,9 +267,8 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
 
   // The agent mutated the draft server-side → adopt its state locally and give
   // the owner one-click undo to the pre-turn snapshot.
-  const applyAgentResult = (nextBlocks: StoredBlock[], nextTheme: Theme) => {
+  const applyAgentResult = (nextBlocks: StoredBlock[]) => {
     setBlocks(nextBlocks);
-    setTheme(nextTheme);
     setDirty(true);
     setFrameVersion((v) => v + 1);
     setSelectedIndex(null);
@@ -343,7 +288,6 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
 
   const statusLabel = STATUS_LABELS[initial.status] ?? STATUS_LABELS.draft;
   const regenerating = busyLabel === "regenerate";
-  const themeBusy = busyLabel === "theme";
   const selected = selectedIndex != null ? blocks[selectedIndex] : null;
 
   const chatPanel = chatOpen ? (
@@ -356,16 +300,9 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     />
   ) : null;
 
-  const previewStyle = {
-    ...themeToCssVars(theme),
-    backgroundColor: "var(--color-background)",
-    color: "var(--color-foreground)",
-    fontFamily: "var(--font-body)",
-  };
-
-  // Template sites render inside the template's OWN wrapper (its palette/fonts +
-  // Nav/Footer), each section through its template component — matching the
-  // published site. Pack/legacy sites keep the theme-vars framed preview.
+  // The preview renders inside the wireframe's OWN wrapper (Nav/Footer + the
+  // generated stylesheet), each section through its wireframe component —
+  // matching the published site.
   const template = getTemplate(initial.templateId);
   const TemplateWrapper = template?.wrapper;
   // Feed the template chrome (Nav/Footer) the REAL business identity — same rule
@@ -493,14 +430,6 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
               variant="secondary"
               size="sm"
               className="shrink-0"
-              onClick={() => setThemeOpen(true)}
-            >
-              <Palette size={15} /> Оформлення
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="shrink-0"
               onClick={() => void openLogo()}
             >
               <ImageIcon size={15} /> Лого
@@ -548,10 +477,9 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           {device === "desktop" ? (
             <div
               className="overflow-hidden rounded-[24px] border border-line bg-surface shadow-card"
-              // A template preview's Nav (and theme toggle) use `position: fixed`;
-              // a transform here makes this the containing block for them so they
-              // stay INSIDE the framed preview instead of floating over the editor
-              // chrome. No effect on pack/legacy previews.
+              // The preview's Nav uses `position: fixed`; a transform here makes
+              // this the containing block for it so it stays INSIDE the framed
+              // preview instead of floating over the editor chrome.
               style={TemplateWrapper ? { transform: "translateZ(0)" } : undefined}
             >
               {blocks.length === 0 ? (
@@ -561,7 +489,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
               ) : TemplateWrapper ? (
                 <TemplateWrapper brand={brand}>{sectionEls}</TemplateWrapper>
               ) : (
-                <div style={previewStyle}>{sectionEls}</div>
+                <>{sectionEls}</>
               )}
             </div>
           ) : (
@@ -632,7 +560,6 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
             host={host}
             saving={saving}
             onSave={(props) => void handleSaveBlock(selectedIndex, props)}
-            onSkinChange={(skin) => handleSkinChange(selectedIndex, skin)}
             onClose={() => setSelectedIndex(null)}
           />
         </div>
@@ -646,22 +573,10 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           host={host}
           saving={saving}
           onSave={(props) => void handleSaveBlock(selectedIndex, props)}
-          onSkinChange={(skin) => handleSkinChange(selectedIndex, skin)}
           onClose={() => setSelectedIndex(null)}
         />
       )}
 
-      {themeOpen && (
-        <ThemePicker
-          options={initial.themeOptions}
-          currentTheme={theme}
-          currentPackId={packId}
-          pending={themeBusy}
-          onPick={(id) => void pickTheme(id)}
-          onPickPack={(id) => void pickPack(id)}
-          onClose={() => setThemeOpen(false)}
-        />
-      )}
 
       <Sheet open={customOpen} onClose={closeCustomSheet} title="Кастомні зміни">
         <p className="mb-4 text-[15px] leading-relaxed text-ink-muted">
@@ -713,7 +628,6 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           onChange={(url) => void saveLogo(url)}
           onClear={() => void saveLogo(null)}
         />
-        <LogoDisplayPanel host={host} logoUrl={logoUrl} />
         {logoUrl && (
           <Button
             variant="danger"

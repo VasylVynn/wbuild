@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Sparkles, Send, Check, CircleAlert, X, Paperclip } from "lucide-react";
 import type { StoredBlock } from "@/lib/blocks/schema";
-import type { Theme } from "@/lib/theme/tokens";
 import { getEditorChatHistory } from "@/app/app/(protected)/edit/chat-actions";
 
 /**
@@ -27,7 +26,7 @@ type StreamEvent =
   | { t: "d"; text: string }
   | { t: "tool"; label: string }
   | { t: "tooldone"; summary: string; ok: boolean }
-  | { t: "final"; message: string; actions: string[]; blocksChanged: boolean; blocks: StoredBlock[]; theme: Theme }
+  | { t: "final"; message: string; actions: string[]; blocksChanged: boolean; blocks: StoredBlock[] }
   | { t: "error"; message: string }
   | { t: "refusal"; message: string };
 
@@ -92,7 +91,7 @@ export default function EditorChat({
   /** Current blocks BEFORE the turn — the undo point. */
   getSnapshot: () => StoredBlock[];
   /** Fresh state after the agent changed the draft. */
-  onApply: (blocks: StoredBlock[], theme: Theme) => void;
+  onApply: (blocks: StoredBlock[]) => void;
   /** Snapshot the shell can restore via «Скасувати». */
   onUndoAvailable: (snapshot: StoredBlock[]) => void;
   onClose: () => void;
@@ -258,7 +257,7 @@ export default function EditorChat({
         });
         if (final.blocksChanged) {
           onUndoAvailable(snapshot);
-          onApply(final.blocks, final.theme);
+          onApply(final.blocks);
         }
       }
     } catch {

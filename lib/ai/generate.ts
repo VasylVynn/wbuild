@@ -28,15 +28,8 @@ import {
   type StoredBlock,
 } from "@/lib/blocks/schema";
 import { blockLibrary, COMPOSITION_RULES } from "@/lib/blocks/library";
-import {
-  getTemplate,
-  shortlistTemplates,
-  siteTemplates,
-  TEMPLATE_IDS,
-  type SiteTemplate,
-} from "@/lib/templates/registry";
-import { themePresets, resolveTheme, THEME_PRESET_IDS } from "@/lib/theme/presets";
-import type { Theme } from "@/lib/theme/tokens";
+import { getTemplate, type SiteTemplate } from "@/lib/templates/registry";
+import { WIRE_TEMPLATE_ID } from "@/lib/design/wire-style";
 import { getVertical } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
@@ -111,14 +104,10 @@ const genBlockSchema = z.discriminatedUnion("type", [
 type GenBlockInstance = z.infer<typeof genBlockSchema>;
 
 const generationSchema = z.object({
-  themePresetId: z.enum(THEME_PRESET_IDS),
-  // A whole-site TEMPLATE: dictates the entire look and the section menu the
-  // page is composed from. Resolution always succeeds (studio is the safety
-  // net) — the legacy design-pack fallback is gone (03 §2.5, dead code out).
-  templateId: z
-    .enum(TEMPLATE_IDS)
-    .optional()
-    .describe("Шаблон сайту зі списку доступних — задає весь вигляд і меню секцій, з яких компонується сторінка."),
+  // There is one structural wireframe, and a second call writes the site's
+  // stylesheet — so the model has no palette to choose and no template to pick.
+  // What it decides here is the composition: which blocks, in what order, with
+  // what copy.
   blocks: z.array(genBlockSchema),
   // Atmospheric hero-image subject proposed by the model FOR THIS business —
   // consumed by generateHeroImage (§4.8 suffix + palette are appended in code,
@@ -156,9 +145,8 @@ function clampSeo(
 
 export interface GeneratedSite {
   blocks: StoredBlock[];
-  theme: Theme;
-  themePresetId: string;
-  // The site's template (always set — template resolution always succeeds).
+  // Always the wireframe; kept on the shape because the render path and the
+  // editor still resolve a template to get its section components.
   templateId: string;
   imageSubject?: string;
   // Model-written page meta (D1) — persisted with the page content (draft →
@@ -177,51 +165,38 @@ function buildLibraryDoc(): string {
     .join("\n");
 }
 
-function buildThemeDoc(vertical: VerticalConfig): string {
-  return vertical.themePresetIds
-    .map((id) => `- ${id}: ${themePresets[id].label} — ${themePresets[id].mood}`)
-    .join("\n");
-}
-
 /**
  * Template menu for the model: every offered template with its section list
  * (id — label — description — «контент за схемою блоку X»). Lives in the USER
  * message's static prefix, before the volatile dossier tail (04 §2).
  *
- * Byte-stability depends on which templates are offered: pinned and
- * no-shortlist calls stay stable per vertical+template, while the seeded
- * shortlist path (spec 2026-07-25 §4.3) varies the menu per host+nonce. That
- * cost was accepted in §4.5 — the unpinned path runs at most once per site.
+
+ * There is exactly ONE wireframe, so this prefix is byte-stable per vertical —
+ * the best case for prompt caching.
  */
-function buildTemplateDoc(templates: SiteTemplate[]): string {
-  return templates
-    .map((t) => {
-      const ids = [...t.order, ...Object.keys(t.sections).filter((id) => !t.order.includes(id))];
-      const menu = ids
-        .map((id) => {
-          const def = t.sections[id];
-          if (!def) return null;
-          const vs = def.variants
-            ? ` [layout: default | ${Object.keys(def.variants).join(" | ")}]`
-            : "";
-          return `    · ${id} — ${def.label}: ${def.description} (блок ${def.block})${vs}`;
-        })
-        .filter(Boolean)
-        .join("\n");
-      return `- ${t.id} — ${t.label}: ${t.description}\n  Секції (компонуй ЛИШЕ з них):\n${menu}`;
+function buildSectionDoc(template: SiteTemplate): string {
+  const ids = [
+    ...template.order,
+    ...Object.keys(template.sections).filter((id) => !template.order.includes(id)),
+  ];
+  return ids
+    .map((id) => {
+      const def = template.sections[id];
+      if (!def) return null;
+      const vs = def.variants
+        ? ` [layout: default | ${Object.keys(def.variants).join(" | ")}]`
+        : "";
+      return `· ${id} — ${def.label}: ${def.description} (блок ${def.block})${vs}`;
     })
-    .join("\n\n");
+    .filter(Boolean)
+    .join("\n");
 }
 
-function buildSystem(vertical: VerticalConfig, forced?: SiteTemplate): string {
-  // When a template is forced (regenerate keeps the site's template), the user
-  // message lists ONLY that template's section menu — otherwise it lists them
-  // all and the model picks. The RULES stay here (static); the menus live in
-  // the user message's static prefix.
-  const templateRule = forced
-    ? `ШАБЛОН уже зафіксовано (обраний для цього сайту раніше — в розмові або при створенні): ${forced.id} — ${forced.label}. Встанови templateId="${forced.id}" і компонуй сторінку ЛИШЕ із секцій цього шаблону (перелік — у повідомленні нижче). Правила:`
-    : `ШАБЛОН (обов'язково): обери ОДИН templateId, чий ХАРАКТЕР і настрій найкраще передають суть цього бізнесу — за відчуттям, НЕ за нішею (жоден шаблон не «закріплений» за галуззю). Шаблон диктує ВЕСЬ вигляд (палітру, шрифти, анімації, може бути темним) і меню секцій (перелік шаблонів і секцій — у повідомленні нижче). Правила:
-- Компонуй сторінку ЛИШЕ із секцій обраного шаблону.`;
+function buildSystem(vertical: VerticalConfig): string {
+  // The page is composed against a single structural wireframe; its surface is
+  // written by a second call (lib/design/wire-style.ts). Nothing about the LOOK
+  // is decided here, so the rules below are purely about composition and copy.
+  const templateRule = `СЕКЦІЇ: компонуй сторінку ЛИШЕ із секцій, перелічених у повідомленні нижче. Правила:`;
   return `Ти — досвідчений веб-дизайнер і копірайтер, що збирає односторінковий сайт українському бізнесу: ${vertical.label} (${vertical.personaHint}).
 Тон і акценти: ${vertical.genHint}.
 Ти НЕ пишеш HTML. Ти КОМПОНУЄШ сторінку з фіксованої бібліотеки блоків: обираєш, які блоки і в якому порядку, і заповнюєш їхній вміст. Виклич інструмент build_site.
@@ -266,8 +241,6 @@ SEO В ТЕКСТАХ СТОРІНКИ:
 - Частину заголовків секцій пиши з ключовими словами ніші, за якими шукають у Google («Весільні букети», «Ремонт ходової»), а НЕ лише образними («Наша магія»). Образність — у підзаголовки й описи.
 - Місто згадай природно у 1–2 місцях сторінки (напр. hero-підзаголовок або «про нас») — НЕ в кожному заголовку і НЕ списком міст. Переспам ключовими словами читається як спам і шкодить довірі.
 
-ТЕМА: обери themePresetId ЛИШЕ зі списку доступних, що найкраще пасує бренду (використовується для favicon/прев'ю — вигляд самої сторінки повністю задає обраний шаблон).
-
 HERO-ЗОБРАЖЕННЯ: заповни imageSubject — короткий опис АНГЛІЙСЬКОЮ (до 15 слів) атмосферного ФОНОВОГО зображення, що асоціюється саме з цим бізнесом: текстури, матеріали, гра світла, природа. ЗАБОРОНЕНО: приміщення/фасади/вітрини, впізнавані товари як «наші», люди, будь-який текст. Приклад для хімчистки: "soft folded fresh linen textures in airy light".`;
 }
 
@@ -280,7 +253,7 @@ HERO-ЗОБРАЖЕННЯ: заповни imageSubject — короткий оп
 // never fixed schema drift more reliably than the repair does.
 const buildSiteTool = {
   name: "build_site",
-  description: "Зібрати односторінковий сайт: обрати тему (themePresetId) і скомпонувати масив blocks.",
+  description: "Зібрати односторінковий сайт: скомпонувати масив blocks — які секції, у якому порядку, з яким вмістом.",
   input_schema: z.toJSONSchema(generationSchema),
 } as unknown as Anthropic.Tool;
 
@@ -295,26 +268,14 @@ export async function generateSite(
   // deterministic id→URL mapping in assemble(). Optional so callers that don't
   // thread media keep working (no photos → no hero/gallery imagery).
   media?: SiteMedia,
-  // Force a specific template (regenerate keeps the site's existing template;
-  // onboarding forwards the design the chat agent picked, wave B4).
-  templateId?: string,
-  // Seeded PRNG from the caller's design-DNA (wave DNA-1). Unused since the
-  // design-pack fallback was deleted; accepted so DNA-seeded callers keep a
-  // stable call shape. No lint suppression needed: `no-unused-vars` defaults to
-  // `args: "after-used"`, and the used `tplRng` below exempts it. If `tplRng`
-  // ever goes away, this parameter starts warning again — that is the signal.
-  _rng?: () => number,
-  // Seeded PRNG for the template shortlist (spec 2026-07-25 §4.3). A SEPARATE
-  // stream from `_rng` on purpose: drawing from the caller's design-DNA stream
-  // would shift every later draw in publish.ts and replay stored nonces to a
-  // different site. Absent → the full catalog (regenerateSite's fail-open path).
-  tplRng?: () => number,
 ): Promise<GeneratedSite> {
   const client = getAnthropic();
   const vertical = getVertical(verticalId);
-  // Resolve a forced template once (regenerate keeps the site's template) — it
-  // both constrains the model's section menu and wins the final resolution.
-  const forcedTemplate = templateId ? getTemplate(templateId) : undefined;
+  // One structural wireframe, always (cleanup 2026-07-27). Template choice,
+  // the seeded shortlist and the design-DNA axes are gone: the model composes
+  // from the whole block library and a second call writes the stylesheet.
+  const template = getTemplate(WIRE_TEMPLATE_ID);
+  if (!template) throw new Error(`wireframe template "${WIRE_TEMPLATE_ID}" not registered`);
 
   // Boundary cast (03 §2.2): the dossier's untyped facts blob must be complete
   // BusinessFacts here — generation cannot run on partial facts.
@@ -328,28 +289,13 @@ export async function generateSite(
   }
   const facts = factsParsed.data;
 
-  // Pinned wins; otherwise a seeded shortlist when the caller supplied a stream,
-  // and the full catalog when it did not (spec 2026-07-25 §4.3, §10.1).
-  const offeredTemplates = forcedTemplate
-    ? [forcedTemplate]
-    : tplRng
-      ? shortlistTemplates(tplRng)
-      : Object.values(siteTemplates);
-
-  // Prompt order is cache-friendly (04 §2): the static catalog docs (library /
-  // themes / template menus) come FIRST, the volatile per-business dossier LAST.
-  // The library and theme docs are byte-stable per vertical; the template menu is
-  // too when the template is pinned or no shortlist stream was supplied, but on
-  // the seeded-shortlist path it varies per host+nonce — a cost accepted in spec
-  // 2026-07-25 §4.5, since that path runs at most once per site.
+  // Prompt order is cache-friendly (04 §2): the static docs come FIRST and are
+  // byte-stable per vertical, the volatile per-business dossier LAST.
   const userPrompt = `Бібліотека блоків:
 ${buildLibraryDoc()}
 
-Доступні теми (обери лише з цих):
-${buildThemeDoc(vertical)}
-
-${forcedTemplate ? "Секції зафіксованого шаблону та layout-варіанти:" : "Доступні шаблони, їхні секції та layout-варіанти:"}
-${buildTemplateDoc(offeredTemplates)}
+Секції, з яких компонується сторінка:
+${buildSectionDoc(template)}
 
 ${formatDossierForPrompt(dossier)}
 
@@ -368,7 +314,7 @@ ${formatDossierForPrompt(dossier)}
     output_config: { effort: "high" },
     // Belt at the API boundary: the dossier carries emoji-heavy scraped text —
     // a lone surrogate anywhere in the body is a hard 400 (§lib/ai/sanitize).
-    system: stripLoneSurrogates(buildSystem(vertical, forcedTemplate)),
+    system: stripLoneSurrogates(buildSystem(vertical)),
     tools: [buildSiteTool],
     tool_choice: { type: "auto" },
     messages: [{ role: "user", content: stripLoneSurrogates(userPrompt) }],
@@ -400,21 +346,7 @@ ${formatDossierForPrompt(dossier)}
     throw new Error(`Generation failed schema validation: ${issues}`);
   }
 
-  // TEMPLATE resolution (owner mandate): the caller's template (regenerate
-  // keeps it) → the model's pick → the fixed default safety net. Always
-  // succeeds — the legacy design-pack branch is deleted (03 §2.5). The
-  // persisted theme is still the model's preset (favicon/OG metadata) — the
-  // template wrapper overrides the actual on-page colors.
-  const template =
-    forcedTemplate ??
-    getTemplate(parsed.data.templateId) ??
-    getTemplate("studio") ??
-    Object.values(siteTemplates)[0];
-  if (!template) throw new Error("no site templates registered");
-
   return {
-    theme: resolveTheme(parsed.data.themePresetId),
-    themePresetId: parsed.data.themePresetId,
     templateId: template.id,
     blocks: assemble(parsed.data.blocks, facts, media, template, dossier),
     imageSubject: parsed.data.imageSubject,
@@ -875,9 +807,8 @@ function computePlacement(
   section: string | undefined,
 ): BlockPlacement {
   const lib = blockLibrary[type];
-  // Template sites carry a `section` and no skin — the template owns the whole
-  // look (the pack/skin plumbing left with the design-pack branch; the editor's
-  // switch_pack path still writes skins on legacy sites).
+  // Every block carries the wireframe `section` it fills; the look is the
+  // generated stylesheet's job, never a per-block choice.
   if (type === "contacts") {
     return { anchor: "#contacts", navLabel: lib.navLabel, showInNav: true, hidden: false, section };
   }

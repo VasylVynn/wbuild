@@ -2,20 +2,17 @@
 
 import { getServiceClient } from "@/lib/supabase/server";
 import { requireMember } from "@/lib/tenant/membership";
-import { revalidateTenant } from "@/lib/cache";
 import { parseBlockProps, type StoredBlock } from "@/lib/blocks/schema";
 import { blockPlacementSchema } from "@/lib/blocks/schema";
 import { getBlockFields } from "@/lib/blocks/fields";
-import { themePresets, resolveTheme, type ThemePresetId } from "@/lib/theme/presets";
 import { getVertical } from "@/lib/verticals/registry";
 import { generateSite } from "@/lib/ai/generate";
 import { buildDossier } from "@/lib/dossier";
 import type { SiteMedia } from "@/lib/media/media";
-import type { Theme } from "@/lib/theme/tokens";
-import { carryDnaFields } from "@/lib/theme/dna";
 import type { BusinessFacts } from "@/lib/verticals/schema";
-import { displayLogoUrl, type PageSeo } from "@/lib/tenant/types";
-import { adaptLogoForTemplate } from "@/lib/media/logo-adapt";
+import { type PageSeo } from "@/lib/tenant/types";
+import type { PageContent } from "@/lib/site/page-content";
+import { publishDraft } from "@/lib/site/publish";
 
 /**
  * Editor server actions (§3 + §5.5): the editor reads/writes DRAFT only;
@@ -29,19 +26,15 @@ export interface EditorData {
   businessName: string;
   verticalId: string;
   status: string;
-  theme: Theme;
-  themeOptions: { id: string; label: string }[];
   blocks: StoredBlock[];
   telegramConnected: boolean;
-  // Active design pack id (undefined for sites generated before packs shipped) —
-  // the editor's pack picker reads this to show the current selection.
-  packId?: string;
-  // Active site-template id (template sites): the preview renders through the
-  // template's OWN section components + wrapper, matching the published site.
+  // The wireframe this draft was composed against — the preview renders through
+  // its OWN section components + wrapper, matching the published site.
   templateId?: string;
-  // Logo the site currently displays (original vs adapted already resolved) —
-  // the frame preview must match the published render (H1).
   displayLogoUrl?: string;
+  // The model-written stylesheet for this draft. The frame preview must read the
+  // DRAFT's design, or it shows a bare grey wireframe while the site is styled.
+  wireCss?: string;
   // Draft page SEO meta (wave D) — shown to the editor agent; goes live on publish.
   seo?: PageSeo;
 }
@@ -52,7 +45,7 @@ export async function getEditorData(host: string): Promise<EditorData | null> {
   const sb = getServiceClient();
   const { data: t } = await sb
     .from("tenants")
-    .select("id, host, brand, vertical, status, draft_theme, telegram_chat_id")
+    .select("id, host, brand, vertical, status, telegram_chat_id")
     .eq("host", host)
     .maybeSingle();
   if (!t) return null;
@@ -71,15 +64,11 @@ export async function getEditorData(host: string): Promise<EditorData | null> {
     businessName: (t.brand as { businessName?: string } | null)?.businessName ?? t.host,
     verticalId: vertical.id,
     status: t.status,
-    theme: (t.draft_theme as Theme) ?? resolveTheme(vertical.themePresetIds[0]),
-    themeOptions: vertical.themePresetIds.map((id) => ({ id, label: themePresets[id].label })),
     blocks: ((p?.draft_content as { blocks?: StoredBlock[] } | null)?.blocks ?? []) as StoredBlock[],
     telegramConnected: Boolean(t.telegram_chat_id),
-    packId: (t.brand as { packId?: string } | null)?.packId,
-    templateId: (t.brand as { templateId?: string } | null)?.templateId,
-    displayLogoUrl: displayLogoUrl(
-      (t.brand ?? {}) as Parameters<typeof displayLogoUrl>[0],
-    ),
+    templateId: (p?.draft_content as { templateId?: string } | null)?.templateId,
+    wireCss: (p?.draft_content as { wireCss?: string } | null)?.wireCss,
+    displayLogoUrl: (t.brand as { logoUrl?: string } | null)?.logoUrl,
     seo: (p?.draft_content as { seo?: PageSeo } | null)?.seo,
   };
 }
@@ -112,11 +101,7 @@ export async function saveDraftSeo(
       .maybeSingle();
     if (!p) return { ok: false, error: "page not found" };
 
-    const draft = (p.draft_content ?? {}) as {
-      blocks?: StoredBlock[];
-      pocket?: StoredBlock[];
-      seo?: PageSeo;
-    };
+    const draft = (p.draft_content ?? {}) as PageContent;
     const current = draft.seo ?? {};
     const next: PageSeo = { ...current };
     if (patch.title !== undefined) {
@@ -133,13 +118,10 @@ export async function saveDraftSeo(
     const hasSeo = Boolean(next.title || next.description);
     const { error } = await sb
       .from("pages")
-      .update({
-        draft_content: {
-          blocks: draft.blocks ?? [],
-          pocket: draft.pocket ?? [],
-          ...(hasSeo && { seo: next }),
-        },
-      })
+      // Spread, don't rebuild: this action owns `seo` and nothing else. Listing
+      // the fields by hand is how a draft save silently dropped the site's
+      // design (templateId/wireCss) and the image job's genToken.
+      .update({ draft_content: { ...draft, ...(hasSeo ? { seo: next } : { seo: undefined }) } })
       .eq("id", p.id);
     if (error) return { ok: false, error: error.message };
     return { ok: true, seo: hasSeo ? next : undefined };
@@ -197,10 +179,8 @@ function validateBlocks(blocks: StoredBlock[]): StoredBlock[] {
       navLabel: b.navLabel,
       showInNav: b.showInNav ?? false,
       hidden: b.hidden ?? false,
-      // Preserve the design placement fields across a draft save: `skin` (pack
-      // sites) and `section` (template sites) must round-trip or the site loses
-      // its look on the first edit.
-      skin: b.skin,
+      // The wireframe `section` this block fills must round-trip, or the site
+      // loses its look on the first edit.
       section: b.section,
       // `variant` (the model-chosen layout) must round-trip too, or the first
       // draft save silently reverts every section to its default layout.
@@ -229,13 +209,14 @@ export async function saveDraftBlocks(
       .eq("slug", "")
       .maybeSingle();
     if (!p) return { ok: false, error: "page not found" };
-    const draft = p.draft_content as { pocket?: StoredBlock[]; seo?: PageSeo } | null;
-    const pocket = draft?.pocket ?? [];
+    const draft = (p.draft_content ?? {}) as PageContent;
     const { error } = await sb
       .from("pages")
       // `seo` (wave D1) must round-trip a block save, like pocket — dropping it
       // here would silently erase the page meta on the first manual edit.
-      .update({ draft_content: { blocks: valid, pocket, ...(draft?.seo && { seo: draft.seo }) } })
+      // Same rule as saveDraftSeo: this action owns `blocks`, so everything
+      // else on the draft — design, pocket, seo, genToken — rides through.
+      .update({ draft_content: { ...draft, blocks: valid } })
       .eq("id", p.id);
     if (error) return { ok: false, error: error.message };
     return { ok: true }; // draft save NEVER purges the cache (§5.5)
@@ -244,45 +225,21 @@ export async function saveDraftBlocks(
   }
 }
 
-export async function switchTheme(
-  host: string,
-  presetId: string,
-): Promise<{ ok: boolean; theme?: Theme; error?: string }> {
-  const gate = await requireMember({ host }); // §3.1
-  if (!gate.ok) return { ok: false, error: gate.error };
-  if (!(presetId in themePresets)) return { ok: false, error: "unknown preset" };
-  const sb = getServiceClient();
-  // Preserve the design-DNA genome across a manual palette switch (codex
-  // review, wave DNA-1): only the preset changes; pair/motion/nonce survive.
-  const { data: prevRow } = await sb
-    .from("tenants")
-    .select("draft_theme")
-    .eq("host", host)
-    .maybeSingle();
-  const theme: Theme = {
-    ...resolveTheme(presetId as ThemePresetId),
-    ...carryDnaFields(prevRow?.draft_theme as { fontPairId?: string; dna?: unknown } | null, presetId),
-  };
-  const { error } = await sb.from("tenants").update({ draft_theme: theme }).eq("host", host);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, theme };
-}
-
 /**
- * The switchTemplate pressure valve (§3 п.5 / §4.7, adapted to free
- * composition): re-run generation from the tenant's FACTS into the draft; the
- * previous draft blocks go to the pocket (never deleted).
+ * «Згенерувати ще раз» (§3 п.5 / §4.7): re-run generation from the tenant's
+ * FACTS into the draft — a new composition AND a new stylesheet. The previous
+ * draft blocks go to the pocket (never deleted).
  */
 export async function regenerateSite(
   host: string,
-): Promise<{ ok: boolean; blocks?: StoredBlock[]; theme?: Theme; error?: string }> {
+): Promise<{ ok: boolean; blocks?: StoredBlock[]; error?: string }> {
   try {
     const gate = await requireMember({ host }); // §3.1
     if (!gate.ok) return { ok: false, error: gate.error };
     const sb = getServiceClient();
     const { data: t } = await sb
       .from("tenants")
-      .select("id, facts, vertical, brand, draft_theme")
+      .select("id, facts, vertical, brand")
       .eq("host", host)
       .maybeSingle();
     if (!t) return { ok: false, error: "tenant not found" };
@@ -294,42 +251,76 @@ export async function regenerateSite(
       logoUrl?: string;
       photos?: string[];
       generatedHero?: string;
-      packId?: string;
-      templateId?: string;
+      designNonce?: number;
     };
 
-    const { data: p } = await sb
+    const { data: p, error: pErr } = await sb
       .from("pages")
       .select("id, draft_content")
       .eq("tenant_id", t.id)
       .eq("slug", "")
       .maybeSingle();
+    // This read feeds the stylesheet fallback below, and `draft_content` is
+    // replaced wholesale. A swallowed transient failure would look like «no
+    // stored sheet» and let a styling failure wipe it — surface it instead.
+    if (pErr) return { ok: false, error: `page read failed: ${pErr.message}` };
     if (!p) return { ok: false, error: "page not found" };
     const oldDraft = p.draft_content as
-      | { blocks?: StoredBlock[]; pocket?: StoredBlock[]; seo?: PageSeo; generatedHero?: string }
+      | {
+          blocks?: StoredBlock[];
+          pocket?: StoredBlock[];
+          seo?: PageSeo;
+          generatedHero?: string;
+          wireCss?: string;
+        }
       | null;
 
-    // Reuse the site's saved template so regeneration KEEPS the look — only the
-    // content/composition is re-rolled, not the design. (Legacy pack sites land
-    // on a template here: the pack fallback left generateSite with the dossier
-    // refactor.) The dossier is the bare facts+media build — the tenant path
-    // has no photoMeta/snapshot, so casting falls back deterministically.
-    // generatedHero now lives in draft_content (written atomically by the image
-    // job); fall back to the legacy brand copy for pre-migration sites.
+    // The dossier is the bare facts+media build — the tenant path has no
+    // photoMeta/snapshot, so photo casting falls back deterministically. The
+    // generated hero is REUSED (already paid for): regeneration never mints a
+    // new image.
     const media: SiteMedia = {
       logoUrl: brand.logoUrl,
       photos: brand.photos ?? [],
       generatedHero: oldDraft?.generatedHero ?? brand.generatedHero,
     };
-    const site = await generateSite(
-      buildDossier({ facts: t.facts, media }),
-      t.vertical,
-      media,
-      brand.templateId,
-    );
+    const site = await generateSite(buildDossier({ facts: t.facts, media }), t.vertical, media);
     const oldBlocks = oldDraft?.blocks ?? [];
     const oldPocket = oldDraft?.pocket ?? [];
 
+    // The nonce advances so the re-styling starts from a different hue
+    // than the previous run — «згенерувати ще раз» must look different, not
+    // just read differently.
+    const designNonce = typeof brand.designNonce === "number" ? brand.designNonce + 1 : 0;
+    let wireCss: string | undefined = oldDraft?.wireCss;
+    // Regeneration produced a NEW composition — different sections, different
+    // order — so the stylesheet must be rewritten too, or the page renders
+    // half-styled.
+    //
+    // Fail-open means KEEPING the previous sheet, which requires seeding the
+    // variable with it: `draft_content` is replaced wholesale below, so leaving
+    // this undefined on a styling failure would silently delete the draft's
+    // stylesheet and leave the owner a grey wireframe. An old sheet against a
+    // new composition degrades gracefully — every section styles through the
+    // same `wire-*` class contract — so it is a genuinely better fallback than
+    // nothing.
+    try {
+      const brief = [
+        `${t.facts.businessName}, ${t.facts.city}.`,
+        t.facts.about ?? "",
+        t.facts.services?.length
+          ? `Послуги: ${t.facts.services.map((s: { name: string }) => s.name).slice(0, 8).join(", ")}.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const hue = Math.floor(mulberry32(designSeed(`${host}:hue`, designNonce))() * 360);
+      wireCss = (await generateWireStyle(brief, { hue })).css;
+    } catch (e) {
+      console.error(
+        `[regenerate] styling failed for ${host}: ${e instanceof Error ? e.message : e}`,
+      );
+    }
     // Regeneration produces fresh SEO meta with the fresh content; keep the
     // previous meta only when the model returned none.
     const seo = site.seo ?? oldDraft?.seo;
@@ -339,6 +330,10 @@ export async function regenerateSite(
         draft_content: {
           blocks: site.blocks,
           pocket: [...oldPocket, ...oldBlocks].slice(-40),
+          // Design rides with the blocks it was generated for; publishing is
+          // the only moment the live site's look changes (invariant 6).
+          templateId: site.templateId,
+          ...(wireCss && { wireCss }),
           // Carry the generated hero forward so the NEXT regeneration reuses it
           // (new sites no longer keep a brand copy — draft_content is the home).
           ...(media.generatedHero && { generatedHero: media.generatedHero }),
@@ -346,84 +341,32 @@ export async function regenerateSite(
         },
       })
       .eq("id", p.id);
-    // Pin the design source the first time (older sites have neither id yet) so
-    // future regenerations keep this look; merge into brand without clobbering it.
-    const tenantUpdate: { draft_theme: Theme; brand?: Record<string, unknown> } = {
-      // Genome survives regeneration (codex review): new preset recorded,
-      // pair/motion/nonce history intact.
-      draft_theme: {
-        ...site.theme,
-        ...carryDnaFields(
-          t.draft_theme as { fontPairId?: string; dna?: unknown } | null,
-          site.themePresetId,
-        ),
-      },
-    };
-    const brandPatch: Record<string, unknown> = {};
-    if (!brand.templateId && site.templateId) brandPatch.templateId = site.templateId;
-    // H1: a site landing on a template for the FIRST time with an existing
-    // logo gets its adapted variant now (fail-open — null keeps the original).
-    if (brandPatch.templateId && brand.logoUrl) {
-      const adapted = await adaptLogoForTemplate({
-        logoUrl: brand.logoUrl,
-        templateId: brandPatch.templateId as string,
-      });
-      if (adapted) brandPatch.logoAdaptedUrl = adapted;
-    }
-    if (Object.keys(brandPatch).length > 0) {
-      tenantUpdate.brand = { ...(t.brand as Record<string, unknown>), ...brandPatch };
-    }
-    await sb.from("tenants").update(tenantUpdate).eq("id", t.id);
-    // Draft-only saves must NOT purge — but brand is UNVERSIONED, so when the
-    // patch touched it (first-time template/pack pin, adapted logo) the LIVE
-    // site reads new values and the cache must go.
-    if (tenantUpdate.brand) await revalidateTenant(host);
 
-    return { ok: true, blocks: site.blocks, theme: site.theme };
+    // The advanced nonce is persisted so the NEXT regeneration rolls a further
+    // hue. It is a counter, not a design: nothing the live site renders reads
+    // it, so writing it to the unversioned `brand` is not a publish.
+    await sb
+      .from("tenants")
+      .update({ brand: { ...(t.brand as Record<string, unknown>), designNonce } })
+      .eq("id", t.id);
+
+    return { ok: true, blocks: site.blocks };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
-/** «Опублікувати»: draft → published atomically-ish + cache purge (§5.5/§9.1). */
+/**
+ * «Опублікувати»: draft → published + cache purge (§5.5/§9.1). The promotion
+ * itself lives in publishDraft() — this action only adds the ownership gate.
+ * Duplicating the promotion here once cost the live site its deferred-image
+ * self-correction, so there is exactly one implementation.
+ */
 export async function publishSite(host: string): Promise<{ ok: boolean; error?: string }> {
   const gate = await requireMember({ host }); // §3.1
   if (!gate.ok) return { ok: false, error: gate.error };
-  const sb = getServiceClient();
-  const { data: t } = await sb
-    .from("tenants")
-    .select("id, draft_theme")
-    .eq("host", host)
-    .maybeSingle();
-  if (!t) return { ok: false, error: "tenant not found" };
-  const { data: p } = await sb
-    .from("pages")
-    .select("id, draft_content")
-    .eq("tenant_id", t.id)
-    .eq("slug", "")
-    .maybeSingle();
-  if (!p) return { ok: false, error: "page not found" };
-
-  const draft = p.draft_content as { blocks?: StoredBlock[]; seo?: PageSeo } | null;
-  const blocks = draft?.blocks ?? [];
-  const { error: pe } = await sb
-    .from("pages")
-    // Publish promotes the WHOLE page meta, not just blocks: draft seo (D1)
-    // goes live here and only here (invariant 6 — AI writes draft only).
-    .update({
-      published_content: { blocks, ...(draft?.seo && { seo: draft.seo }) },
-      is_published: true,
-    })
-    .eq("id", p.id);
-  if (pe) return { ok: false, error: pe.message };
-  const { error: te } = await sb
-    .from("tenants")
-    .update({ published_theme: t.draft_theme, status: "published" })
-    .eq("id", t.id);
-  if (te) return { ok: false, error: te.message };
-
-  await revalidateTenant(host);
-  return { ok: true };
+  const res = await publishDraft(host);
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 
 // ── Block-level AI edit (current-cycle п.1) ──────────────────────────────────
@@ -432,6 +375,8 @@ import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limi
 import { headers } from "next/headers";
 import { sendTelegramMessage } from "@/lib/telegram/push";
 import { isAnthropicConfigured } from "@/lib/ai/anthropic";
+import { designSeed, mulberry32 } from "@/lib/design/seed";
+import { generateWireStyle } from "@/lib/design/wire-style";
 
 /**
  * «Відредагувати з ШІ»: rewrites ONE block's props per the owner's instruction.

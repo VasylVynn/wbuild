@@ -1,6 +1,6 @@
 import type { StoredBlock } from "@/lib/blocks/schema";
 import type { SiteTemplate } from "@/lib/templates/registry";
-import { fixtureContent } from "../packs/fixture";
+import { fixtureContent } from "./fixture-content";
 
 /**
  * Fixture blocks for a template preview. Iterates the template's OWN sections (in

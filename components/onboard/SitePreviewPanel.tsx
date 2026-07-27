@@ -36,14 +36,12 @@ function ContactRow({
 export default function SitePreviewPanel({
   facts,
   verticalId,
-  templateLabel,
   photosCount,
   hasLogo,
   className = "",
 }: {
   facts: Partial<BusinessFacts>;
   verticalId?: string;
-  templateLabel?: string;
   photosCount: number;
   hasLogo: boolean;
   className?: string;
@@ -85,11 +83,6 @@ export default function SitePreviewPanel({
               {hasLogo ? "✓" : "L"}
             </span>
             {vertical && <Chip tone="honey" className="shrink-0">{vertical.label}</Chip>}
-            {templateLabel && (
-              <Chip tone="brand" className="min-w-0 shrink truncate">
-                Дизайн: {templateLabel}
-              </Chip>
-            )}
           </div>
           {facts.businessName?.trim() ? (
             <div className="text-[19px] font-bold leading-snug text-ink">{facts.businessName}</div>

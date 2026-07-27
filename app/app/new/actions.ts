@@ -13,7 +13,6 @@ import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
 import { requireMember } from "@/lib/tenant/membership";
 import { sanitizeMedia, type SiteMedia } from "@/lib/media/media";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
-import { getTemplate, templateDisplayName } from "@/lib/templates/registry";
 import { saveDraftHost } from "./persist-actions";
 
 /**
@@ -35,22 +34,16 @@ export async function onboardAction(
   history: ChatMsg[],
   facts: Partial<BusinessFacts>,
   verticalId?: string,
-  templateId?: string,
   // Client-held flags, echoed back on refusals only (codex review): a
-  // rate-limited fallback turn must not wipe ready/confirmed/template state.
-  // `conversationId` seeds the design shortlist (spec 2026-07-25 §4.2) — carried
-  // here rather than as a sixth positional parameter.
-  current?: { ready?: boolean; confirmed?: boolean; conversationId?: string },
+  // rate-limited fallback turn must not wipe ready/confirmed state.
+  current?: { ready?: boolean; confirmed?: boolean },
 ): Promise<OnboardTurnResult> {
-  const cleanTemplateId = getTemplate(templateId) ? templateId : undefined;
   const refuse = (message: string): OnboardTurnResult => ({
     message,
     facts,
     verticalId: verticalId ?? "generic",
     ready: current?.ready ?? false,
     confirmed: current?.confirmed ?? false,
-    templateId: cleanTemplateId,
-    templateLabel: templateDisplayName(cleanTemplateId),
     quickReplies: [],
     progress: [],
   });
@@ -64,7 +57,7 @@ export async function onboardAction(
   const limit = await checkRateLimit("chat_turn", ipFromHeaders(await headers()));
   if (!limit.ok) return refuse(rateLimitMessage(limit.retryAfterSec));
 
-  return onboardTurn(history, facts, verticalId, templateId, current?.conversationId);
+  return onboardTurn(history, facts, verticalId);
 }
 
 /** Session state for the chat UI's login gate (journal #43). */
@@ -98,7 +91,6 @@ export async function generateDraftAction(
   verticalId?: string,
   media?: SiteMedia,
   conversationId?: string,
-  templateId?: string,
 ): Promise<GenerateDraftResult> {
   // Server-side backstop (adversarial review): a bypassed client must not reach
   // generation with a hollow facts object.
@@ -130,7 +122,6 @@ export async function generateDraftAction(
 
   const cleanMedia = sanitizeMedia(media);
   const bizFacts = toBusinessFacts(parsedFacts.data);
-  const cleanTemplateId = getTemplate(templateId) ? templateId : undefined;
 
   try {
     const snapshot = conversationId ? await getLatestSnapshot({ conversationId }) : null;
@@ -144,7 +135,7 @@ export async function generateDraftAction(
     const vId =
       verticalId ?? classifyVertical(aboutText, { igCategory: snapshot?.parsed.businessCategoryName });
 
-    // Reuse the persisted draft host on re-generate (advances the DNA nonce =
+    // Reuse the persisted draft host on re-generate (advances the design nonce =
     // «same data ⇒ different site», and avoids orphan draft tenants); else mint.
     let existingHost: string | undefined;
     if (conversationId && isSupabaseConfigured()) {
@@ -165,7 +156,6 @@ export async function generateDraftAction(
       facts: bizFacts,
       verticalId: vId,
       media: cleanMedia,
-      templateId: cleanTemplateId,
       dossier: dossier ?? undefined,
     });
     if (!res.ok) return { ok: false, error: res.error ?? "Не вдалося згенерувати сайт." };

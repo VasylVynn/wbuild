@@ -1,8 +1,11 @@
-import type { StoredBlock } from "@/lib/blocks/schema";
-import type { DesignPack } from "@/lib/design/packs";
+/*
+ * Fixture page content for template previews. Extracted from the deleted
+ * admin/packs module during the wireframe cleanup (2026-07-27) — the blocks
+ * are design-agnostic.
+ */
 
 /**
- * Fixture content for the design-pack preview pages: one realistic block of
+ * Fixture content for the template preview pages: one realistic block of
  * every type, skinned by the pack under preview. Images are permanent
  * generated assets already living in our public bucket.
  */
@@ -199,11 +202,3 @@ export const fixtureContent = [
     },
   ];
 
-export function fixtureBlocks(pack: DesignPack): StoredBlock[] {
-  const skin = (type: string) => {
-    const s = pack.skins[type as keyof DesignPack["skins"]];
-    return s || undefined;
-  };
-  const base = { showInNav: false, hidden: false };
-  return fixtureContent.map((b) => ({ ...b, ...base, skin: skin(b.type) })) as unknown as StoredBlock[];
-}

@@ -5,7 +5,6 @@ import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
 import type { ChatMsg } from "@/lib/ai/onboard";
 import { isStorageUrl, MAX_PHOTOS, mediaSchema, type SiteMedia } from "@/lib/media/media";
-import { getTemplate, templateDisplayName } from "@/lib/templates/registry";
 
 // Shape stored inside conversations.facts_state
 type FactsState = {
@@ -16,7 +15,6 @@ type FactsState = {
   // rows stay valid (absent = not confirmed).
   confirmed?: boolean;
   // B3: the design the agent picked in the chat. Optional so pre-B rows stay valid.
-  templateId?: string;
   // Owner-uploaded logo/photos (§4.8). Optional so pre-media rows stay valid.
   media?: SiteMedia;
   // Refactor 04 §2: the DRAFT host minted at generateDraftAction (draft-then-
@@ -30,9 +28,7 @@ export type ConversationData = {
   verticalId: string | undefined;
   ready: boolean;
   confirmed: boolean;
-  templateId?: string;
   /** Resolved server-side so the client never bundles the template registry. */
-  templateLabel?: string;
   media: SiteMedia;
   /** Draft host, if a draft was already generated (draft-then-publish flow). */
   host?: string;
@@ -56,7 +52,7 @@ export async function startConversation(): Promise<{ conversationId: string } | 
   // Placeholder tenant — host nullable until subdomain chosen (data-model.md O1)
   const { data: tenant, error: tenantErr } = await db
     .from("tenants")
-    .insert({ host: null, status: "demo", draft_theme: {}, brand: {} })
+    .insert({ host: null, status: "demo", brand: {} })
     .select("id")
     .single();
 
@@ -84,7 +80,6 @@ export async function saveTurn(
   verticalId: string | undefined,
   ready: boolean,
   confirmed = false,
-  templateId?: string,
   // Wave G (codex review): the chat-upload flow persists messages AND media in
   // this ONE write — two racing read-modify-writes (saveTurn + saveMediaAction)
   // could lose the just-uploaded photo. Untrusted client input, validated
@@ -126,8 +121,6 @@ export async function saveTurn(
   // Unknown/absent template ids are dropped (registry is the authority); the
   // stored pick only changes when this turn carries a valid one — a refusal
   // turn that lost the client-side pick must not wipe the persisted choice.
-  const prevTemplateId = (prev?.facts_state as FactsState | null)?.templateId;
-  const cleanTemplateId = getTemplate(templateId) ? templateId : prevTemplateId;
 
   // The draft host is written out-of-band by saveDraftHost; a plain turn write
   // must preserve it (same reasoning as media above).
@@ -138,7 +131,6 @@ export async function saveTurn(
     verticalId,
     ready,
     confirmed,
-    ...(cleanTemplateId && { templateId: cleanTemplateId }),
     ...(mediaFinal && { media: mediaFinal }),
     ...(prevHost && { host: prevHost }),
   };
@@ -245,7 +237,6 @@ export async function loadConversation(
 
   const fs = data.facts_state as FactsState | null;
 
-  const templateId = getTemplate(fs?.templateId) ? fs?.templateId : undefined;
 
   return {
     messages: (data.messages as ChatMsg[]) ?? [],
@@ -253,7 +244,6 @@ export async function loadConversation(
     verticalId: fs?.verticalId,
     ready: fs?.ready ?? false,
     confirmed: fs?.confirmed ?? false,
-    ...(templateId && { templateId, templateLabel: templateDisplayName(templateId) }),
     media: fs?.media ?? { photos: [] },
     ...(fs?.host && { host: fs.host }),
   };

@@ -1,15 +1,13 @@
-import type { Theme } from "@/lib/theme/tokens";
 import type { StoredBlock } from "@/lib/blocks/schema";
 
 /**
  * Two-level data model (brief §5.1):
- *   - Tenant (site config): brand, footer, nav mode, theme, facts, canonical host.
+ *   - Tenant (site config): brand, footer, facts, canonical host.
  *   - Page: an ordered list of blocks.
  * Header/footer/nav are NOT copied per page — they live on the tenant.
  */
 
 export type TenantStatus = "demo" | "draft" | "published" | "suspended";
-export type NavMode = "onepage" | "multipage";
 
 export interface Tenant {
   id: string;
@@ -21,27 +19,20 @@ export interface Tenant {
   /** §2.4 — the ONE chosen host; every absolute URL (canonical, og:url,
    *  sitemap, JSON-LD, metadataBase) is built from this, never the request host. */
   canonicalHostname: string;
-  navMode: NavMode;
   status: TenantStatus;
   brand: {
     businessName: string;
     tagline?: string;
     logoUrl?: string;
-    /** Palette-adapted variant of logoUrl (H1) — generated, lives in our bucket.
-     *  The ORIGINAL upload is never touched; this sits alongside it. */
-    logoAdaptedUrl?: string;
-    /** Owner's pick in the editor «Лого» sheet. Absent = show the adapted
-     *  variant when one exists (fail-open to the original otherwise). */
-    logoDisplay?: "original" | "adapted";
     /** Owner-uploaded photos (§4.8) — the trusted source for hero/gallery imagery. */
     photos?: string[];
     /** Atmospheric hero background generated when the owner has NO photos (§4.8).
      *  Reused on regeneration — never a real venue/product; hero-only, no gallery. */
     generatedHero?: string;
-    /** Design source id (persisted for continuity on regenerate). Exactly one is
-     *  set: `templateId` (template site — read by the render path) or `packId`. */
-    packId?: string;
-    templateId?: string;
+    /** Generation counter seeding the design hue (lib/design/seed.ts). A
+     *  counter, not a design — the site's actual look lives on the page content
+     *  so a draft regeneration cannot change the live site (invariant 6). */
+    designNonce?: number;
   };
   footer: {
     phone?: string;
@@ -50,21 +41,11 @@ export interface Tenant {
     social?: { label: string; href: string }[];
     copyright?: string;
   };
-  theme: Theme;
   /** Structured questionnaire facts — the grounding source (§4.4). Typed per
    *  vertical elsewhere; kept open here so the model is vertical-agnostic. */
   facts: Record<string, unknown>;
 }
 
-/**
- * The logo the SITE shows (H1): the adapted variant by default when present,
- * unless the owner explicitly toggled «Оригінал». Always falls back to the
- * original upload — adaptation failing can never lose the logo.
- */
-export function displayLogoUrl(brand: Tenant["brand"]): string | undefined {
-  if (brand.logoDisplay === "original") return brand.logoUrl;
-  return brand.logoAdaptedUrl ?? brand.logoUrl;
-}
 
 /** Page-level SEO meta (wave D1): written by generation, editable by the
  *  editor agent. Versioned WITH the content — lives in draft_content.seo and
@@ -89,10 +70,11 @@ export interface Page {
   blocks: StoredBlock[];
   /** Published SEO meta (public render); undefined for pre-wave-D sites. */
   seo?: PageSeo;
+  /** The template these blocks were composed against, and the stylesheet
+   *  written for them. Versioned WITH the content (draft vs published) rather
+   *  than on the unversioned `brand`, so regenerating a draft cannot change the
+   *  live site (invariant 6). */
+  templateId?: string;
+  wireCss?: string;
 }
 
-/** A nav item projected from data (§5.3) — never edited by hand. */
-export interface NavItem {
-  label: string;
-  href: string; // "#services" (one-page) or "/contacts" (multi-page)
-}

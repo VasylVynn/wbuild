@@ -28,7 +28,11 @@ import { photoIdFor, type PhotoMeta } from "@/lib/media/media";
  * so the tool handler can tell the owner honestly instead of erroring.
  */
 
-const MAX_IMPORT_IMAGES = 30; // avatar + carousel children, capped (§1.3)
+// Avatar + carousel children, capped (§1.3). This cap is also the vision budget:
+// every imported image costs one analyzePhoto call (deep.ts:184), and the site
+// itself only ever casts a hero + a gallery of ~8, so 20 leaves ample headroom
+// for the dossier while keeping the per-onboarding vision spend bounded.
+const MAX_IMPORT_IMAGES = 20;
 const POST_LIMIT = 20;
 const IMPORT_CONCURRENCY = 4;
 

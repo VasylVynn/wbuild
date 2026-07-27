@@ -40,15 +40,11 @@ export default function FerriWrapper({
   children: ReactNode;
   brand?: TemplateBrand;
 }) {
-  // DNA-2c: the seeded site theme is the default; ?theme= and the visitor's
-  // stored toggle still win (same pattern as SalonWrapper).
-  const dnaTheme: Theme | undefined =
-    brand?.dnaTheme === "dark" || brand?.dnaTheme === "light" ? brand.dnaTheme : undefined;
-  const [theme, setTheme] = useState<Theme>(dnaTheme ?? "dark");
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
     // Precedence: ?theme= (preview/testing) → stored choice → dark default.
-    let next: Theme = dnaTheme ?? "dark";
+    let next: Theme = "dark";
     try {
       const param = new URLSearchParams(window.location.search).get("theme");
       const stored = window.localStorage.getItem(STORE_KEY);
@@ -58,7 +54,7 @@ export default function FerriWrapper({
       /* SSR / blocked storage — stay dark */
     }
     setTheme(next);
-  }, [dnaTheme]);
+  }, []);
 
   const toggle = () =>
     setTheme((t) => {

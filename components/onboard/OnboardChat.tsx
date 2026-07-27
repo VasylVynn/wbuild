@@ -313,7 +313,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   const [confirmed, setConfirmed] = useState(false);
   const [verticalId, setVerticalId] = useState<string | undefined>(undefined);
   // Chat-picked site design (wave B5) — { id, label } once the agent proposes one.
-  const [template, setTemplate] = useState<{ id: string; label: string } | null>(null);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>(
@@ -405,9 +404,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       setVerticalId(data.verticalId);
       setReady(data.ready);
       setConfirmed(data.confirmed);
-      if (data.templateId && data.templateLabel) {
-        setTemplate({ id: data.templateId, label: data.templateLabel });
-      }
       // Media survives the login-gate redirect (saved fire-and-forget) — restore
       // it so the media step shows what was already uploaded.
       setMedia(data.media ?? { photos: [] });
@@ -442,8 +438,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     ready: boolean;
     confirmed: boolean;
     quickReplies: string[];
-    templateId?: string;
-    templateLabel?: string;
     // Media the agent's tools added this turn (scrape/analyze/set_media_role).
     media?: { photos: string[]; logoUrl?: string; photoMeta?: PhotoMeta[] };
   };
@@ -464,7 +458,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         messages: modelMessages,
         facts,
         verticalId,
-        templateId: template?.id,
         media: mediaNow,
         conversationId: convIdRef.current,
       }),
@@ -474,7 +467,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       const j = (await res.json()) as { message?: string };
       if (typeof j.message === "string") {
         // Refusal (rate limit etc.) is message-only — carry the current state
-        // through so a limited turn can't silently drop ready/confirmed/template.
+        // through so a limited turn can't silently drop ready/confirmed.
         return {
           message: j.message,
           facts,
@@ -482,8 +475,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
           ready,
           confirmed,
           quickReplies: [],
-          templateId: template?.id,
-          templateLabel: template?.label,
         };
       }
       throw new Error("bad refusal payload");
@@ -552,7 +543,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     setReady(false);
     setConfirmed(false);
     setVerticalId(undefined);
-    setTemplate(null);
     setInput("");
     setQuickReplies(igImportEnabled ? ["У мене є Instagram"] : []);
     setSavedNote(null);
@@ -677,7 +667,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
             verticalId,
             ready,
             confirmed,
-            template?.id,
             mediaNow,
           ).catch(() => {});
         }
@@ -712,14 +701,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
           setMedia(effectiveMedia);
         }
 
-        // Last-wins: an existing pick must never be cleared by a result without
-        // one (e.g. a later turn that doesn't touch the design).
-        const nextTemplate =
-          result.templateId && result.templateLabel
-            ? { id: result.templateId, label: result.templateLabel }
-            : template;
-        setTemplate(nextTemplate);
-
         // Agentic feedback: which facts the agent just recorded — a real diff of
         // the same progress model as the header chips, not decoration.
         const newly = deriveProgress(result.facts)
@@ -738,7 +719,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
             result.verticalId,
             result.ready,
             result.confirmed ?? false,
-            nextTemplate?.id,
             effectiveMedia,
           );
         }
@@ -751,11 +731,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         // non-stream server action still answers the turn (degraded: no tools).
         setTyping(true);
         applyResult(
-          await onboardAction(modelMessages, facts, verticalId, template?.id, {
-            ready,
-            confirmed,
-            conversationId: convIdRef.current ?? undefined,
-          }),
+          await onboardAction(modelMessages, facts, verticalId, { ready, confirmed }),
         );
       }
     } finally {
@@ -804,7 +780,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         verticalId,
         ready,
         confirmed,
-        template?.id,
         media,
       );
     }
@@ -921,7 +896,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         verticalId,
         media,
         convIdRef.current ?? undefined,
-        template?.id,
       );
       if (result.ok) {
         setDraft({ host: result.host, previewUrl: result.previewUrl, editUrl: result.editUrl });
@@ -1253,7 +1227,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         <SitePreviewPanel
           facts={facts}
           verticalId={verticalId}
-          templateLabel={template?.label}
           photosCount={media.photos.length}
           hasLogo={!!media.logoUrl}
           className="hidden lg:flex"

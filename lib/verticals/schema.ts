@@ -4,7 +4,7 @@ import { z } from "zod";
  * Generic business facts — the vertical-agnostic core (Fable verdict: the
  * florist schema was ~90% generic; a "vertical" is DATA, not a code fork). All
  * verticals share this shape; per-vertical differences (labels, plausible price
- * ranges, prompt hints, theme presets) live in the vertical registry.
+ * ranges, prompt hints) live in the vertical registry.
  * Grounding (§4.4) is unchanged: these are the facts, copied verbatim.
  */
 
