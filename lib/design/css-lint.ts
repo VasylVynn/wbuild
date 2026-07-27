@@ -8,9 +8,9 @@ import postcss, { type AtRule, type Declaration, type Rule } from "postcss";
  * offenders so a bad sheet degrades to "less styled", never "broken mobile".
  *
  * Heuristics (spec 2026-07-28, v1 — deliberately conservative):
- * - every @media is stripped wholesale: wire.css owns responsiveness, a
- *   generated breakpoint is suspect by definition (invariant §7);
- * - @import and @font-face are stripped; font-family declarations too;
+ * - every at-rule except @keyframes is stripped wholesale: wire.css owns
+ *   responsiveness and decor, a generated @media/@supports/@import is suspect
+ *   by definition (invariant §7); font-family declarations stripped too;
  * - rules whose EVERY selector targets ::before/::after are the decor layer —
  *   display/position/float are legitimate there and stay;
  * - on ordinary selectors display/position/float are stripped, and
@@ -18,7 +18,7 @@ import postcss, { type AtRule, type Declaration, type Rule } from "postcss";
  *   (auto/percentage/fit-content/...); max-width stays (allowed on text);
  * - overflow is stripped only on `.wire-section` selectors (sections must never
  *   clip content); card-level overflow (border-radius clipping) is benign;
- * - url() to any http(s) origin is stripped (§4.8: no foreign URLs; the sheet
+ * - url() to any http(s) or protocol-relative origin is stripped (§4.8: no foreign URLs; the sheet
  *   never needs remote assets — data: URIs and gradients stay);
  * - selectors not scoped under .tpl-salonwire are re-scoped (prefixed), so a
  *   leaked selector can't restyle platform chrome.
@@ -51,7 +51,7 @@ export function lintWireCss(css: string): LintResult {
   }
 
   root.walkAtRules((at: AtRule) => {
-    if (at.name === "media" || at.name === "import" || at.name === "font-face") {
+    if (at.name.toLowerCase() !== "keyframes") {
       violations.push(`stripped @${at.name}${at.params ? ` ${at.params.slice(0, 60)}` : ""}`);
       at.remove();
     }
@@ -82,7 +82,7 @@ export function lintWireCss(css: string): LintResult {
         decl.remove();
         return;
       }
-      if (/url\(\s*['"]?https?:/i.test(decl.value)) {
+      if (/url\(\s*['"]?(?:https?:)?\/\//i.test(decl.value)) {
         violations.push(`stripped external url() in \`${prop}\` from \`${where}\``);
         decl.remove();
         return;
@@ -93,7 +93,7 @@ export function lintWireCss(css: string): LintResult {
 
   // Re-scope leaked selectors under the wireframe root class.
   root.walkRules((rule: Rule) => {
-    if (rule.parent?.type === "atrule") return; // keyframes steps etc.
+    if (rule.parent?.type === "atrule") return; // keyframes steps only (all other at-rules stripped above).
     rule.selectors = rule.selectors.map((s) => {
       const t = s.trim();
       if (t.startsWith(".tpl-salonwire") || t.startsWith(":root") || t.startsWith("@")) return s;
