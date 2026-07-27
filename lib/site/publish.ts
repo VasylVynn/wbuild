@@ -103,28 +103,26 @@ export async function generateDraft(opts: {
     // just produced. Fail-open: if styling dies the draft still ships — grey,
     // but complete, editable and publishable.
     let wireCss: string | undefined = prevWireCss;
-    {
-      const brief = [
-        `${facts.businessName}, ${facts.city}.`,
-        facts.about ?? "",
-        facts.services?.length
-          ? `Послуги: ${facts.services.map((s) => s.name).slice(0, 8).join(", ")}.`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      try {
-        // Hue seeded off host+nonce: two businesses in one niche start from
-        // different colour worlds, and «згенерувати ще раз» moves to another.
-        // Without this the model returns its default palette for the niche —
-        // measured in the spike, two grooming salons both landed in warm cream.
-        const hue = Math.floor(mulberry32(designSeed(`${host}:hue`, designNonce))() * 360);
-        wireCss = (await generateWireStyle(brief, { hue })).css;
-      } catch (e) {
-        console.error(
-          `[generate] styling failed for ${host}: ${e instanceof Error ? e.message : e}`,
-        );
-      }
+    const brief = [
+      `${facts.businessName}, ${facts.city}.`,
+      facts.about ?? "",
+      facts.services?.length
+        ? `Послуги: ${facts.services.map((s) => s.name).slice(0, 8).join(", ")}.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    // Hue seeded off host+nonce: two businesses in one niche start from
+    // different colour worlds, and «згенерувати ще раз» moves to another.
+    // Without this the model returns its default palette for the niche —
+    // measured in the spike, two grooming salons both landed in warm cream.
+    const hue = Math.floor(mulberry32(designSeed(`${host}:hue`, designNonce))() * 360);
+    try {
+      wireCss = (await generateWireStyle(brief, { hue })).css;
+    } catch (e) {
+      console.error(
+        `[generate] styling failed for ${host}: ${e instanceof Error ? e.message : e}`,
+      );
     }
 
     const sb = getServiceClient();
@@ -199,7 +197,16 @@ export async function generateDraft(opts: {
     // Self-validation cycle (04 §4): inspect the draft against the dossier,
     // fix/drop offending sections, ≤2 rounds. Operates on the just-saved
     // draft; fail-open inside (a broken inspector must never kill generation).
-    await runDraftQualityLoop({ host, facts, verticalId: vertical.id, media, templateId: site.templateId, dossier });
+    await runDraftQualityLoop({
+      host,
+      facts,
+      verticalId: vertical.id,
+      media,
+      templateId: site.templateId,
+      dossier,
+      styleBrief: brief,
+      styleHue: hue,
+    });
 
     // Background image batch — runs post-response, AFTER the quality loop's
     // final draft save (no write race). Patches the shimmer placeholders with

@@ -9,6 +9,7 @@ import type { SiteMedia } from "@/lib/media/media";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
 import { getServiceClient } from "@/lib/supabase/server";
 import type { PageContent } from "@/lib/site/page-content";
+import { runStyleAudit } from "@/lib/design/style-audit";
 
 /**
  * Draft self-validation cycle (refactor 04 §4): after generation lands in the
@@ -412,6 +413,10 @@ export async function runDraftQualityLoop(opts: {
   media?: SiteMedia;
   templateId?: string;
   dossier?: Dossier;
+  /** Style-gate inputs (spec 2026-07-28). Absent → the style phase is skipped
+   *  (legacy callers), the text loop runs unchanged. */
+  styleBrief?: string;
+  styleHue?: number;
 }): Promise<void> {
   const { host, facts, dossier } = opts;
   try {
@@ -431,6 +436,21 @@ export async function runDraftQualityLoop(opts: {
     const draft = (page.draft_content ?? {}) as PageContent;
     let blocks = draft.blocks ?? [];
     if (!blocks.length) return;
+
+    // Style gate (spec 2026-07-28): kicked off alongside the first text
+    // inspection; awaited after the text rounds so the two model calls overlap.
+    const stylePromise =
+      opts.styleBrief !== undefined && typeof opts.styleHue === "number"
+        ? runStyleAudit({
+            css: draft.wireCss,
+            sectionDigest: sectionDigest(sectionEntries(blocks)),
+            brief: opts.styleBrief,
+            hue: opts.styleHue,
+          }).catch((e) => {
+            console.warn(`[style-audit] failed (fail-open): ${e instanceof Error ? e.message : e}`);
+            return null;
+          })
+        : null;
 
     // Sections already fixed once: flagged again next round → dropped (04 §4
     // drop-don't-polish; protected types are kept as-is instead).
@@ -497,6 +517,30 @@ export async function runDraftQualityLoop(opts: {
           .from("pages")
           .update({ draft_content: { ...draft, blocks } })
           .eq("id", page.id);
+      }
+    }
+
+    const style = stylePromise ? await stylePromise : null;
+    if (style) {
+      // One CAS-gated write: blocks from the text rounds are already saved
+      // above; this adds the audited css + report. The spread keeps every
+      // other PageContent field (templateId, pocket, genToken, seo...).
+      const styled = {
+        ...draft,
+        blocks,
+        ...(style.css && { wireCss: style.css }),
+        styleAudit: style.report,
+      };
+      let q = sb.from("pages").update({ draft_content: styled }).eq("id", page.id);
+      if (draft.genToken) q = q.eq("draft_content->>genToken", draft.genToken);
+      // .select("id") row-count check = the established CAS convention
+      // (publish.ts patchGeneratedImages) — a stale CAS must log, not vanish.
+      const { data: sRows, error: sErr } = await q.select("id");
+      if (sErr) console.warn(`[style-audit] save failed (fail-open): ${sErr.message}`);
+      else if (!sRows?.length)
+        console.warn(`[style-audit] ${host}: stale genToken — newer generation won, report dropped`);
+      if (style.report.flagged) {
+        console.warn(`[style-audit] ${host} FLAGGED: ${style.report.correctiveNote ?? "final fail"}`);
       }
     }
   } catch (e) {
