@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { MailCheck } from "lucide-react";
+import { Mail, MailCheck } from "lucide-react";
 import { resetPasswordAction } from "@/app/app/login/actions";
-import { Button, Field, Input, Wordmark } from "@/components/ui";
+import { Button, Field, Input } from "@/components/ui";
+import { Logo } from "@/components/landing/Logo";
 
 /**
  * Password reset, step 1 (public path /reset on the app host): ask for the
@@ -33,15 +34,20 @@ export default function ResetPage() {
   if (sent) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 bg-canvas px-6 py-16 text-center">
-        <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-honey-soft text-honey-text">
+        <div className="animate-pop flex h-[72px] w-[72px] items-center justify-center rounded-full bg-honey-soft text-honey-text">
           <MailCheck size={32} />
         </div>
-        <h1 className="mt-6 font-brand text-[24px] font-medium text-ink">Перевірте пошту</h1>
-        <p className="text-[16px] leading-relaxed text-ink-muted">
+        <h1 className="animate-rise mt-6 font-brand text-[26px] font-semibold text-ink">
+          Перевірте пошту
+        </h1>
+        <p className="animate-rise text-[16px] leading-relaxed text-ink-muted">
           Якщо акаунт із адресою <b className="text-ink">{email}</b> існує, ми надіслали лист із
           посиланням для зміни пароля. Відкрийте його в цьому ж браузері.
         </p>
-        <Link href="/login" className="mt-6 text-[14px] font-semibold text-brand hover:text-brand-hover">
+        <Link
+          href="/login"
+          className="mt-6 text-[14px] font-semibold text-ink-muted transition-colors hover:text-ink"
+        >
           ← Повернутися до входу
         </Link>
       </main>
@@ -49,41 +55,59 @@ export default function ResetPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 bg-canvas px-6 py-16">
-      <div className="flex items-center justify-between">
-        <Link href="/login" className="text-[14px] font-semibold text-ink-muted transition-colors hover:text-ink">
-          ← До входу
-        </Link>
-        <Wordmark />
+    <main className="flex min-h-screen flex-col bg-canvas px-5 py-6 sm:px-10">
+      <Logo href={process.env.NEXT_PUBLIC_ROOT_DOMAIN ? `//${process.env.NEXT_PUBLIC_ROOT_DOMAIN}` : "/"} />
+
+      <div className="flex flex-1 items-center justify-center py-10">
+        <div className="w-full max-w-sm">
+          <div className="animate-rise">
+            <h1 className="text-balance font-brand text-[28px] font-semibold tracking-tight text-ink">
+              Скидання пароля
+            </h1>
+            <p className="mt-2 text-[15px] text-ink-muted">
+              Введіть email, з яким реєструвалися, — надішлемо посилання для зміни пароля.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} noValidate className="animate-rise mt-6 flex flex-col gap-4">
+            <Field label="Електронна пошта">
+              <div className="relative">
+                <Mail
+                  aria-hidden
+                  size={16}
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+                />
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ваш@email.com"
+                  autoComplete="email"
+                  required
+                  className="pl-10"
+                />
+              </div>
+            </Field>
+
+            {error && (
+              <p className="rounded-2xl bg-danger-soft px-4 py-3 text-[14px] font-semibold text-danger">
+                {error}
+              </p>
+            )}
+
+            <Button type="submit" size="lg" disabled={loading} className="mt-2 w-full rounded-full">
+              {loading ? "Зачекайте…" : "Надіслати лист"}
+            </Button>
+          </form>
+        </div>
       </div>
 
-      <div>
-        <h1 className="font-brand text-[24px] font-medium text-ink">Скидання пароля</h1>
-        <p className="mt-2 text-[15px] text-ink-muted">
-          Введіть email, з яким реєструвалися, — надішлемо посилання для зміни пароля.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-        <Field label="Електронна пошта">
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="ваш@email.com"
-            autoComplete="email"
-            required
-          />
-        </Field>
-
-        {error && (
-          <p className="rounded-[12px] bg-danger-soft px-4 py-3 text-[14px] font-semibold text-danger">{error}</p>
-        )}
-
-        <Button type="submit" disabled={loading} className="mt-2 w-full">
-          {loading ? "Зачекайте…" : "Надіслати лист"}
-        </Button>
-      </form>
+      <Link
+        href="/login"
+        className="text-[14px] font-semibold text-ink-muted transition-colors hover:text-ink"
+      >
+        ← До входу
+      </Link>
     </main>
   );
 }

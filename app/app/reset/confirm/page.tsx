@@ -3,8 +3,10 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { Lock } from "lucide-react";
 import { updatePasswordAction } from "@/app/app/login/actions";
-import { Button, Field, Input, Wordmark } from "@/components/ui";
+import { Button, Field, Input } from "@/components/ui";
+import { Logo } from "@/components/landing/Logo";
 
 /**
  * Password reset, step 2 (public path /reset/confirm): the recovery email
@@ -51,55 +53,79 @@ function ResetConfirmForm() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 bg-canvas px-6 py-16">
-      <div className="flex items-center justify-between">
-        <Link href="/login" className="text-[14px] font-semibold text-ink-muted transition-colors hover:text-ink">
-          ← До входу
-        </Link>
-        <Wordmark />
-      </div>
+    <main className="flex min-h-screen flex-col bg-canvas px-5 py-6 sm:px-10">
+      <Logo href={process.env.NEXT_PUBLIC_ROOT_DOMAIN ? `//${process.env.NEXT_PUBLIC_ROOT_DOMAIN}` : "/"} />
 
-      <div>
-        <h1 className="font-brand text-[24px] font-medium text-ink">Новий пароль</h1>
-        <p className="mt-2 text-[15px] text-ink-muted">Придумайте новий пароль для входу.</p>
-      </div>
-
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-        <Field label="Новий пароль">
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Мінімум 6 символів"
-            autoComplete="new-password"
-            required
-          />
-        </Field>
-
-        <Field label="Повторіть пароль">
-          <Input
-            type="password"
-            value={repeat}
-            onChange={(e) => setRepeat(e.target.value)}
-            placeholder="Ще раз той самий пароль"
-            autoComplete="new-password"
-            required
-          />
-        </Field>
-
-        {error && (
-          <div className="flex flex-col gap-2 rounded-[12px] bg-danger-soft px-4 py-3 text-[14px] font-semibold text-danger">
-            {error}
-            <Link href="/reset" className="font-semibold underline">
-              Надіслати новий лист
-            </Link>
+      <div className="flex flex-1 items-center justify-center py-10">
+        <div className="w-full max-w-sm">
+          <div className="animate-rise">
+            <h1 className="text-balance font-brand text-[28px] font-semibold tracking-tight text-ink">
+              Новий пароль
+            </h1>
+            <p className="mt-2 text-[15px] text-ink-muted">Придумайте новий пароль для входу.</p>
           </div>
-        )}
 
-        <Button type="submit" disabled={loading} className="mt-2 w-full">
-          {loading ? "Зачекайте…" : "Зберегти пароль"}
-        </Button>
-      </form>
+          <form onSubmit={handleSubmit} noValidate className="animate-rise mt-6 flex flex-col gap-4">
+            <Field label="Новий пароль">
+              <div className="relative">
+                <Lock
+                  aria-hidden
+                  size={16}
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+                />
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Мінімум 6 символів"
+                  autoComplete="new-password"
+                  required
+                  className="pl-10"
+                />
+              </div>
+            </Field>
+
+            <Field label="Повторіть пароль">
+              <div className="relative">
+                <Lock
+                  aria-hidden
+                  size={16}
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+                />
+                <Input
+                  type="password"
+                  value={repeat}
+                  onChange={(e) => setRepeat(e.target.value)}
+                  placeholder="Ще раз той самий пароль"
+                  autoComplete="new-password"
+                  required
+                  className="pl-10"
+                />
+              </div>
+            </Field>
+
+            {error && (
+              <div className="flex flex-col gap-2 rounded-2xl bg-danger-soft px-4 py-3 text-[14px] font-semibold text-danger">
+                {error}
+                <Link href="/reset" className="font-semibold underline">
+                  Надіслати новий лист
+                </Link>
+              </div>
+            )}
+
+            <Button type="submit" size="lg" disabled={loading} className="mt-2 w-full rounded-full">
+              {loading ? "Зачекайте…" : "Зберегти пароль"}
+            </Button>
+          </form>
+        </div>
+      </div>
+
+      <Link
+        href="/login"
+        className="text-[14px] font-semibold text-ink-muted transition-colors hover:text-ink"
+      >
+        ← До входу
+      </Link>
     </main>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check, Send } from "lucide-react";
 import { getTelegramConnectLink } from "@/app/app/(protected)/(shell)/sites/actions";
 import { Button, Chip } from "@/components/ui";
 
@@ -19,7 +20,11 @@ export default function TelegramConnect({ tenantId, connected }: TelegramConnect
   const [errorMsg, setErrorMsg] = useState("");
 
   if (connected) {
-    return <Chip tone="ok">Telegram ✓</Chip>;
+    return (
+      <Chip tone="ok">
+        <Check size={12} /> Telegram підключено
+      </Chip>
+    );
   }
 
   if (state === "opened") {
@@ -42,12 +47,18 @@ export default function TelegramConnect({ tenantId, connected }: TelegramConnect
     <div className="flex w-full flex-col items-start gap-1.5">
       <Button
         variant="telegram"
-        size="md"
+        size="sm"
         onClick={handleConnect}
         disabled={state === "loading"}
-        className="w-full"
+        className="w-full rounded-full"
       >
-        {state === "loading" ? "…" : "Підключити Telegram"}
+        {state === "loading" ? (
+          "…"
+        ) : (
+          <>
+            <Send size={14} /> Підключити Telegram
+          </>
+        )}
       </Button>
       {state === "error" && (
         <span className="text-[13px] font-semibold text-danger">{errorMsg}</span>

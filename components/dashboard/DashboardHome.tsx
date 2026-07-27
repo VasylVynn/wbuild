@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { ArrowRight, Eye, Globe, Inbox, Plus } from "lucide-react";
-import { Card, Chip } from "@/components/ui";
+import { Card, EmptyState } from "@/components/ui";
+import StatCard from "@/components/dashboard/StatCard";
+import SiteCard from "@/components/dashboard/SiteCard";
+import LeadList from "@/components/dashboard/LeadList";
 
 /**
  * Dashboard home content (P1): stats from site_events/leads, the user's sites,
@@ -26,33 +29,9 @@ export interface DashLead {
   createdAt: string;
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
-  return (
-    <Card className="flex items-center gap-4 p-5">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-sunken text-ink-muted">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <div className="text-[24px] font-bold leading-tight text-ink">{value}</div>
-        <div className="truncate text-[13px] font-semibold text-ink-muted">{label}</div>
-      </div>
-    </Card>
-  );
-}
-
-function SectionHeader({ title, href, linkLabel }: { title: string; href: string; linkLabel: string }) {
-  return (
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="text-[17px] font-bold text-ink">{title}</h2>
-      <Link
-        href={href}
-        className="inline-flex items-center gap-1 text-[14px] font-semibold text-brand transition-colors hover:text-brand-hover"
-      >
-        {linkLabel} <ArrowRight size={14} />
-      </Link>
-    </div>
-  );
-}
+// Link needs to render an <a>, so we mirror Button's look here directly.
+const primaryPill =
+  "inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full bg-brand px-5 font-ui text-[15px] font-semibold text-white transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-honey-deep focus-visible:ring-offset-2";
 
 export default function DashboardHome({
   greetName,
@@ -65,88 +44,93 @@ export default function DashboardHome({
   sites: DashSite[];
   leads: DashLead[];
 }) {
+  const hasLeads = leads.length > 0;
+
   return (
-    <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="font-brand text-[24px] font-medium text-ink">Панель</h1>
-        {greetName && <p className="mt-1 text-[14px] text-ink-muted">{greetName}</p>}
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="font-brand text-[26px] font-semibold leading-tight tracking-tight text-ink sm:text-[30px]">
+            Вітаємо!
+          </h1>
+          <p className="mt-1.5 text-[15px] leading-relaxed text-ink-muted">
+            Ось що відбувається з вашими сайтами.
+          </p>
+          {greetName && (
+            <p className="mt-0.5 truncate text-[13px] font-semibold text-ink-faint">{greetName}</p>
+          )}
+        </div>
+        <Link href="/new" className={primaryPill}>
+          <Plus size={16} /> Новий сайт
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <StatCard icon={<Eye size={20} />} label="Переглядів за 7 днів" value={stats.views7} />
-        <StatCard icon={<Inbox size={20} />} label="Заявок за 7 днів" value={stats.leads7} />
-        <StatCard icon={<Globe size={20} />} label="Сайтів" value={stats.sitesTotal} />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+        <StatCard label="Заявки" value={stats.leads7} hint="за 7 днів" icon={Inbox} accent />
+        <StatCard label="Перегляди" value={stats.views7} hint="за 7 днів" icon={Eye} />
+        <StatCard
+          label="Сайти"
+          value={stats.sitesTotal}
+          hint="усього"
+          icon={Globe}
+          className="col-span-2 lg:col-span-1"
+        />
       </div>
 
-      <section>
-        <SectionHeader title="Мої сайти" href="/sites" linkLabel="Усі" />
-        {sites.length === 0 ? (
-          <Card className="flex flex-col items-start gap-3 p-6">
-            <p className="text-[15px] text-ink-muted">
-              Ще немає сайтів. Створіть перший у розмові з помічником — це займе близько трьох
-              хвилин.
-            </p>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <section className={hasLeads ? "lg:col-span-3" : "lg:col-span-5"}>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="font-brand text-[18px] font-semibold text-ink">Ваші сайти</h2>
             <Link
-              href="/new"
-              className="inline-flex min-h-[40px] items-center gap-2 rounded-[12px] bg-brand px-4 text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover"
+              href="/sites"
+              className="inline-flex items-center gap-1 text-[14px] font-semibold text-ink transition-colors hover:text-ink-muted"
             >
-              <Plus size={16} /> Створити сайт
+              Усі <ArrowRight size={14} />
             </Link>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-            {sites.map((s) => (
-              <Card key={s.id} className="flex flex-col gap-2.5 p-5 transition-shadow hover:shadow-lg">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[16px] font-bold text-ink">{s.name}</span>
-                  <Chip tone={s.statusTone}>{s.statusLabel}</Chip>
-                </div>
-                <div className="truncate text-[13px] font-semibold text-ink-muted">
-                  {s.host} · {s.verticalLabel}
-                </div>
-                <div className="mt-1 flex items-center gap-4 text-[14px] font-semibold">
-                  <Link href={`/edit/${encodeURIComponent(s.host)}`} className="text-brand hover:text-brand-hover">
-                    Редагувати
-                  </Link>
-                  <a
-                    href={s.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-ink-muted hover:text-ink"
-                  >
-                    Відкрити ↗
-                  </a>
-                </div>
-              </Card>
-            ))}
           </div>
-        )}
-      </section>
 
-      {leads.length > 0 && (
-        <section>
-          <SectionHeader title="Останні заявки" href="/leads" linkLabel="Усі" />
-          <Card className="divide-y divide-line">
-            {leads.map((l) => (
-              <div key={l.id} className="flex flex-col gap-1 px-5 py-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="truncate text-[15px] font-bold text-ink">{l.name}</span>
-                  <span className="shrink-0 text-[12px] font-semibold text-ink-faint">{l.createdAt}</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[14px]">
-                  {l.phone && (
-                    <a href={`tel:${l.phone}`} className="font-semibold text-brand hover:underline">
-                      {l.phone}
-                    </a>
-                  )}
-                  {l.message && <span className="truncate text-ink-muted">{l.message}</span>}
-                </div>
-                <span className="text-[12px] font-semibold text-ink-faint">{l.siteLabel}</span>
+          {sites.length === 0 ? (
+            <EmptyState icon={<Globe size={20} />} title="Ще немає сайтів">
+              Створіть перший у розмові з помічником — це займе близько трьох хвилин.
+              <div className="mt-4">
+                <Link href="/new" className={`${primaryPill} w-full sm:w-auto`}>
+                  <Plus size={16} /> Створити сайт
+                </Link>
               </div>
-            ))}
-          </Card>
+            </EmptyState>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {sites.map((s) => (
+                <SiteCard
+                  key={s.id}
+                  name={s.name}
+                  host={s.host}
+                  url={s.url}
+                  editHref={`/edit/${encodeURIComponent(s.host)}`}
+                  statusLabel={s.statusLabel}
+                  statusTone={s.statusTone}
+                  verticalLabel={s.verticalLabel}
+                />
+              ))}
+            </div>
+          )}
         </section>
-      )}
+
+        {hasLeads && (
+          <Card className="p-5 lg:col-span-2">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-brand text-[18px] font-semibold text-ink">Останні заявки</h2>
+              <Link
+                href="/leads"
+                className="inline-flex items-center gap-1 text-[14px] font-semibold text-ink transition-colors hover:text-ink-muted"
+              >
+                Усі <ArrowRight size={14} />
+              </Link>
+            </div>
+            <LeadList leads={leads} className="mt-2" />
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

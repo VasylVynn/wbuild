@@ -156,7 +156,7 @@ export default function BlockEditPanel({
           {items.map((item, index) => (
             <div
               key={index}
-              className="flex flex-col gap-3 rounded-[16px] border border-line bg-canvas p-4"
+              className="flex flex-col gap-3 rounded-card border border-line bg-canvas p-4"
             >
               <div className="flex items-center justify-between">
                 <span className="text-[13px] font-bold text-ink-faint">№ {index + 1}</span>
@@ -211,7 +211,7 @@ export default function BlockEditPanel({
           <button
             type="button"
             onClick={() => setItems(field.key, [...items, emptyItem(field.itemFields)])}
-            className="inline-flex min-h-[44px] items-center justify-center rounded-full border-2 border-dashed border-line-strong px-5 text-[15px] font-semibold text-ink-muted transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-full border-2 border-dashed border-line-strong px-5 text-[15px] font-semibold text-ink-muted transition-colors hover:border-honey hover:bg-honey-soft hover:text-honey-text"
           >
             + Додати
           </button>
@@ -254,7 +254,7 @@ export default function BlockEditPanel({
         ) : (
           <>
             {/* ✨ AI-edit — distinct honey panel, native to the form. */}
-            <div className="flex flex-col gap-3 rounded-[16px] bg-honey-soft p-4">
+            <div className="flex flex-col gap-3 rounded-card border border-honey/40 bg-honey-soft p-4">
               <div className="flex items-center gap-2">
                 <Sparkles size={15} className="text-honey-text" aria-hidden />
                 <span className="text-[12px] font-extrabold uppercase tracking-[0.06em] text-honey-text">
@@ -296,7 +296,7 @@ export default function BlockEditPanel({
                     type="button"
                     disabled={aiBusy}
                     onClick={() => fillExample(ex)}
-                    className="inline-flex min-h-8 items-center rounded-full border border-honey/40 bg-surface px-3 py-1 text-[12px] font-semibold text-honey-text transition-colors hover:bg-honey hover:text-white disabled:opacity-50"
+                    className="inline-flex min-h-8 items-center rounded-full border border-honey/40 bg-surface px-3 py-1 text-[12px] font-semibold text-honey-text transition-colors hover:bg-honey disabled:opacity-50"
                   >
                     {ex}
                   </button>
@@ -322,7 +322,7 @@ export default function BlockEditPanel({
         )}
       </div>
 
-      <div className="flex gap-3 border-t border-sunken px-5 py-4">
+      <div className="flex gap-3 border-t border-line bg-surface px-5 py-4">
         <Button
           size="md"
           disabled={saving}

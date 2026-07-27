@@ -106,7 +106,7 @@ export default function PhotoField({
   }
 
   const pick = () => inputRef.current?.click();
-  const tile = "h-28 w-28 shrink-0 overflow-hidden rounded-[16px]";
+  const tile = "h-28 w-28 shrink-0 overflow-hidden rounded-card";
 
   return (
     <div className="flex flex-col gap-3">
@@ -157,9 +157,9 @@ export default function PhotoField({
           <button
             type="button"
             onClick={pick}
-            className={`flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-line-strong bg-canvas text-center transition-colors hover:border-brand hover:bg-brand-soft ${tile}`}
+            className={`flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-line-strong bg-canvas text-center transition-colors hover:border-honey hover:bg-honey-soft ${tile}`}
           >
-            <span aria-hidden className="text-[26px] leading-none text-brand">+</span>
+            <span aria-hidden className="text-[26px] leading-none text-honey-text">+</span>
             <span className="px-2 text-[12px] font-bold text-ink-muted">Завантажити фото</span>
           </button>
         )}
@@ -184,7 +184,7 @@ export default function PhotoField({
       )}
 
       {warnings.length > 0 && (
-        <div className="flex flex-col gap-0.5 rounded-[12px] bg-warn-soft px-3.5 py-2.5">
+        <div className="flex flex-col gap-0.5 rounded-control bg-warn-soft px-3.5 py-2.5">
           {warnings.map((w) => (
             <p key={w} className="text-[13px] font-semibold text-warn">
               {w}
