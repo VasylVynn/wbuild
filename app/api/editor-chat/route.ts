@@ -15,9 +15,7 @@ import {
   getEditorData,
   saveDraftBlocks,
   saveDraftSeo,
-  switchTheme,
 } from "@/app/app/(protected)/edit/actions";
-import { switchDesignPack } from "@/app/app/(protected)/edit/design-actions";
 import { requireMember } from "@/lib/tenant/membership";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
@@ -182,7 +180,6 @@ export async function POST(req: Request): Promise<Response> {
 
   // Working copy — tools mutate it and persist after each successful call.
   let blocks: StoredBlock[] = site.blocks;
-  let theme = site.theme;
   let seo = site.seo;
   let blocksChanged = false;
   const actions: string[] = [];
@@ -243,12 +240,6 @@ export async function POST(req: Request): Promise<Response> {
         const next = blocks.map((b, j) => (j === i ? ({ ...b, hidden: a.hidden } as StoredBlock) : b));
         return persist(next, `${a.hidden ? "Приховав" : "Показав"} секцію ${label(i)}`);
       }
-      case "set_skin": {
-        const i = a.index as number;
-        if (!inRange(i)) return { ok: false, summary: "Немає блоку з таким номером." };
-        const next = blocks.map((b, j) => (j === i ? ({ ...b, skin: a.skin } as StoredBlock) : b));
-        return persist(next, `Змінив вигляд секції ${label(i)}`);
-      }
       case "regenerate_block": {
         const i = a.index as number;
         if (!inRange(i)) return { ok: false, summary: "Немає блоку з таким номером." };
@@ -262,25 +253,6 @@ export async function POST(req: Request): Promise<Response> {
         if (!res.ok) return { ok: false, summary: res.error };
         const next = blocks.map((b, j) => (j === i ? ({ ...b, props: res.props } as StoredBlock) : b));
         return persist(next, `Переписав вміст секції ${label(i)}`);
-      }
-      case "switch_theme": {
-        const res = await switchTheme(host, a.presetId as string);
-        if (!res.ok || !res.theme) return { ok: false, summary: res.error ?? "Невідомий пресет." };
-        theme = res.theme;
-        blocksChanged = true;
-        const summary = "Змінив кольорове оформлення";
-        actions.push(summary);
-        return { ok: true, summary };
-      }
-      case "switch_pack": {
-        const res = await switchDesignPack(host, a.packId as string);
-        if (!res.ok || !res.blocks || !res.theme) return { ok: false, summary: res.error ?? "Невідомий пакет." };
-        blocks = res.blocks;
-        theme = res.theme;
-        blocksChanged = true;
-        const summary = "Змінив дизайн-пакет";
-        actions.push(summary);
-        return { ok: true, summary };
       }
       case "set_seo": {
         // D5: draft-only like every tool — the meta goes live on publish.
@@ -375,8 +347,6 @@ export async function POST(req: Request): Promise<Response> {
     verticalId: site.verticalId,
     facts,
     blocks,
-    themeOptions: site.themeOptions,
-    isTemplateSite: Boolean(site.templateId),
     onboardingTranscript: onboarding,
     stats,
     seo,
@@ -426,8 +396,6 @@ export async function POST(req: Request): Promise<Response> {
                   verticalId: site.verticalId,
                   facts,
                   blocks,
-                  themeOptions: site.themeOptions,
-                  isTemplateSite: Boolean(site.templateId),
                   onboardingTranscript: onboarding,
                   stats,
                   seo,
@@ -501,7 +469,7 @@ export async function POST(req: Request): Promise<Response> {
             .then(() => undefined, () => undefined);
         }
 
-        send({ t: "final", message, actions, blocksChanged, blocks, theme, seo });
+        send({ t: "final", message, actions, blocksChanged, blocks, seo });
       } catch {
         send({ t: "error", message: "Щось пішло не так. Спробуйте ще раз." });
       } finally {

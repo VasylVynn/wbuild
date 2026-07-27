@@ -18,8 +18,9 @@ export function buildTemplateBrand(
   template: SiteTemplate,
   /** Display logo (storage URL) — the caller resolves original vs adapted. */
   logoUrl?: string,
-  /** DNA-2c: seeded template data-theme from the tenant's DNA. */
-  dnaTheme?: string,
+  /** The stylesheet the model wrote for this site, stored on its page content
+   *  next to the blocks it was written for. */
+  wireCss?: string,
 ): TemplateBrand {
   // Nav real estate is precious: a name like «DIVA | салон краси Самбір»
   // renders as just «DIVA» — the first segment before a separator. The full
@@ -49,7 +50,7 @@ export function buildTemplateBrand(
     ...(logoUrl ? { logoUrl } : {}),
     navLinks,
     ctaHref: "#lead_form",
-    ...(dnaTheme ? { dnaTheme } : {}),
+    ...(wireCss ? { wireCss } : {}),
     contact,
   };
 }

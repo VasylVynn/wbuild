@@ -65,10 +65,15 @@ export default async function LeadsPage() {
   });
 
   return (
-    <div>
-      <h1 className="mb-6 font-brand text-[24px] font-medium text-ink">
-        Заявки <span className="text-ink-faint">({leads.length})</span>
-      </h1>
+    <div className="flex flex-col gap-6">
+      <div className="min-w-0">
+        <h1 className="font-brand text-[26px] font-semibold leading-tight tracking-tight text-ink sm:text-[30px]">
+          Заявки <span className="text-ink-faint">({leads.length})</span>
+        </h1>
+        <p className="mt-1.5 text-[15px] leading-relaxed text-ink-muted">
+          Усі звернення з ваших сайтів. Кожна нова заявка одразу летить у ваш Telegram.
+        </p>
+      </div>
 
       {items.length === 0 ? (
         <EmptyState icon={<Inbox size={20} />} title="Ще немає заявок">

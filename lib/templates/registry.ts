@@ -14,19 +14,18 @@ import { restaurantMeta, restaurantSections } from "@/components/templates/resta
 import { sparkMeta, sparkSections } from "@/components/templates/spark";
 import { belezaMeta, belezaSections } from "@/components/templates/beleza";
 import { launchMeta, launchSections } from "@/components/templates/launch";
+import { salonwireMeta, salonwireSections } from "@/components/templates/salonwire";
 
 /**
  * Site templates — the owner mandate (2026-07): a generated site must BE a
  * chosen source template. The model picks a `templateId`, then composes the page
  * ONLY from that template's sections; the template dictates the ENTIRE look — its
- * own palette, fonts, animations, wrapper (may be dark) — not a per-block skin.
+ * own palette, fonts, animations and wrapper (may be dark).
  *
  * This is deliberately NOT "server-only": the render path (PageRenderer) and the
  * admin previews import it on both the server and client boundary. A template is
  * built from a `components/templates/<id>` module's meta + sections.
  *
- * Templates and design packs coexist: a vertical WITH a template affinity uses
- * the template path (packs ignored); a vertical WITHOUT one falls back to packs.
  */
 export type { TemplateSectionDef };
 
@@ -37,13 +36,13 @@ export type { TemplateSectionDef };
 export interface TemplateBrand {
   brandName?: string;
   brandAccent?: string;
-  /** Owner's logo (storage URL; already the adapted variant when one is chosen).
-   *  Absent → the Nav keeps its text-only brand. */
+  /** Owner's logo (storage URL). Absent → the Nav keeps its text-only brand. */
   logoUrl?: string;
   navLinks?: { href: string; label: string }[];
   ctaHref?: string;
-  /** DNA-2c: the data-theme this site starts on (wrapper initial; visitor toggle still wins). */
-  dnaTheme?: string;
+  /** The stylesheet the model wrote for THIS site, injected after the
+   *  wireframe's own CSS. Legacy templates ignore it. */
+  wireCss?: string;
   /** Real contact facts for the footer's «Контакти» column. */
   contact?: {
     phone?: string;
@@ -70,23 +69,9 @@ export interface SiteTemplate {
   /** Outer shell that owns the template's global look (bg, fonts, may be dark)
    *  and its chrome (Nav/Footer); `brand` feeds it the real business identity. */
   wrapper: ComponentType<{ children: ReactNode; brand?: TemplateBrand }>;
-  /**
-   * Themes this template ships — the per-template theming foundation. Colours
-   * are CSS vars on the wrapper; each theme is one value-set toggled by a
-   * `data-theme` attribute. First entry is the default. A template may ship
-   * one (studio: dark only) or several (ferri: dark + light).
-   */
-  themes: string[];
-  defaultTheme: string;
-  /**
-   * DNA-2b: font pairs (lib/theme/font-pairs.ts ids) that PRESERVE this
-   * template's identity. The DNA rolls the pair for template sites from this
-   * list; absent/empty → the template's own hardcoded fonts (no override).
-   */
-  dnaFontPairs?: string[];
 }
 
-export const siteTemplates: Record<string, SiteTemplate> = {
+export const legacyTemplates: Record<string, SiteTemplate> = {
   studio: {
     id: studioMeta.id,
     label: studioMeta.label,
@@ -95,9 +80,6 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: studioMeta.order,
     sections: studioSections,
     wrapper: studioMeta.wrapper,
-    themes: ["dark"],
-    defaultTheme: "dark",
-    dnaFontPairs: ["unbounded-inter", "manrope-inter", "montserrat-rubik"],
   },
   ferri: {
     id: ferriMeta.id,
@@ -107,11 +89,8 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: ferriMeta.order,
     sections: ferriSections,
     wrapper: ferriMeta.wrapper,
-    themes: ["dark", "light"],
-    defaultTheme: "dark",
     // Restored in DNA-2c: ferri now reads fonts through --ferri-display/--ferri-body
     // indirections (C3), so pairs render for real.
-    dnaFontPairs: ["literata-inter", "playfair-jost", "lora-source"],
   },
   salon: {
     id: salonMeta.id,
@@ -121,9 +100,6 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: salonMeta.order,
     sections: salonSections,
     wrapper: salonMeta.wrapper,
-    themes: ["light", "dark"],
-    defaultTheme: "light",
-    dnaFontPairs: ["cormorant-manrope", "playfair-jost", "lora-source"],
   },
   portfolio: {
     id: portfolioMeta.id,
@@ -133,8 +109,6 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: portfolioMeta.order,
     sections: portfolioSections,
     wrapper: portfolioMeta.wrapper,
-    themes: ["dark"],
-    defaultTheme: "dark",
   },
   aisaas: {
     id: aisaasMeta.id,
@@ -144,8 +118,6 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: aisaasMeta.order,
     sections: aisaasSections,
     wrapper: aisaasMeta.wrapper,
-    themes: ["light"],
-    defaultTheme: "light",
   },
   nextly: {
     id: nextlyMeta.id,
@@ -155,8 +127,6 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: nextlyMeta.order,
     sections: nextlySections,
     wrapper: nextlyMeta.wrapper,
-    themes: ["light", "dark"],
-    defaultTheme: "light",
   },
   react2021: {
     id: react2021Meta.id,
@@ -166,8 +136,6 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: react2021Meta.order,
     sections: react2021Sections,
     wrapper: react2021Meta.wrapper,
-    themes: ["light"],
-    defaultTheme: "light",
   },
   spark: {
     id: sparkMeta.id,
@@ -177,9 +145,6 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: sparkMeta.order,
     sections: sparkSections,
     wrapper: sparkMeta.wrapper,
-    themes: ["light", "dark"],
-    defaultTheme: "light",
-    dnaFontPairs: ["manrope-inter", "montserrat-rubik", "onest"],
   },
   beleza: {
     id: belezaMeta.id,
@@ -189,9 +154,6 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: belezaMeta.order,
     sections: belezaSections,
     wrapper: belezaMeta.wrapper,
-    themes: ["light"],
-    defaultTheme: "light",
-    dnaFontPairs: ["cormorant-manrope", "playfair-jost", "nunito-duo"],
   },
   launch: {
     id: launchMeta.id,
@@ -201,9 +163,6 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: launchMeta.order,
     sections: launchSections,
     wrapper: launchMeta.wrapper,
-    themes: ["dark", "light"],
-    defaultTheme: "dark",
-    dnaFontPairs: ["unbounded-inter", "montserrat-rubik", "manrope-inter"],
   },
   restaurant: {
     id: restaurantMeta.id,
@@ -213,35 +172,34 @@ export const siteTemplates: Record<string, SiteTemplate> = {
     order: restaurantMeta.order,
     sections: restaurantSections,
     wrapper: restaurantMeta.wrapper,
-    themes: ["light"],
-    defaultTheme: "light",
-    dnaFontPairs: ["lora-source", "literata-inter", "playfair-jost"],
   },
 };
 
-/** Non-empty tuple for z.enum — there is always at least one template (studio). */
-export const TEMPLATE_IDS: [string, ...string[]] = Object.keys(siteTemplates) as [
-  string,
-  ...string[],
-];
+/**
+ * The production catalog — one structural wireframe. Every site is composed
+ * against it and then dressed by a stylesheet the model writes for that
+ * business (lib/design/wire-style.ts), so «which template» is no longer a
+ * choice anyone makes: uniqueness comes from the CSS, not from picking one of
+ * eleven fixed looks.
+ *
+ * The eleven old templates stay in `legacyTemplates` above as the source
+ * material for porting structural layouts into the wireframe. They are
+ * resolvable by id (dev/admin preview routes) but are never generated into,
+ * never offered to an owner, and never named to a model.
+ */
+export const siteTemplates: Record<string, SiteTemplate> = {
+  salonwire: {
+    id: salonwireMeta.id,
+    label: salonwireMeta.label,
+    description: salonwireMeta.description,
+    verticalIds: salonwireMeta.verticalIds,
+    order: salonwireMeta.order,
+    sections: salonwireSections,
+    wrapper: salonwireMeta.wrapper,
+  },
+};
 
 export function getTemplate(id: string | undefined): SiteTemplate | undefined {
   if (!id) return undefined;
-  return siteTemplates[id];
-}
-
-/** Human-facing template name for UI chips/summaries — the label without its «» quoting. */
-export function templateDisplayName(id: string | undefined): string | undefined {
-  const t = getTemplate(id);
-  return t ? t.label.replace(/[«»]/g, "") : undefined;
-}
-
-/**
- * Templates whose affinity includes this vertical. Empty is allowed: a vertical
- * with no template affinity falls back to design packs in generation.
- */
-export function templatesFor(verticalId?: string): SiteTemplate[] {
-  return Object.values(siteTemplates).filter(
-    (t) => verticalId != null && t.verticalIds.includes(verticalId),
-  );
+  return siteTemplates[id] ?? legacyTemplates[id];
 }

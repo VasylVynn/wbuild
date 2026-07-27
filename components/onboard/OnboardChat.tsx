@@ -8,7 +8,17 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
-import { CircleAlert, PartyPopper, Paperclip, RotateCcw } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CircleAlert,
+  Paperclip,
+  PartyPopper,
+  Pencil,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
+import { useSmoothText } from "@/components/useSmoothText";
 import type { ChatMsg, ProgressItem } from "@/lib/ai/onboard";
 import {
   onboardAction,
@@ -313,7 +323,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   const [confirmed, setConfirmed] = useState(false);
   const [verticalId, setVerticalId] = useState<string | undefined>(undefined);
   // Chat-picked site design (wave B5) — { id, label } once the agent proposes one.
-  const [template, setTemplate] = useState<{ id: string; label: string } | null>(null);
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>(
@@ -365,7 +374,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Hidden file input behind the paperclip button (chat photo upload, wave G).
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -374,6 +383,10 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
 
   // Progress chips — derived, always in sync with the collected facts.
   const progress = deriveProgress(facts);
+  // Same model, read as a bar: purely presentational, no extra state.
+  const progressPct = Math.round(
+    (progress.filter((p) => p.done).length / progress.length) * 100,
+  );
 
   // Revoke still-attached (unsent) thumbnail blob URLs on unmount — they
   // otherwise live for the whole tab. Ref keeps the cleanup closure current.
@@ -386,10 +399,33 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     [],
   );
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll the chat COLUMN only (scrollIntoView would also scroll the
+  // page/preview ancestors). Own sends always jump; otherwise don't yank the
+  // owner back down if they scrolled up to read.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const last = messages[messages.length - 1];
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 300;
+    if (nearBottom || last?.role === "user") el.scrollTop = el.scrollHeight;
   }, [messages, typing]);
+
+  // Streaming grows the last bubble every frame — keep the column pinned to
+  // the bottom while the turn runs, releasing when the owner scrolls up.
+  useEffect(() => {
+    if (!loading) return;
+    const el = chatScrollRef.current;
+    if (!el) return;
+    let raf = 0;
+    const tick = () => {
+      if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+        el.scrollTop = el.scrollHeight;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [loading]);
 
   // On mount: resume a previously persisted conversation from localStorage
   useEffect(() => {
@@ -405,9 +441,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       setVerticalId(data.verticalId);
       setReady(data.ready);
       setConfirmed(data.confirmed);
-      if (data.templateId && data.templateLabel) {
-        setTemplate({ id: data.templateId, label: data.templateLabel });
-      }
       // Media survives the login-gate redirect (saved fire-and-forget) — restore
       // it so the media step shows what was already uploaded.
       setMedia(data.media ?? { photos: [] });
@@ -442,8 +475,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     ready: boolean;
     confirmed: boolean;
     quickReplies: string[];
-    templateId?: string;
-    templateLabel?: string;
     // Media the agent's tools added this turn (scrape/analyze/set_media_role).
     media?: { photos: string[]; logoUrl?: string; photoMeta?: PhotoMeta[] };
   };
@@ -464,7 +495,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         messages: modelMessages,
         facts,
         verticalId,
-        templateId: template?.id,
         media: mediaNow,
         conversationId: convIdRef.current,
       }),
@@ -474,7 +504,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       const j = (await res.json()) as { message?: string };
       if (typeof j.message === "string") {
         // Refusal (rate limit etc.) is message-only — carry the current state
-        // through so a limited turn can't silently drop ready/confirmed/template.
+        // through so a limited turn can't silently drop ready/confirmed.
         return {
           message: j.message,
           facts,
@@ -482,8 +512,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
           ready,
           confirmed,
           quickReplies: [],
-          templateId: template?.id,
-          templateLabel: template?.label,
         };
       }
       throw new Error("bad refusal payload");
@@ -552,7 +580,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     setReady(false);
     setConfirmed(false);
     setVerticalId(undefined);
-    setTemplate(null);
     setInput("");
     setQuickReplies(igImportEnabled ? ["У мене є Instagram"] : []);
     setSavedNote(null);
@@ -677,7 +704,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
             verticalId,
             ready,
             confirmed,
-            template?.id,
             mediaNow,
           ).catch(() => {});
         }
@@ -712,14 +738,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
           setMedia(effectiveMedia);
         }
 
-        // Last-wins: an existing pick must never be cleared by a result without
-        // one (e.g. a later turn that doesn't touch the design).
-        const nextTemplate =
-          result.templateId && result.templateLabel
-            ? { id: result.templateId, label: result.templateLabel }
-            : template;
-        setTemplate(nextTemplate);
-
         // Agentic feedback: which facts the agent just recorded — a real diff of
         // the same progress model as the header chips, not decoration.
         const newly = deriveProgress(result.facts)
@@ -738,7 +756,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
             result.verticalId,
             result.ready,
             result.confirmed ?? false,
-            nextTemplate?.id,
             effectiveMedia,
           );
         }
@@ -751,7 +768,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         // non-stream server action still answers the turn (degraded: no tools).
         setTyping(true);
         applyResult(
-          await onboardAction(modelMessages, facts, verticalId, template?.id, { ready, confirmed }),
+          await onboardAction(modelMessages, facts, verticalId, { ready, confirmed }),
         );
       }
     } finally {
@@ -800,7 +817,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         verticalId,
         ready,
         confirmed,
-        template?.id,
         media,
       );
     }
@@ -917,7 +933,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         verticalId,
         media,
         convIdRef.current ?? undefined,
-        template?.id,
       );
       if (result.ok) {
         setDraft({ host: result.host, previewUrl: result.previewUrl, editUrl: result.editUrl });
@@ -980,7 +995,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
 
   if (phase === "chat") {
     return (
-      <div className={`h-[100dvh] ${rootBase} lg:grid lg:grid-cols-[minmax(0,1fr)_420px]`}>
+      <div className={`h-[100dvh] ${rootBase} lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(400px,32%)]`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <ConfirmDialog
           open={resetOpen}
@@ -993,24 +1008,27 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         <div className="flex h-full min-h-0 flex-col">
 
         {/* Header: honey «3» avatar + Помічник + status */}
-        <header className="bg-surface">
+        <header className="border-b border-line bg-surface/85 backdrop-blur">
           <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-2.5">
             <Link
               href="/"
               aria-label="Назад"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[20px] font-bold text-ink-muted hover:bg-sunken"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
             >
-              ←
+              <ArrowLeft size={20} />
             </Link>
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-honey-soft font-brand text-[19px] font-semibold text-honey">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-honey font-brand text-[19px] font-semibold text-honey-text">
               3
             </span>
             <div className="flex flex-col leading-tight">
-              <span className="text-[17px] font-extrabold text-ink">Помічник</span>
-              {/* Static — the tool/thinking chip below the messages is the
+              <span className="font-brand text-[17px] font-semibold text-ink">Помічник</span>
+              {/* Static — the tool/typing indicator below the messages is the
                   sole "agent is working" signal; swapping this label too
                   read as a redundant third indicator (owner feedback). */}
-              <span className="text-[13px] font-bold text-ok">онлайн</span>
+              <span className="flex items-center gap-1.5 text-[13px] font-bold text-ok">
+                <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-hidden />
+                онлайн
+              </span>
             </div>
             {/* Reset only makes sense once the user actually said something. */}
             {messages.length > 1 && (
@@ -1025,12 +1043,20 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               </button>
             )}
           </div>
-          {/* Progress chips */}
-          <div className="border-b border-line">
-            <div className="mx-auto flex w-full max-w-2xl items-center gap-2 overflow-x-auto px-4 pb-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <span className="mr-1 hidden shrink-0 text-[14px] font-bold text-ink-faint sm:inline">
-                Зібрано:
-              </span>
+          {/* Progress: the same derived model twice — a honey bar for the feel
+              of momentum, chips for what exactly is already collected. */}
+          <div className="mx-auto w-full max-w-2xl px-4 pb-3">
+            <div className="flex items-center justify-between text-[12px] font-bold text-ink-muted">
+              <span>Збираємо ваш сайт</span>
+              <span className="tabular-nums">{progressPct}%</span>
+            </div>
+            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-sunken">
+              <div
+                className="h-full rounded-full bg-honey transition-all duration-700 ease-out"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            <div className="no-scrollbar mt-2.5 flex items-center gap-2 overflow-x-auto">
               {progress.map((p) => (
                 <Chip key={p.key} tone={p.done ? "ok" : "neutral"} className="shrink-0 whitespace-nowrap">
                   {p.done ? `✓ ${p.label}` : p.label}
@@ -1041,23 +1067,31 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         </header>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-2xl flex-col gap-3.5 px-4 py-5">
-            <div className="self-center rounded-full bg-sunken px-3.5 py-1.5 text-[13px] font-bold text-ink-muted">
+        <div ref={chatScrollRef} className="flex-1 overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-2xl flex-col gap-3.5 px-4 py-6">
+            <div className="flex items-center gap-1.5 self-center rounded-full bg-honey/15 px-3.5 py-1.5 text-[13px] font-bold text-honey-text">
+              <Sparkles size={14} />
               Сайт буде готовий за ~3 хвилини
             </div>
 
             {messages.map((msg, i) => (
-              <ChatBubble key={i} msg={msg} />
+              <ChatBubble
+                key={i}
+                msg={msg}
+                streaming={loading && msg.role === "assistant" && i === messages.length - 1}
+              />
             ))}
 
             {savedNote && !typing && (
-              <div className="pl-1 text-[13px] font-bold text-ok">✓ Записав: {savedNote}</div>
+              <span className="ml-[42px] self-start rounded-full bg-ok-soft px-3 py-1 text-[13px] font-bold text-ok">
+                ✓ Записав: {savedNote}
+              </span>
             )}
 
             {batchCard && (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-3 rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface px-4 py-3">
+              <div className="flex items-start gap-2.5">
+                <AgentAvatar busy />
+                <div className="flex items-center gap-3 rounded-[22px] rounded-tl-[8px] border border-line bg-surface px-4 py-3 shadow-[0_1px_2px_rgba(51,41,28,0.05)]">
                   <div className="flex -space-x-3">
                     {batchCard.thumbs.slice(0, 3).map((t, i) => (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1065,14 +1099,10 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
                         key={i}
                         src={t}
                         alt=""
-                        className="h-12 w-12 shrink-0 rounded-[10px] border-2 border-surface object-cover"
+                        className="h-12 w-12 shrink-0 rounded-[12px] border-2 border-surface object-cover"
                       />
                     ))}
                   </div>
-                  <span
-                    className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent"
-                    aria-hidden
-                  />
                   <span className="text-[14px] font-semibold text-ink-muted">
                     {batchCard.total === 1
                       ? "Роздивляюсь фото…"
@@ -1082,72 +1112,88 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               </div>
             )}
 
-            {/* ONE working indicator at a time, never two together: tool
-                chips win while any tool is running; otherwise a single
-                «Думаю…» chip covers extended thinking AND the plain
-                pre-first-token wait (both look identical to the owner).
-                Once text starts streaming, `typing` flips false and the
-                growing bubble is the only signal — no chip at all. */}
+            {/* ONE working indicator at a time, never two together: the tool
+                card wins while any tool is running; otherwise the typing
+                bubble covers extended thinking AND the plain pre-first-token
+                wait (both look identical to the owner). Once text starts
+                streaming, `typing` flips false and the growing bubble is the
+                only signal — no indicator at all. */}
             {activeTools.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {activeTools.map((label, i) => (
-                  <span
-                    key={`${label}-${i}`}
-                    className="flex items-center gap-2 rounded-full border-[1.5px] border-brand-soft bg-brand-soft px-3.5 py-2 text-[13px] font-bold text-brand"
-                  >
-                    <span
-                      className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent"
-                      aria-hidden
-                    />
-                    {label}
-                  </span>
-                ))}
+              <div className="flex items-start gap-2.5">
+                <AgentAvatar busy />
+                <div className="min-w-0 rounded-[22px] rounded-tl-[8px] border border-line bg-surface px-4 py-3 shadow-[0_1px_2px_rgba(51,41,28,0.05)]">
+                  <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+                    Працюю над сайтом
+                  </p>
+                  <ul className="flex flex-col gap-2">
+                    {activeTools.map((label, i) => (
+                      <li
+                        key={`${label}-${i}`}
+                        className="flex items-center gap-2.5 text-[15px] font-semibold text-ink"
+                      >
+                        <span
+                          className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-honey border-t-transparent"
+                          aria-hidden
+                        />
+                        {label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             ) : (
               typing && <AgentTyping />
             )}
 
-            <div ref={messagesEndRef} />
           </div>
         </div>
 
         {/* Footer: confirmed CTA + quick replies + input. The big CTA appears
             only AFTER the user explicitly confirmed the chat summary (A6). */}
-        <footer className="mx-auto w-full max-w-2xl px-4 pb-5">
+        <footer className="border-t border-line bg-surface/70 backdrop-blur">
+          <div className="mx-auto w-full max-w-2xl px-4 pb-5 pt-3.5">
           {confirmed && (
             <button
               onClick={() => void handleCreateSite()}
               disabled={loading}
-              className="mb-3 flex min-h-[60px] w-full items-center justify-center rounded-[18px] bg-brand text-[18px] font-bold text-white shadow-[0_8px_24px_rgba(27,91,191,0.35)] transition-colors hover:bg-brand-hover disabled:opacity-50"
+              className="animate-pop mb-3 flex min-h-[60px] w-full items-center justify-center gap-2 rounded-[18px] bg-brand text-[18px] font-bold text-white shadow-[0_10px_28px_rgba(51,41,28,0.22)] transition-colors hover:bg-brand-hover disabled:opacity-50"
             >
-              Створити сайт →
+              Створити сайт
+              <ArrowRight size={20} />
             </button>
           )}
 
           {quickReplies.length > 0 && !loading && (
-            <div className="mb-3 flex flex-wrap gap-2">
-              {quickReplies.map((q) => (
-                <button
-                  key={q}
-                  onClick={() => send(q)}
-                  className="rounded-full border-[1.5px] border-line-strong bg-surface px-[18px] py-3 text-[15px] font-bold text-ink transition-colors hover:border-brand hover:text-brand"
-                >
-                  {q}
-                </button>
-              ))}
+            <div className="mb-3">
+              <p className="mb-2 flex items-center gap-1.5 text-[12px] font-bold text-ink-muted">
+                <Sparkles size={14} className="text-honey" />
+                Підказки — оберіть або напишіть своє
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {quickReplies.map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => send(q)}
+                    className="animate-pop rounded-full border border-line-strong bg-surface px-[18px] py-2.5 text-[15px] font-bold text-ink transition-all hover:-translate-y-0.5 hover:border-honey hover:bg-honey/10"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Reviews OCR'd from screenshots — the owner confirms each before it
               becomes a fact (invariant №5). One card at a time. */}
           {pendingReviews.length > 0 && (
-            <div className="mb-3 flex flex-col gap-3 rounded-[18px] border-[1.5px] border-line bg-surface p-4">
-              <span className="text-[15px] font-bold text-ink">
+            <div className="animate-pop mb-3 flex flex-col gap-3 rounded-[20px] border border-line bg-surface p-4 shadow-card">
+              <span className="flex items-center gap-1.5 text-[15px] font-bold text-ink">
+                <Sparkles size={15} className="shrink-0 text-honey" />
                 {pendingReviews.length > 1
                   ? `Знайшов відгук на скріншоті (ще ${pendingReviews.length - 1} у черзі):`
                   : "Знайшов відгук на скріншоті:"}
               </span>
-              <p className="whitespace-pre-wrap rounded-[12px] bg-sunken px-3.5 py-3 text-[15px] leading-relaxed text-ink">
+              <p className="whitespace-pre-wrap rounded-[14px] bg-sunken px-3.5 py-3 text-[15px] leading-relaxed text-ink">
                 {pendingReviews[0].quote}
               </p>
               <input
@@ -1160,7 +1206,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
                 }
                 placeholder="Імʼя клієнта (необовʼязково)"
                 autoComplete="off"
-                className="h-12 w-full rounded-full border-[1.5px] border-line-strong bg-surface px-4 text-[15px] text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft"
+                className="h-12 w-full rounded-full border border-line-strong bg-surface px-4 text-[15px] text-ink placeholder:text-ink-faint focus:border-honey-deep focus:outline-none focus:ring-4 focus:ring-honey/20"
               />
               <div className="flex gap-2.5">
                 {/* Gated by `loading`: saving while a chat turn streams would let
@@ -1179,18 +1225,18 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
           {pending.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
               {pending.map((p) => (
-                <div key={p.id} className="relative">
+                <div key={p.id} className="animate-pop relative">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={p.thumbUrl}
                     alt=""
-                    className="h-14 w-14 rounded-[12px] border-[1.5px] border-line object-cover"
+                    className="h-14 w-14 rounded-[14px] border border-line object-cover shadow-[0_1px_2px_rgba(51,41,28,0.06)]"
                   />
                   <button
                     onClick={() => removePending(p.id)}
                     disabled={loading}
                     aria-label="Прибрати фото"
-                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[12px] font-bold leading-none text-white"
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[12px] font-bold leading-none text-white transition-colors hover:bg-brand-hover"
                   >
                     ×
                   </button>
@@ -1215,7 +1261,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               onClick={() => fileInputRef.current?.click()}
               disabled={loading}
               aria-label="Додати фото"
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-[1.5px] border-line-strong bg-surface text-ink-muted transition-colors hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-45"
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface text-ink-muted transition-colors hover:border-honey hover:bg-honey/10 hover:text-honey-text disabled:cursor-not-allowed disabled:opacity-45"
             >
               <Paperclip size={22} />
             </button>
@@ -1228,13 +1274,13 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               disabled={loading}
               placeholder={confirmed ? "Або допишіть щось…" : "Написати…"}
               autoComplete="off"
-              className="h-14 min-w-0 flex-1 rounded-full border-[1.5px] border-line-strong bg-surface px-5 text-[17px] text-ink placeholder:text-ink-faint transition-shadow focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft disabled:opacity-50"
+              className="h-14 min-w-0 flex-1 rounded-full border border-line-strong bg-surface px-5 text-[17px] text-ink placeholder:text-ink-faint transition-shadow focus:border-honey-deep focus:outline-none focus:ring-4 focus:ring-honey/20 disabled:opacity-50"
             />
             <button
               onClick={handleSend}
               disabled={loading || (!input.trim() && pending.length === 0)}
               aria-label="Надіслати"
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-45"
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand text-white shadow-[0_6px_18px_rgba(51,41,28,0.18)] transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
             >
               <SendArrow />
             </button>
@@ -1243,13 +1289,13 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
           {uploadError && (
             <p className="mt-2 pl-1 text-[14px] font-semibold text-danger">{uploadError}</p>
           )}
+          </div>
         </footer>
         </div>
 
         <SitePreviewPanel
           facts={facts}
           verticalId={verticalId}
-          templateLabel={template?.label}
           photosCount={media.photos.length}
           hasLogo={!!media.logoUrl}
           className="hidden lg:flex"
@@ -1271,18 +1317,20 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     return (
       <div className={`flex min-h-[100dvh] flex-col ${rootBase}`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
-        <header className="border-b border-line bg-surface">
+        <header className="border-b border-line bg-surface/85 backdrop-blur">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 py-3.5">
             <button
               onClick={() => setPhase("chat")}
               disabled={loading}
               aria-label="Назад до розмови"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[20px] font-bold text-ink-muted hover:bg-sunken disabled:opacity-45"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-sunken hover:text-ink disabled:opacity-45"
             >
-              ←
+              <ArrowLeft size={20} />
             </button>
             <div className="flex flex-col leading-tight">
-              <span className="text-[18px] font-extrabold text-ink">Ваш сайт готовий до публікації</span>
+              <span className="font-brand text-[18px] font-semibold text-ink">
+                Ваш сайт готовий до публікації
+              </span>
               <span className="text-[13px] font-bold text-ink-muted">
                 Перегляньте — і опублікуйте, коли все влаштовує
               </span>
@@ -1291,11 +1339,23 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         </header>
 
         <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-5">
-          <div className="flex-1 overflow-hidden rounded-[18px] border-[1.5px] border-line bg-surface shadow-[0_8px_24px_rgba(23,36,47,0.06)]">
+          <div className="flex flex-1 flex-col overflow-hidden rounded-[24px] border border-line bg-surface p-2 shadow-card">
+            {/* Browser chrome around the live draft — the frame only; the iframe
+                renders the real tenant site and is never styled from here. */}
+            <div className="flex items-center gap-2 px-2 py-2">
+              <span className="flex gap-1.5">
+                {["#E6A5A0", "#EFC776", "#A9C9A4"].map((c) => (
+                  <span key={c} className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c }} />
+                ))}
+              </span>
+              <span className="ml-1 flex-1 truncate rounded-full bg-sunken px-3 py-1 text-[12px] font-semibold text-ink-faint">
+                {draft.host}
+              </span>
+            </div>
             <iframe
               src={draft.previewUrl}
               title="Попередній перегляд сайту"
-              className="h-full min-h-[420px] w-full"
+              className="min-h-[420px] w-full flex-1 rounded-[16px] border border-line bg-canvas"
             />
           </div>
 
@@ -1304,16 +1364,16 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               size="lg"
               disabled={loading}
               onClick={() => void handlePublish()}
-              className="min-h-[60px] w-full text-[19px] shadow-[0_8px_24px_rgba(27,91,191,0.3)]"
+              className="min-h-[60px] w-full text-[19px] shadow-[0_10px_28px_rgba(51,41,28,0.22)]"
             >
               {loading ? "Публікую…" : "Опублікувати сайт"}
             </Button>
             <div className="flex gap-2">
               <Link
                 href={draft.editUrl}
-                className="flex h-[52px] flex-1 items-center justify-center rounded-[16px] border-[1.5px] border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
+                className="flex h-[52px] flex-1 items-center justify-center gap-2 rounded-[16px] border border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
               >
-                ✏️ Відредагувати
+                <Pencil size={17} /> Відредагувати
               </Link>
               <Button
                 variant="quiet"
@@ -1339,8 +1399,8 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     return (
       <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 ${rootBase}`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
-        <div className="flex w-full max-w-md flex-col items-center text-center">
-          <span className="flex h-24 w-24 items-center justify-center rounded-full bg-honey-soft font-brand text-[42px] font-semibold text-honey">
+        <div className="animate-rise flex w-full max-w-md flex-col items-center text-center">
+          <span className="flex h-24 w-24 items-center justify-center rounded-full bg-honey font-brand text-[42px] font-semibold text-honey-text shadow-[0_18px_40px_-14px_rgba(51,41,28,0.4)]">
             3
           </span>
           <h2 className="mt-8 font-brand text-[24px] font-semibold leading-tight">
@@ -1351,12 +1411,12 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
           </p>
           <Link
             href="/login?next=/new"
-            className="mt-8 flex min-h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-brand px-7 text-[18px] font-bold text-white transition-colors hover:bg-brand-hover"
+            className="mt-8 flex min-h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-brand px-7 text-[18px] font-bold text-white shadow-[0_10px_28px_rgba(51,41,28,0.22)] transition-colors hover:bg-brand-hover"
           >
             Увійти або зареєструватися
           </Link>
           <Button variant="quiet" size="md" className="mt-2" onClick={() => setPhase("chat")}>
-            ← Назад до розмови
+            <ArrowLeft size={17} /> Назад до розмови
           </Button>
         </div>
       </div>
@@ -1383,25 +1443,25 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <div className="flex w-full max-w-md flex-col items-center">
           <span
-            className="flex h-24 w-24 items-center justify-center rounded-full bg-honey-soft font-brand text-[42px] font-semibold text-honey"
+            className="flex h-24 w-24 items-center justify-center rounded-full bg-honey font-brand text-[42px] font-semibold text-honey-text"
             style={{ animation: "ob-pulse 2.6s ease-in-out infinite" }}
           >
             3
           </span>
-          <h2 className="mt-8 text-center font-brand text-[24px] font-medium">Генеруємо ваш сайт…</h2>
+          <h2 className="mt-8 text-center font-brand text-[24px] font-semibold">Генеруємо ваш сайт…</h2>
           <p className="mt-3 text-center text-[17px] leading-relaxed text-ink-muted">
             {GEN_MESSAGES[msgIndex]}
           </p>
 
-          <div className="mt-8 h-2.5 w-full overflow-hidden rounded-full bg-brand-soft">
+          <div className="mt-8 h-2.5 w-full overflow-hidden rounded-full bg-sunken">
             <div
-              className="relative h-2.5 overflow-hidden rounded-full bg-brand transition-all duration-1000 ease-out"
+              className="relative h-2.5 overflow-hidden rounded-full bg-honey transition-all duration-1000 ease-out"
               style={{ width: `${barPct}%` }}
             >
               {/* Perpetual shimmer — the bar must never look frozen, even
                   while its width sits still between step ticks. */}
               <span
-                className="absolute inset-y-0 left-0 w-1/3 bg-white/40"
+                className="absolute inset-y-0 left-0 w-1/3 bg-white/50"
                 style={{ animation: "ob-shimmer 1.6s ease-in-out infinite" }}
                 aria-hidden
               />
@@ -1437,15 +1497,15 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       <div className={`relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 ${rootBase}`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <Confetti />
-        <div className="flex w-full max-w-md flex-col items-center text-center">
-          <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-honey-soft text-honey-text">
+        <div className="animate-rise flex w-full max-w-md flex-col items-center text-center">
+          <div className="animate-pop flex h-[72px] w-[72px] items-center justify-center rounded-full bg-honey text-honey-text shadow-[0_18px_40px_-14px_rgba(51,41,28,0.4)]">
             <PartyPopper size={34} />
           </div>
           <h2 className="mt-6 font-brand text-[26px] font-semibold">Ваш сайт готовий!</h2>
           <p className="mt-2.5 text-[17px] text-ink-muted">Він уже працює за адресою:</p>
 
           <Card className="mt-5 flex w-full flex-col gap-3.5 p-5">
-            <span className="break-all text-center text-[18px] font-extrabold text-brand">
+            <span className="break-all text-center font-brand text-[18px] font-semibold text-ink">
               {displayUrl}
             </span>
             <div className="flex gap-2.5">
@@ -1453,13 +1513,13 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
                 href={siteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex h-[54px] flex-[1.3] items-center justify-center rounded-[16px] bg-brand text-[16px] font-bold text-white transition-colors hover:bg-brand-hover"
+                className="flex h-[54px] flex-[1.3] items-center justify-center rounded-[16px] bg-brand text-[16px] font-bold text-white shadow-[0_8px_22px_rgba(51,41,28,0.2)] transition-colors hover:bg-brand-hover"
               >
                 Відкрити сайт ↗
               </a>
               <button
                 onClick={copyUrl}
-                className="flex h-[54px] flex-1 items-center justify-center rounded-[16px] border-[1.5px] border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
+                className="flex h-[54px] flex-1 items-center justify-center rounded-[16px] border border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
               >
                 {copied ? "Скопійовано ✓" : "Копіювати"}
               </button>
@@ -1470,7 +1530,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
             Перегляньте сайт — фото й зображення можна замінити в редакторі.
           </p>
 
-          <div className="mt-3.5 flex w-full items-center gap-3.5 rounded-[18px] border-[1.5px] border-line bg-surface px-5 py-4 text-left">
+          <div className="mt-3.5 flex w-full items-center gap-3.5 rounded-[20px] border border-line bg-surface px-5 py-4 text-left shadow-card">
             <TelegramMark />
             <div className="min-w-0 flex-1">
               <div className="text-[16px] font-extrabold text-ink">Наступний крок — Telegram</div>
@@ -1491,9 +1551,9 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
             {editHost && (
               <Link
                 href={`/edit/${editHost}`}
-                className="flex h-[54px] w-full items-center justify-center rounded-[16px] border-[1.5px] border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
+                className="flex h-[54px] w-full items-center justify-center gap-2 rounded-[16px] border border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
               >
-                ✏️ Редагувати сайт
+                <Pencil size={17} /> Редагувати сайт
               </Link>
             )}
             <Link
@@ -1515,12 +1575,12 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   return (
     <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 ${rootBase}`}>
       <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
-      <div className="flex w-full max-w-md flex-col items-center text-center">
+      <div className="animate-rise flex w-full max-w-md flex-col items-center text-center">
         <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-danger-soft text-danger">
           <CircleAlert size={34} />
         </div>
         <h2 className="mt-6 font-brand text-[24px] font-semibold">Щось пішло не так</h2>
-        <p className="mt-4 rounded-[14px] bg-danger-soft px-5 py-4 text-[15px] font-semibold leading-relaxed text-danger">
+        <p className="mt-4 w-full rounded-[16px] bg-danger-soft px-5 py-4 text-[15px] font-semibold leading-relaxed text-danger">
           {errorMsg}
         </p>
         <Button size="lg" className="mt-6" onClick={() => void (draft ? handlePublish() : runGenerate())}>
@@ -1543,51 +1603,90 @@ function renderBold(text: string): ReactNode[] {
     .map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
 }
 
-function ChatBubble({ msg }: { msg: ChatMsg }) {
+// Honey mark that fronts every assistant turn (bubble, typing, tool card) —
+// the reference's assistant avatar. `busy` swaps in a spinning ring.
+function AgentAvatar({ busy = false }: { busy?: boolean }) {
+  return (
+    <span
+      className="relative mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-honey text-honey-text"
+      aria-hidden
+    >
+      <Sparkles size={16} />
+      {busy && (
+        <span className="absolute inset-[-3px] animate-spin rounded-full border-2 border-honey border-t-transparent" />
+      )}
+    </span>
+  );
+}
+
+function ChatBubble({ msg, streaming = false }: { msg: ChatMsg; streaming?: boolean }) {
   const isUser = msg.role === "user";
   const atts = msg.attachments ?? [];
+  // SSE chunks land bursty; the smoothing hook types them out evenly.
+  const shown = useSmoothText(msg.content, streaming && !isUser);
   if (!msg.content && atts.length === 0) return null;
+
+  const body = (
+    <>
+      {atts.length > 0 && (
+        <div className={`flex flex-wrap gap-1.5 ${msg.content ? "mb-2.5" : ""}`}>
+          {atts.map((u, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={i} src={u} alt="" className="h-24 w-24 rounded-[14px] object-cover" />
+          ))}
+        </div>
+      )}
+      {msg.content !== "" && (
+        <p className="whitespace-pre-wrap">
+          {isUser ? msg.content : renderBold(shown)}
+          {streaming && !isUser && (
+            <span aria-hidden className="animate-blink text-honey">
+              ▍
+            </span>
+          )}
+        </p>
+      )}
+    </>
+  );
+
+  if (isUser) {
+    return (
+      <div className="flex justify-end">
+        <div className="animate-pop max-w-[85%] rounded-[22px] rounded-br-[8px] bg-brand px-[18px] py-3.5 text-[17px] leading-relaxed text-white shadow-[0_6px_16px_rgba(51,41,28,0.14)] sm:max-w-[75%]">
+          {body}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[85%] px-[18px] py-3.5 text-[17px] leading-relaxed sm:max-w-[75%] ${
-          isUser
-            ? "rounded-[20px_20px_6px_20px] bg-brand text-white"
-            : "rounded-[20px_20px_20px_6px] border-[1.5px] border-line bg-surface text-ink shadow-[0_1px_2px_rgba(23,36,47,0.04)]"
-        }`}
-      >
-        {atts.length > 0 && (
-          <div className={`flex flex-wrap gap-1.5 ${msg.content ? "mb-2.5" : ""}`}>
-            {atts.map((u, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img key={i} src={u} alt="" className="h-24 w-24 rounded-[12px] object-cover" />
-            ))}
-          </div>
-        )}
-        {msg.content !== "" && (
-          <p className="whitespace-pre-wrap">{isUser ? msg.content : renderBold(msg.content)}</p>
-        )}
+    <div className="flex items-start gap-2.5">
+      <AgentAvatar />
+      <div className="animate-rise max-w-[85%] rounded-[22px] rounded-tl-[8px] border border-line bg-surface px-[18px] py-3.5 text-[17px] leading-relaxed text-ink shadow-[0_1px_2px_rgba(51,41,28,0.05)] sm:max-w-[75%]">
+        {body}
       </div>
     </div>
   );
 }
 
-// Working indicator: a single spinning pill saying «Думаю…». Shown whenever
-// a turn is in flight and no text has streamed yet — extended thinking and
-// the plain pre-first-token wait are indistinguishable to the owner, so they
-// share one honest label instead of a misleading "writing" claim. Same chip
-// style as the live tool-status chips (04 §2), and mutually exclusive with
-// them at the call site: one "agent is working" language, never two chips.
+// Working indicator: an assistant bubble with three pulsing dots. Shown
+// whenever a turn is in flight and no text has streamed yet — extended
+// thinking and the plain pre-first-token wait are indistinguishable to the
+// owner, so the dots claim nothing about which one it is (the honest
+// «Думаю…» label survives for screen readers). Mutually exclusive with the
+// live tool card (04 §2) at the call site: never two indicators at once.
 function AgentTyping() {
   return (
-    <div className="flex flex-wrap gap-2">
-      <span className="flex items-center gap-2 rounded-full border-[1.5px] border-brand-soft bg-brand-soft px-3.5 py-2 text-[13px] font-bold text-brand">
-        <span
-          className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-brand border-t-transparent"
-          aria-hidden
-        />
-        Думаю…
-      </span>
+    <div className="flex items-start gap-2.5" role="status">
+      <AgentAvatar />
+      <div className="flex items-center gap-1.5 rounded-[22px] rounded-tl-[8px] border border-line bg-surface px-4 py-4 shadow-[0_1px_2px_rgba(51,41,28,0.05)]">
+        {/* The honest label stays for assistive tech; sighted owners read the
+            dots, which claim nothing about what the agent is doing. */}
+        <span className="sr-only">Думаю…</span>
+        <span className="h-2 w-2 animate-blink rounded-full bg-ink-faint [animation-delay:0ms]" aria-hidden />
+        <span className="h-2 w-2 animate-blink rounded-full bg-ink-faint [animation-delay:200ms]" aria-hidden />
+        <span className="h-2 w-2 animate-blink rounded-full bg-ink-faint [animation-delay:400ms]" aria-hidden />
+      </div>
     </div>
   );
 }
@@ -1604,9 +1703,11 @@ function GenStep({ state, children }: { state: "done" | "active" | "pending"; ch
       }`}
     >
       {state === "done" ? (
-        <span aria-hidden>✓</span>
+        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-ok-soft text-[11px]" aria-hidden>
+          ✓
+        </span>
       ) : state === "active" ? (
-        <span className="inline-block h-4 w-4 animate-spin rounded-full border-[2.5px] border-brand border-t-transparent" aria-hidden />
+        <span className="inline-block h-4 w-4 animate-spin rounded-full border-[2.5px] border-honey border-t-transparent" aria-hidden />
       ) : (
         <span className="inline-block h-4 w-4 rounded-full border-2 border-line-strong" aria-hidden />
       )}
@@ -1616,13 +1717,14 @@ function GenStep({ state, children }: { state: "done" | "active" | "pending"; ch
 }
 
 function Confetti() {
+  // Warm palette only: honey, deep ink, the soft-ok green — no leftover blue.
   const pieces = [
     { left: "16%", color: "#E9A23B", w: 10, h: 14, delay: 0, dur: 2.6 },
-    { left: "38%", color: "#1B5BBF", w: 8, h: 12, delay: 0.4, dur: 3.1 },
+    { left: "38%", color: "#3A3128", w: 8, h: 12, delay: 0.4, dur: 3.1 },
     { left: "58%", color: "#177E53", w: 10, h: 10, delay: 0.8, dur: 2.8, round: true },
     { left: "80%", color: "#E9A23B", w: 8, h: 13, delay: 1.2, dur: 3.4 },
-    { left: "27%", color: "#C03A32", w: 9, h: 9, delay: 1.6, dur: 3, round: true },
-    { left: "70%", color: "#1B5BBF", w: 9, h: 12, delay: 0.2, dur: 3.2 },
+    { left: "27%", color: "#F2CE86", w: 9, h: 9, delay: 1.6, dur: 3, round: true },
+    { left: "70%", color: "#3A3128", w: 9, h: 12, delay: 0.2, dur: 3.2 },
   ];
   return (
     <div className="pointer-events-none absolute inset-x-0 top-10 h-40" aria-hidden>

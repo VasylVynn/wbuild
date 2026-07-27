@@ -25,7 +25,7 @@ import InstagramCta from "@/components/blocks/InstagramCta";
  * component. The render path falls back to UnknownBlock if one is ever missing.
  */
 export const blockRegistry: Partial<{
-  [K in BlockType]: ComponentType<{ data: BlockProps[K]; skin?: string }>;
+  [K in BlockType]: ComponentType<{ data: BlockProps[K] }>;
 }> = {
   hero: Hero,
   richText: RichText,

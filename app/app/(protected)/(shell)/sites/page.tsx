@@ -4,8 +4,9 @@ import { myTenantIds } from "@/lib/tenant/membership";
 import { getVertical } from "@/lib/verticals/registry";
 import { ROOT_DOMAIN } from "@/lib/config";
 import TelegramConnect from "@/components/dashboard/TelegramConnect";
-import { Globe } from "lucide-react";
-import { Card, Chip, EmptyState } from "@/components/ui";
+import SiteCard from "@/components/dashboard/SiteCard";
+import { Globe, Plus } from "lucide-react";
+import { EmptyState } from "@/components/ui";
 
 // Always show the current list — new sites appear immediately.
 export const dynamic = "force-dynamic";
@@ -48,10 +49,8 @@ const STATUS: Record<string, { label: string; tone: "ok" | "warn" | "danger" | "
 
 // Link needs to render an <a>, so we mirror Button's look here directly
 // rather than nesting a <button> inside it (invalid HTML).
-const primaryLinkMd =
-  "inline-flex shrink-0 min-h-[40px] items-center justify-center gap-2 rounded-[12px] bg-brand px-4 font-ui text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover";
-const secondaryLinkSm =
-  "inline-flex flex-1 min-h-[36px] items-center justify-center gap-2 rounded-[12px] border-[1.5px] border-line-strong bg-surface px-3.5 font-ui text-[14px] font-semibold text-ink transition-colors hover:bg-sunken";
+const primaryPill =
+  "inline-flex shrink-0 min-h-[44px] items-center justify-center gap-2 rounded-full bg-brand px-5 font-ui text-[15px] font-semibold text-white transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-honey-deep focus-visible:ring-offset-2";
 
 export default async function SitesPage() {
   const sites = await listSites();
@@ -60,14 +59,19 @@ export default async function SitesPage() {
   const urlFor = (host: string) => `${isProd ? "https" : "http"}://${host}${isProd ? "" : port}`;
 
   return (
-    <div>
+    <div className="flex flex-col gap-6">
       {/* Binds sites created anonymously before the user registered (§3.1). */}
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <h1 className="font-brand text-[24px] font-medium text-ink">
-          Мої сайти <span className="text-ink-faint">({sites.length})</span>
-        </h1>
-        <Link href="/new" className={primaryLinkMd}>
-          + Створити сайт
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="font-brand text-[26px] font-semibold leading-tight tracking-tight text-ink sm:text-[30px]">
+            Мої сайти <span className="text-ink-faint">({sites.length})</span>
+          </h1>
+          <p className="mt-1.5 text-[15px] leading-relaxed text-ink-muted">
+            Редагуйте вміст і підключайте Telegram, щоб заявки приходили миттєво.
+          </p>
+        </div>
+        <Link href="/new" className={primaryPill}>
+          <Plus size={16} /> Створити сайт
         </Link>
       </div>
 
@@ -75,43 +79,28 @@ export default async function SitesPage() {
         <EmptyState icon={<Globe size={20} />} title="Ще немає сайтів">
           Створіть перший у простій розмові з помічником — це займе близько трьох хвилин.
           <div className="mt-4">
-            <Link href="/new" className={`${primaryLinkMd} w-full sm:w-auto`}>
-              Створити сайт
+            <Link href="/new" className={`${primaryPill} w-full sm:w-auto`}>
+              <Plus size={16} /> Створити сайт
             </Link>
           </div>
         </EmptyState>
       ) : (
-        <ul className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {sites.map((s) => {
             const status = STATUS[s.status] ?? STATUS.demo;
-            const name = s.brand?.businessName || s.host;
+            const name = s.brand?.businessName || s.host!;
             return (
               <li key={s.id}>
-                <Card className="flex h-full flex-col gap-3 p-5 transition-shadow hover:shadow-lg">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <span className="truncate text-[17px] font-bold text-ink">{name}</span>
-                    <Chip tone={status.tone}>{status.label}</Chip>
-                  </div>
-                  <div className="truncate text-[14px] font-semibold text-ink-muted">
-                    {s.host} · {getVertical(s.vertical).label}
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <Link href={`/edit/${encodeURIComponent(s.host!)}`} className={secondaryLinkSm}>
-                      Редагувати
-                    </Link>
-                    <a
-                      href={urlFor(s.host!)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={secondaryLinkSm}
-                    >
-                      Відкрити ↗
-                    </a>
-                  </div>
-                  <div className="mt-auto">
-                    <TelegramConnect tenantId={s.id} connected={!!s.telegram_chat_id} />
-                  </div>
-                </Card>
+                <SiteCard
+                  name={name}
+                  host={s.host!}
+                  url={urlFor(s.host!)}
+                  editHref={`/edit/${encodeURIComponent(s.host!)}`}
+                  statusLabel={status.label}
+                  statusTone={status.tone}
+                  verticalLabel={getVertical(s.vertical).label}
+                  footer={<TelegramConnect tenantId={s.id} connected={!!s.telegram_chat_id} />}
+                />
               </li>
             );
           })}

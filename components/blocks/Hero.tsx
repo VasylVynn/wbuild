@@ -2,13 +2,9 @@ import type { BlockProps } from "@/lib/blocks/schema";
 /* eslint-disable @next/next/no-img-element -- tenant photos are plain <img> by design (§4.8 storage URLs, no next/image loader) */
 
 /**
- * Hero — five Design-DNA wave 2 archetypes: STRUCTURALLY distinct shapes, each
- * with an honest no-photo state (a LIGHT, CSS-only decor composition — accent/
- * muted mesh + dot-grid — never a flat band and never a fabricated image).
- *
- * The six legacy "primary band" skins ("" classic, split, minimal, photo,
- * gradient, mesh) were removed per owner order 2026-07-20 (DNA-2c): the DB was
- * wiped, there is no production data, and those band looks are unsupported.
+ * Hero — five archetypes: STRUCTURALLY distinct shapes, each with an honest
+ * no-photo state (a LIGHT, CSS-only decor composition — accent/muted mesh +
+ * dot-grid — never a flat band and never a fabricated image).
  *
  *  - "photo-scrim"  full-bleed photo, bottom-up scrim, content bottom-LEFT in
  *                   light text. No photo → light decor bg, dark bottom-left copy.

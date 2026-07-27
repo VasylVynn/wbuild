@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Sparkles, Send, Check, CircleAlert, X, Paperclip } from "lucide-react";
 import type { StoredBlock } from "@/lib/blocks/schema";
-import type { Theme } from "@/lib/theme/tokens";
 import { getEditorChatHistory } from "@/app/app/(protected)/edit/chat-actions";
+import { useSmoothText } from "@/components/useSmoothText";
 
 /**
  * Editor-agent chat panel (P3, upgraded by refactor 03/04): the owner talks to
@@ -27,7 +27,7 @@ type StreamEvent =
   | { t: "d"; text: string }
   | { t: "tool"; label: string }
   | { t: "tooldone"; summary: string; ok: boolean }
-  | { t: "final"; message: string; actions: string[]; blocksChanged: boolean; blocks: StoredBlock[]; theme: Theme }
+  | { t: "final"; message: string; actions: string[]; blocksChanged: boolean; blocks: StoredBlock[] }
   | { t: "error"; message: string }
   | { t: "refusal"; message: string };
 
@@ -81,6 +81,22 @@ function renderBold(text: string): ReactNode[] {
     .map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
 }
 
+/** Assistant bubble text: smooths the bursty SSE deltas into an even typing
+ * flow and shows a blinking caret while the turn is still streaming. */
+function AssistantText({ content, streaming }: { content: string; streaming: boolean }) {
+  const shown = useSmoothText(content, streaming);
+  return (
+    <>
+      {renderBold(shown)}
+      {streaming && (
+        <span aria-hidden className="animate-blink text-honey">
+          ▍
+        </span>
+      )}
+    </>
+  );
+}
+
 export default function EditorChat({
   host,
   getSnapshot,
@@ -92,7 +108,7 @@ export default function EditorChat({
   /** Current blocks BEFORE the turn — the undo point. */
   getSnapshot: () => StoredBlock[];
   /** Fresh state after the agent changed the draft. */
-  onApply: (blocks: StoredBlock[], theme: Theme) => void;
+  onApply: (blocks: StoredBlock[]) => void;
   /** Snapshot the shell can restore via «Скасувати». */
   onUndoAvailable: (snapshot: StoredBlock[]) => void;
   onClose: () => void;
@@ -108,12 +124,38 @@ export default function EditorChat({
   const [uploadingPhotos, setUploadingPhotos] = useState(0);
   const [actingLabel, setActingLabel] = useState("Вношу зміни…");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const busyPaintRef = useRef(false);
 
+  // Scroll the CHAT LIST only — scrollIntoView drags every scrollable ancestor
+  // (the whole editor pane) along with it. Own sends always jump; otherwise
+  // leave the owner alone if they scrolled up to read.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = listRef.current;
+    if (!el) return;
+    const last = items[items.length - 1];
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 300;
+    if (nearBottom || (last && last.kind === "msg" && last.role === "user")) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [items, stage]);
+
+  // While a reply streams the bubble grows every frame — keep the list pinned
+  // to the bottom, releasing as soon as the owner scrolls up.
+  useEffect(() => {
+    if (!busy) return;
+    const el = listRef.current;
+    if (!el) return;
+    let raf = 0;
+    const tick = () => {
+      if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+        el.scrollTop = el.scrollHeight;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [busy]);
 
   // Memory: transcript survives reloads (editor_chats).
   useEffect(() => {
@@ -258,7 +300,7 @@ export default function EditorChat({
         });
         if (final.blocksChanged) {
           onUndoAvailable(snapshot);
-          onApply(final.blocks, final.theme);
+          onApply(final.blocks);
         }
       }
     } catch {
@@ -279,13 +321,13 @@ export default function EditorChat({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between border-b border-sunken px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-honey-soft text-honey-text">
-            <Sparkles size={15} />
+      <div className="flex shrink-0 items-center justify-between border-b border-line bg-surface px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-honey text-honey-text">
+            <Sparkles size={16} />
           </span>
           <div className="leading-tight">
-            <div className="text-[14px] font-bold text-ink">Помічник сайту</div>
+            <div className="font-brand text-[14px] font-medium text-ink">Помічник сайту</div>
             <div className="text-[11px] font-semibold text-ink-faint">
               редактор · маркетолог · SEO
             </div>
@@ -301,11 +343,11 @@ export default function EditorChat({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={listRef} className="no-scrollbar flex-1 overflow-y-auto bg-canvas px-4 py-4">
         <div className="flex flex-col gap-3">
           {items.length === 0 && (
             <div className="flex flex-col gap-2.5">
-              <p className="text-[13px] leading-relaxed text-ink-muted">
+              <p className="rounded-2xl rounded-bl-md border border-line bg-surface px-3.5 py-2.5 text-[13.5px] leading-relaxed text-ink">
                 Я памʼятаю нашу розмову при створенні сайту і бачу всі секції. Попросіть змінити
                 текст, прибрати чи додати секцію, переставити блоки — або спитайте поради.
               </p>
@@ -314,7 +356,7 @@ export default function EditorChat({
                   key={s}
                   type="button"
                   onClick={() => void send(s)}
-                  className="rounded-[12px] border border-line bg-surface px-3 py-2 text-left text-[13px] font-semibold text-ink-muted transition-colors hover:border-brand hover:text-brand"
+                  className="rounded-full border border-line bg-surface px-3.5 py-2 text-left text-[13px] font-semibold text-ink-muted transition-colors hover:border-honey hover:bg-honey-soft hover:text-honey-text"
                 >
                   {s}
                 </button>
@@ -326,7 +368,7 @@ export default function EditorChat({
             it.kind === "action" ? (
               <div
                 key={i}
-                className={`flex items-center gap-2 self-start rounded-full px-3 py-1.5 text-[12px] font-semibold ${
+                className={`animate-pop flex items-center gap-2 self-start rounded-full px-3 py-1.5 text-[12px] font-semibold ${
                   it.ok ? "bg-ok-soft text-ok" : "bg-danger-soft text-danger"
                 }`}
               >
@@ -342,19 +384,26 @@ export default function EditorChat({
                   <div className="flex flex-wrap justify-end gap-1.5">
                     {it.photos.map((src) => (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img key={src} src={src} alt="" className="h-14 w-14 rounded-[10px] object-cover" />
+                      <img key={src} src={src} alt="" className="h-14 w-14 rounded-[12px] object-cover" />
                     ))}
                   </div>
                 )}
                 {it.content && (
                   <p
-                    className={`max-w-[92%] whitespace-pre-wrap rounded-[14px] px-3.5 py-2.5 text-[13.5px] leading-relaxed ${
+                    className={`animate-rise max-w-[92%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[13.5px] leading-relaxed ${
                       it.role === "user"
-                        ? "bg-brand text-white"
-                        : "border border-line bg-surface text-ink"
+                        ? "rounded-br-md bg-brand text-white"
+                        : "rounded-bl-md border border-line bg-surface text-ink"
                     }`}
                   >
-                    {it.role === "user" ? it.content : renderBold(it.content)}
+                    {it.role === "user" ? (
+                      it.content
+                    ) : (
+                      <AssistantText
+                        content={it.content}
+                        streaming={busy && stage === "typing" && i === items.length - 1}
+                      />
+                    )}
                   </p>
                 )}
               </div>
@@ -362,12 +411,12 @@ export default function EditorChat({
           )}
 
           {busy && stage !== "typing" && (
-            <div className="flex items-center gap-2 self-start rounded-[14px] border border-line bg-surface px-3.5 py-2.5 text-[13px] font-semibold text-ink-muted">
+            <div className="flex items-center gap-2 self-start rounded-2xl rounded-bl-md border border-line bg-surface px-3.5 py-2.5 text-[13px] font-semibold text-ink-muted">
               <span className="flex gap-1">
-                {[0, 0.15, 0.3].map((d) => (
+                {[0, 0.2, 0.4].map((d) => (
                   <span
                     key={d}
-                    className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-faint"
+                    className="h-1.5 w-1.5 animate-blink rounded-full bg-honey"
                     style={{ animationDelay: `${d}s` }}
                   />
                 ))}
@@ -375,15 +424,14 @@ export default function EditorChat({
               {stage === "acting" ? actingLabel : "Думаю…"}
             </div>
           )}
-          <div ref={endRef} />
         </div>
       </div>
 
-      <div className="border-t border-sunken p-3">
+      <div className="shrink-0 border-t border-line bg-surface p-3">
         {(pendingPhotos.length > 0 || uploadingPhotos > 0) && (
           <div className="mb-2 flex flex-wrap gap-1.5">
             {pendingPhotos.map((src) => (
-              <div key={src} className="group relative h-12 w-12 overflow-hidden rounded-[10px] border border-line">
+              <div key={src} className="group relative h-12 w-12 overflow-hidden rounded-[12px] border border-line">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={src} alt="" className="h-full w-full object-cover" />
                 <button
@@ -397,13 +445,13 @@ export default function EditorChat({
               </div>
             ))}
             {uploadingPhotos > 0 && (
-              <div className="flex h-12 w-12 items-center justify-center rounded-[10px] border border-dashed border-line-strong">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-brand" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-[12px] border border-dashed border-line-strong">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-honey" />
               </div>
             )}
           </div>
         )}
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-1 rounded-[26px] border border-line-strong bg-canvas p-1 transition-colors focus-within:border-honey-deep focus-within:ring-2 focus-within:ring-honey/25">
           <input
             ref={fileInputRef}
             type="file"
@@ -421,7 +469,7 @@ export default function EditorChat({
             disabled={busy || pendingPhotos.length >= MAX_ATTACH}
             aria-label="Прикріпити фото"
             title="Прикріпити фото"
-            className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[12px] border border-line-strong text-ink-faint transition-colors hover:border-brand hover:text-brand disabled:opacity-45"
+            className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full text-ink-faint transition-colors hover:bg-sunken hover:text-ink disabled:opacity-45"
           >
             <Paperclip size={16} />
           </button>
@@ -437,14 +485,14 @@ export default function EditorChat({
             rows={2}
             disabled={busy}
             placeholder="Напр.: додай секцію з відгуками…"
-            className="min-h-[44px] flex-1 resize-none rounded-[12px] border border-line-strong bg-surface px-3 py-2.5 text-[13.5px] text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand-soft disabled:opacity-50"
+            className="min-h-[44px] flex-1 resize-none bg-transparent px-1 py-2.5 text-[13.5px] leading-relaxed text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
           />
           <button
             type="button"
             onClick={() => void send(input)}
             disabled={busy || (!input.trim() && pendingPhotos.length === 0)}
             aria-label="Надіслати"
-            className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[12px] bg-brand text-white transition-colors hover:bg-brand-hover disabled:opacity-45"
+            className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full bg-brand text-white transition-colors hover:bg-brand-hover disabled:opacity-45"
           >
             <Send size={16} />
           </button>

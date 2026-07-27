@@ -45,7 +45,6 @@ export const verticals: Record<string, VerticalConfig> = {
       "Порадь вказати кілька послуг (напр. авторські букети, доставка квітів, весільна флористика, оформлення подій) з орієнтовними цінами, години роботи та спосіб замовлення (телефон/Instagram). Якщо клієнт не знає, що вказати — просто запропонуй типове для квіткарні й спитай, що з цього він робить.",
     fields: { ...baseFields, services: { label: "Послуги (напр. букети, доставка)", fact: true } },
     priceRange: { min: 50, max: 15000 },
-    themePresetIds: ["rose-classic", "sage-minimal", "burgundy-elegant", "peach-soft"],
     exampleServices: ["Авторський букет", "Доставка квітів", "Весільна флористика", "Оформлення подій"],
     imagePrompts: [
       heroPrompt("extreme macro of soft rose and peony petals with dewy bokeh, delicate pastel botanicals"),
@@ -62,7 +61,6 @@ export const verticals: Record<string, VerticalConfig> = {
       "Порадь вказати асортимент або меню з цінами (напр. торти на замовлення, тістечка, хліб), можливість замовлення тортів під подію, доставку та години роботи. Якщо не знає — запропонуй типове для пекарні й уточни, що саме він випікає.",
     fields: { ...baseFields, services: { label: "Меню / асортимент з цінами", fact: true } },
     priceRange: { min: 20, max: 5000 },
-    themePresetIds: ["warm-bakery", "peach-soft", "rose-classic"],
     exampleServices: ["Торти на замовлення", "Тістечка", "Свіжий хліб", "Кава з собою"],
     imagePrompts: [
       heroPrompt("warm flour-dust light drifting over rustic wheat stalks and golden grain textures"),
@@ -79,7 +77,6 @@ export const verticals: Record<string, VerticalConfig> = {
       "Юристи різні — СПЕРШУ уточни спеціалізацію (сімейне, кримінальне, корпоративне право, нерухомість, нотаріальні послуги тощо), бо від цього залежить весь сайт. Порадь винести: напрямки послуг, орієнтовну вартість консультації, як записатися на консультацію, роки практики чи досвід. Веди просто, без канцеляриту.",
     fields: { ...baseFields, services: { label: "Напрямки послуг (з орієнтовними цінами)", fact: true } },
     priceRange: { min: 200, max: 100000 },
-    themePresetIds: ["slate-professional", "navy-trust"],
     exampleServices: ["Консультація", "Складання договорів", "Супровід угод", "Представництво в суді"],
     imagePrompts: [
       heroPrompt("calm abstract architectural light falling across clean stone columns and paper textures"),
@@ -96,7 +93,6 @@ export const verticals: Record<string, VerticalConfig> = {
       "Порадь вказати перелік послуг (напр. діагностика, ремонт двигуна, шиномонтаж, заміна масла) з орієнтовними цінами, як записатися (подзвонити або лишити номер — передзвонимо), години роботи та адресу з орієнтиром. Якщо не знає — запропонуй типове для СТО й уточни, на чому він спеціалізується.",
     fields: { ...baseFields, services: { label: "Послуги (напр. діагностика, ремонт)", fact: true } },
     priceRange: { min: 100, max: 50000 },
-    themePresetIds: ["bold-slate", "slate-professional"],
     exampleServices: ["Комп'ютерна діагностика", "Заміна масла", "Шиномонтаж", "Ремонт ходової"],
     imagePrompts: [
       heroPrompt("dark metallic bokeh with faint silhouettes of tools receding into shadow, brushed-steel highlights"),
@@ -114,7 +110,6 @@ export const verticals: Record<string, VerticalConfig> = {
       "Порадь вказати послуги (напр. комплексний грумінг, стрижка, купання, тримінг, гігієнічні процедури) з орієнтовними цінами за розміром/породою, для кого працює (собаки, коти), як записатися та адресу. Якщо не знає — запропонуй типове для грумінг-салону й уточни, з якими тваринами працює.",
     fields: { ...baseFields, services: { label: "Послуги (напр. стрижка, купання)", fact: true } },
     priceRange: { min: 100, max: 10000 },
-    themePresetIds: ["peach-soft", "sage-minimal", "lavender-provence", "honey-mustard"],
     exampleServices: ["Комплексний грумінг", "Гігієнічна стрижка", "Купання та сушка", "Тримінг"],
     imagePrompts: [
       heroPrompt("soft pastel towels and gentle foam bubbles in warm cozy light, fluffy textures"),
@@ -131,7 +126,6 @@ export const verticals: Record<string, VerticalConfig> = {
       "СПЕРШУ з'ясуй, ЯКИЙ це бізнес і що він пропонує. Далі порадь вказати перелік послуг або товарів з орієнтовними цінами, контакти, години роботи та як замовити чи звернутися. Веди дуже просто, як консультант, що допомагає людині, яка не знає, що писати на сайті.",
     fields: baseFields,
     priceRange: { min: 20, max: 100000 },
-    themePresetIds: ["emerald-fresh", "slate-professional", "navy-trust"],
     exampleServices: ["Основна послуга", "Додаткова послуга", "Консультація"],
     imagePrompts: [
       heroPrompt("soft brand-colored abstract gradient with gentle flowing light and subtle grain texture"),

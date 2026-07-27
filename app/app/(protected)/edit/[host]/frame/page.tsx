@@ -1,13 +1,9 @@
-import type { CSSProperties } from "react";
 import { notFound } from "next/navigation";
 import { getEditorData } from "@/app/app/(protected)/edit/actions";
 import { getTemplate } from "@/lib/templates/registry";
 import { buildTemplateBrand } from "@/lib/templates/brand";
-import { themeToCssVars } from "@/lib/theme/tokens";
-import { TENANT_FONT_CLASSES } from "@/lib/theme/fonts";
-import { resolveFontPair } from "@/lib/theme/font-pairs";
+import { TENANT_FONT_CLASSES } from "@/lib/fonts";
 import { PageRenderer } from "@/components/PageRenderer";
-import { DecorLayer } from "@/components/site/DecorLayer";
 
 /**
  * Device-preview frame (P2): renders the DRAFT exactly like the published site
@@ -33,44 +29,24 @@ export default async function EditorFramePage({
   const data = await getEditorData(decodeURIComponent(host));
   if (!data) notFound();
 
+  // A draft whose generation never produced a design has nothing to render as
+  // a site — the editor's own empty state covers that case.
   const template = getTemplate(data.templateId);
-  if (template) {
-    // DNA-2b: mirror the public shell — the rolled pair reaches the template
-    // font indirections; absent pair leaves the template untouched.
-    const pair = resolveFontPair((data.theme as { fontPairId?: string }).fontPairId);
-    return (
-      <div
-        className={TENANT_FONT_CLASSES}
-        {...(pair && {
-          "data-dna-pair": pair.id,
-          style: { "--font-heading": pair.heading, "--font-body": pair.body } as CSSProperties,
-        })}
-      >
-        <PageRenderer
-          blocks={data.blocks}
-          templateId={data.templateId}
-          brand={buildTemplateBrand(data.businessName, data.blocks, template, data.displayLogoUrl, (data.theme as { dna?: { templateTheme?: string } }).dna?.templateTheme)}
-        />
-      </div>
-    );
-  }
+  if (!template) notFound();
 
   return (
-    <div
-      className={TENANT_FONT_CLASSES}
-      style={{
-        ...themeToCssVars(data.theme),
-        backgroundColor: "var(--color-background)",
-        color: "var(--color-foreground)",
-        fontFamily: "var(--font-body)",
-        minHeight: "100vh",
-        // Stacking context: decor (z-index:-1) above the background, below content.
-        position: "relative",
-        isolation: "isolate",
-      }}
-    >
-      <DecorLayer decorId={(data.theme as { dna?: { decorId?: string } }).dna?.decorId} />
-      <PageRenderer blocks={data.blocks} />
+    <div className={TENANT_FONT_CLASSES}>
+      <PageRenderer
+        blocks={data.blocks}
+        templateId={data.templateId}
+        brand={buildTemplateBrand(
+          data.businessName,
+          data.blocks,
+          template,
+          data.displayLogoUrl,
+          data.wireCss,
+        )}
+      />
     </div>
   );
 }

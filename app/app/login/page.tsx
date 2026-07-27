@@ -3,41 +3,67 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Check, MailCheck } from "lucide-react";
+import { Check, Lock, Mail, MailCheck, Sparkles } from "lucide-react";
 import { signInAction, signUpAction } from "./actions";
-import { Button, Field, Input, Wordmark } from "@/components/ui";
+import { Button, Field, Input } from "@/components/ui";
+import { Logo } from "@/components/landing/Logo";
+import { TelegramCard } from "@/components/landing/TelegramCard";
 
 /**
  * Auth page for the dashboard host (public path /login). One screen, two modes
- * («Увійти» / «Зареєструватися»), split-panel on desktop (brand left, form
+ * («Увійти» / «Зареєструватися»), split-panel on desktop (form left, brand
  * right). Plain-language errors. On success the server action redirects to
  * /sites (or ?next=, when present and same-origin); here we only surface
  * errors and the "confirm your email" state.
  */
 type Mode = "signin" | "signup";
 
+/* «На головну» must leave the app host for the marketing root — a bare "/" on
+   app.* just bounces a logged-out visitor back to this login page. */
+const HOME_HREF = process.env.NEXT_PUBLIC_ROOT_DOMAIN
+  ? `//${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`
+  : "/";
+
+const promises = [
+  "Сайт створюється за коротку розмову з помічником",
+  "Кожна заявка з сайту миттєво падає в месенджер",
+  "Редагується дотиком — без конструкторів і налаштувань",
+];
+
 function BrandPanel() {
   return (
-    <div className="hidden flex-col justify-center gap-8 bg-brand px-12 py-16 text-white lg:flex xl:px-20">
-      <span className="select-none font-brand text-[24px] font-semibold tracking-tight">
-        <span className="text-honey">3</span>minsite
-      </span>
-      <h2 className="max-w-md font-brand text-[32px] font-semibold leading-tight">
-        Клієнти з інтернету — прямо у ваш Telegram
-      </h2>
-      <ul className="flex max-w-md flex-col gap-3 text-[16px] text-brand-soft">
-        {[
-          "Сайт створюється за коротку розмову з помічником",
-          "Кожна заявка з сайту миттєво падає в месенджер",
-          "Редагується дотиком — без конструкторів і налаштувань",
-        ].map((line) => (
-          <li key={line} className="flex items-start gap-3">
-            <Check size={18} className="mt-0.5 shrink-0 text-honey" />
-            <span>{line}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <aside className="relative hidden overflow-hidden bg-brand text-white lg:flex lg:w-1/2">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-24 top-1/3 h-96 w-96 rounded-full opacity-40 blur-3xl"
+        style={{ background: "radial-gradient(circle, var(--color-honey) 0%, transparent 70%)" }}
+      />
+      <div className="relative flex flex-col justify-between gap-10 p-12 xl:p-16">
+        <span className="inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3.5 py-1.5 text-[12px] font-semibold text-honey">
+          <Sparkles size={14} /> 3minsite для вашої справи
+        </span>
+
+        <div>
+          <h2 className="max-w-md text-balance font-brand text-[32px] font-semibold leading-tight tracking-tight">
+            Клієнти з інтернету — прямо у ваш Telegram
+          </h2>
+          <ul className="mt-8 flex max-w-md flex-col gap-3 text-[16px] text-white/75">
+            {promises.map((line) => (
+              <li key={line} className="flex items-start gap-3">
+                <Check size={18} className="mt-0.5 shrink-0 text-honey" />
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="animate-ui-float mt-10 max-w-sm">
+            <TelegramCard />
+          </div>
+        </div>
+
+        <p className="text-[14px] text-white/50">Без карток і без технічних знань.</p>
+      </div>
+    </aside>
   );
 }
 
@@ -98,15 +124,21 @@ function LoginForm() {
   if (confirmSent) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 bg-canvas px-6 py-16 text-center">
-        <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-honey-soft text-honey-text">
+        <div className="animate-pop flex h-[72px] w-[72px] items-center justify-center rounded-full bg-honey-soft text-honey-text">
           <MailCheck size={32} />
         </div>
-        <h1 className="mt-6 font-brand text-[24px] font-medium text-ink">Перевірте пошту</h1>
-        <p className="text-[17px] leading-relaxed text-ink-muted">
+        <h1 className="animate-rise mt-6 font-brand text-[26px] font-semibold text-ink">
+          Перевірте пошту
+        </h1>
+        <p className="animate-rise text-[17px] leading-relaxed text-ink-muted">
           Ми надіслали лист для підтвердження на <b className="text-ink">{email}</b>. Відкрийте його й
           натисніть на посилання — і зможете увійти.
         </p>
-        <Button variant="secondary" onClick={() => switchMode("signin")} className="mt-6">
+        <Button
+          variant="secondary"
+          onClick={() => switchMode("signin")}
+          className="mt-6 rounded-full"
+        >
           Повернутися до входу
         </Button>
       </main>
@@ -114,93 +146,118 @@ function LoginForm() {
   }
 
   return (
-    <main className="min-h-screen bg-canvas lg:grid lg:grid-cols-2">
-      <BrandPanel />
-      <div className="flex min-h-screen flex-col justify-center px-6 py-16">
-        <div className="mx-auto flex w-full max-w-md flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <Link href="/" className="text-[14px] font-semibold text-ink-muted transition-colors hover:text-ink">
-          ← На головну
-        </Link>
-        <Wordmark />
-      </div>
+    <main className="flex min-h-screen bg-canvas">
+      <div className="flex w-full flex-col px-5 py-6 sm:px-10 lg:w-1/2">
+        <Logo href={HOME_HREF} />
 
-      <div className="flex rounded-full bg-sunken p-[5px]">
-        <button
-          type="button"
-          onClick={() => switchMode("signin")}
-          className={`flex-1 rounded-full py-3 text-[16px] font-bold transition-colors ${
-            !isSignup ? "bg-surface text-ink shadow-card" : "text-ink-muted"
-          }`}
-        >
-          Увійти
-        </button>
-        <button
-          type="button"
-          onClick={() => switchMode("signup")}
-          className={`flex-1 rounded-full py-3 text-[16px] font-bold transition-colors ${
-            isSignup ? "bg-surface text-ink shadow-card" : "text-ink-muted"
-          }`}
-        >
-          Зареєструватися
-        </button>
-      </div>
+        <div className="flex flex-1 items-center justify-center py-10">
+          <div className="w-full max-w-sm">
+            <div className="animate-rise">
+              <h1 className="text-balance font-brand text-[28px] font-semibold tracking-tight text-ink">
+                {isSignup ? "Створіть акаунт" : "З поверненням"}
+              </h1>
+              <p className="mt-2 text-[15px] text-ink-muted">
+                {isSignup
+                  ? "Кілька секунд — і почнемо збирати ваш сайт."
+                  : "Увійдіть, щоб керувати сайтами та заявками."}
+              </p>
+            </div>
 
-      <div>
-        <h1 className="font-brand text-[24px] font-medium text-ink">
-          {isSignup ? "Реєстрація" : "Вхід"}
-        </h1>
-        <p className="mt-2 text-[16px] text-ink-muted">
-          {isSignup
-            ? "Створіть обліковий запис, щоб керувати своїми сайтами."
-            : "Раді вас бачити знову!"}
-        </p>
-      </div>
+            <div className="animate-rise mt-6 grid grid-cols-2 gap-1 rounded-full bg-sunken p-1">
+              <button
+                type="button"
+                onClick={() => switchMode("signin")}
+                className={`rounded-full py-2.5 text-[15px] font-semibold transition-all ${
+                  !isSignup ? "bg-surface text-ink shadow-card" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                Вхід
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMode("signup")}
+                className={`rounded-full py-2.5 text-[15px] font-semibold transition-all ${
+                  isSignup ? "bg-surface text-ink shadow-card" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                Реєстрація
+              </button>
+            </div>
 
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-        <Field label="Електронна пошта">
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="ваш@email.com"
-            autoComplete="email"
-            required
-          />
-        </Field>
+            <form onSubmit={handleSubmit} noValidate className="animate-rise mt-6 flex flex-col gap-4">
+              <Field label="Електронна пошта">
+                <div className="relative">
+                  <Mail
+                    aria-hidden
+                    size={16}
+                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+                  />
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="ваш@email.com"
+                    autoComplete="email"
+                    required
+                    className="pl-10"
+                  />
+                </div>
+              </Field>
 
-        <Field label="Пароль">
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder={isSignup ? "Мінімум 6 символів" : "Ваш пароль"}
-            autoComplete={isSignup ? "new-password" : "current-password"}
-            required
-          />
-        </Field>
+              <Field label="Пароль">
+                <div className="relative">
+                  <Lock
+                    aria-hidden
+                    size={16}
+                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
+                  />
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={isSignup ? "Мінімум 6 символів" : "Ваш пароль"}
+                    autoComplete={isSignup ? "new-password" : "current-password"}
+                    required
+                    className="pl-10"
+                  />
+                </div>
+              </Field>
 
-        {!isSignup && (
-          <Link
-            href="/reset"
-            className="-mt-1 self-end text-[14px] font-semibold text-brand transition-colors hover:text-brand-hover"
-          >
-            Забули пароль?
-          </Link>
-        )}
+              {!isSignup && (
+                <Link
+                  href="/reset"
+                  className="-mt-1 self-end text-[14px] font-semibold text-ink-muted transition-colors hover:text-ink"
+                >
+                  Забули пароль?
+                </Link>
+              )}
 
-        {error && (
-          <p className="rounded-[14px] bg-danger-soft px-4 py-3.5 text-[15px] font-semibold text-danger">
-            {error}
-          </p>
-        )}
+              {error && (
+                <p className="rounded-2xl bg-danger-soft px-4 py-3.5 text-[15px] font-semibold text-danger">
+                  {error}
+                </p>
+              )}
 
-        <Button type="submit" disabled={loading} className="mt-2 w-full">
-          {loading ? "Зачекайте…" : isSignup ? "Зареєструватися" : "Увійти"}
-        </Button>
-      </form>
+              <Button type="submit" size="lg" disabled={loading} className="mt-2 w-full rounded-full">
+                {loading ? "Зачекайте…" : isSignup ? "Зареєструватися" : "Увійти"}
+              </Button>
+            </form>
+
+            <p className="mt-6 text-center text-[13px] text-ink-faint">
+              Продовжуючи, ви погоджуєтесь з умовами використання та політикою конфіденційності.
+            </p>
+          </div>
         </div>
+
+        <a
+          href={HOME_HREF}
+          className="text-[14px] font-semibold text-ink-muted transition-colors hover:text-ink"
+        >
+          ← На головну
+        </a>
       </div>
+
+      <BrandPanel />
     </main>
   );
 }

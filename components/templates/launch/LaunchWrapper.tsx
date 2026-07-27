@@ -43,15 +43,10 @@ export default function LaunchWrapper({
   children: ReactNode;
   brand?: TemplateBrand;
 }) {
-  // Default identity is DARK; an explicit light dnaTheme opts out.
-  const [theme, setTheme] = useState<Theme>(
-    brand?.dnaTheme === "light" ? "light" : "dark",
-  );
+  const [theme, setTheme] = useState<Theme>("dark");
 
-  const dnaTheme: Theme | undefined =
-    brand?.dnaTheme === "dark" || brand?.dnaTheme === "light" ? brand.dnaTheme : undefined;
   useEffect(() => {
-    let next: Theme = dnaTheme ?? "dark";
+    let next: Theme = "dark";
     try {
       const param = new URLSearchParams(window.location.search).get("theme");
       const stored = window.localStorage.getItem(STORE_KEY);
@@ -61,7 +56,7 @@ export default function LaunchWrapper({
       /* ignore */
     }
     setTheme(next);
-  }, [dnaTheme]);
+  }, []);
 
   const toggle = () =>
     setTheme((t) => {

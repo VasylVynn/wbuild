@@ -43,10 +43,9 @@ type GeminiResponse = { candidates?: { content?: { parts?: GeminiPart[] } }[] };
 export async function generateSiteImages(opts: {
   verticalId?: string;
   subject?: string;
-  palette?: { primary: string; background: string };
   galleryCount: number;
 }): Promise<{ hero: string | null; gallery: string[] }> {
-  const { verticalId, subject, palette, galleryCount } = opts;
+  const { verticalId, subject, galleryCount } = opts;
   // Distinct composition twists keep N images from one subject visually varied.
   const twists = [
     "extreme close-up detail, macro texture",
@@ -62,8 +61,8 @@ export async function generateSiteImages(opts: {
   );
 
   const [hero, ...gallery] = await Promise.all([
-    generateHeroImage({ verticalId, subject, palette }),
-    ...gallerySubjects.map((s) => generateHeroImage({ verticalId, subject: s, palette })),
+    generateHeroImage({ verticalId, subject }),
+    ...gallerySubjects.map((s) => generateHeroImage({ verticalId, subject: s })),
   ]);
   return { hero, gallery: gallery.filter((u): u is string => Boolean(u)) };
 }
@@ -72,8 +71,6 @@ export async function generateHeroImage(opts: {
   verticalId?: string;
   /** Model-proposed atmospheric subject for THIS business (English, sanitized here). */
   subject?: string;
-  /** Site theme colors — keeps the image from clashing with the chosen palette. */
-  palette?: { primary: string; background: string };
 }): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -85,14 +82,10 @@ export async function generateHeroImage(opts: {
   // are appended IN CODE, so bounds never depend on the subject's wording.
   const subject = opts.subject?.replace(/[\n\r"«»]/g, " ").trim().slice(0, 140);
   const fallbacks = getVertical(opts.verticalId).imagePrompts;
-  let prompt = subject
+  const prompt = subject
     ? `${subject}, ${HERO_PROMPT_SUFFIX}`
     : fallbacks[Math.floor(Math.random() * fallbacks.length)];
   if (!prompt) return null;
-  if (opts.palette) {
-    prompt += `, color palette inspired by ${opts.palette.primary} and ${opts.palette.background}`;
-  }
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {

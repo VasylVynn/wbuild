@@ -13,7 +13,7 @@ import { useEffect, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAtt
 // ── Button ───────────────────────────────────────────────────────────────────
 type BtnVariant = "primary" | "secondary" | "quiet" | "telegram" | "danger";
 const btnBase =
-  "inline-flex items-center justify-center gap-2 rounded-[14px] font-ui font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2";
+  "inline-flex items-center justify-center gap-2 rounded-[14px] font-ui font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-honey-deep focus-visible:ring-offset-2";
 const btnVariants: Record<BtnVariant, string> = {
   primary: "bg-brand text-white hover:bg-brand-hover",
   secondary: "bg-surface text-ink border-[1.5px] border-line-strong hover:bg-sunken",
@@ -37,7 +37,7 @@ export function Button({
 
 // ── Fields ───────────────────────────────────────────────────────────────────
 const fieldBase =
-  "w-full rounded-[12px] border bg-surface px-3.5 py-2.5 text-[16px] text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand-soft focus:border-brand transition-shadow";
+  "w-full rounded-[12px] border bg-surface px-3.5 py-2.5 text-[16px] text-ink placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-honey-soft focus:border-honey-deep transition-shadow";
 const fieldBorder = (error?: boolean) => (error ? "border-danger bg-danger-soft/30" : "border-line-strong");
 
 export function Field({ label, error, children }: { label?: string; error?: string; children: ReactNode }) {

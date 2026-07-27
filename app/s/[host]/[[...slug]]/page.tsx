@@ -5,7 +5,6 @@ import { getCachedPublishedPage } from "@/lib/cache";
 import { PageRenderer } from "@/components/PageRenderer";
 import { getTemplate, type TemplateBrand } from "@/lib/templates/registry";
 import { buildTemplateBrand } from "@/lib/templates/brand";
-import { displayLogoUrl } from "@/lib/tenant/types";
 import {
   canonicalUrl,
   faviconDataUri,
@@ -59,13 +58,10 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     // A large card only earns its space when we actually have an image (§10.3).
     twitter: { card: image ? "summary_large_image" : "summary" },
     // Per-tenant favicon inlined as a data: URI — no per-site asset infra.
-    icons: {
-      icon: faviconDataUri(
-        businessName,
-        tenant.theme.colors.primary,
-        tenant.theme.colors.primaryForeground,
-      ),
-    },
+    // The site's palette lives inside a model-written stylesheet, not in
+    // parsed tokens — so the favicon uses the neutral mark rather than
+    // regex-mining a colour out of CSS.
+    icons: { icon: faviconDataUri(businessName) },
     // §10.4 — keep demo/draft/suspended tenants out of the index; the main
     // scaled-content-abuse safeguard. Only a published tenant is indexable.
     robots: tenant.status === "published" ? undefined : { index: false, follow: false },
@@ -89,11 +85,11 @@ export default async function TenantPage({ params }: { params: Params }) {
     jsonLd = localBusinessJsonLd(tenant, firstImageFromBlocks(page.blocks), page.seo);
   }
 
-  // Feed the template chrome (Nav/Footer) the REAL business identity: the name
-  // (its last word becomes the two-tone accent), a nav built from the sections
-  // actually on the page, and the "leave a request" CTA target. Absent for
-  // pack/legacy sites → the shell renders their own header/footer instead.
-  const templateId = tenant?.brand.templateId;
+  // Feed the site chrome (Nav/Footer) the REAL business identity: the name, a
+  // nav built from the sections actually on the page, and the "leave a request"
+  // CTA target. Both the wireframe id and its stylesheet come from the PUBLISHED
+  // content they belong to, so regenerating a draft cannot restyle the live site.
+  const templateId = page.templateId;
   const template = templateId ? getTemplate(templateId) : undefined;
   let brand: TemplateBrand | undefined;
   if (template && tenant) {
@@ -101,8 +97,8 @@ export default async function TenantPage({ params }: { params: Params }) {
       tenant.brand.businessName ?? "",
       page.blocks,
       template,
-      displayLogoUrl(tenant.brand),
-      tenant.theme.dna?.templateTheme,
+      tenant.brand.logoUrl,
+      page.wireCss,
     );
   }
 

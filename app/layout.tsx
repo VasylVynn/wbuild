@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Manrope, Unbounded } from "next/font/google";
 import "./globals.css";
@@ -14,6 +14,11 @@ const unbounded = Unbounded({
   weight: ["500", "600"],
   variable: "--font-unbounded",
 });
+
+export const viewport: Viewport = {
+  colorScheme: "light",
+  themeColor: "#f7f0e0",
+};
 
 export const metadata: Metadata = {
   title: "3minsite — клієнти з інтернету, прямо у ваш Telegram",

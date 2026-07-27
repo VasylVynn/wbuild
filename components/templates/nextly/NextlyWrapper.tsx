@@ -32,14 +32,10 @@ export default function NextlyWrapper({
   children: ReactNode;
   brand?: TemplateBrand;
 }) {
-  // DNA-2c: the seeded site theme is the default; ?theme= and the visitor's
-  // stored toggle still win (same pattern as SalonWrapper).
-  const dnaTheme: Theme | undefined =
-    brand?.dnaTheme === "dark" || brand?.dnaTheme === "light" ? brand.dnaTheme : undefined;
-  const [theme, setTheme] = useState<Theme>(dnaTheme ?? "light");
+  const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
-    let next: Theme = dnaTheme ?? "light";
+    let next: Theme = "light";
     try {
       const param = new URLSearchParams(window.location.search).get("theme");
       const stored = window.localStorage.getItem(STORE_KEY);
@@ -49,7 +45,7 @@ export default function NextlyWrapper({
       /* ignore */
     }
     setTheme(next);
-  }, [dnaTheme]);
+  }, []);
 
   const toggle = () =>
     setTheme((t) => {

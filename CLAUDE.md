@@ -35,8 +35,8 @@ No test suite yet (only `lint`). `dev`/`build` use **Turbopack**.
 ## Architecture
 
 **One Next.js 15 app (App Router, React 19) serves the platform AND every tenant site.**
-A tenant is a **DB row, never a deploy**. Data-driven render: content is data (`{blocks, theme}`),
-not pre-generated HTML.
+A tenant is a **DB row, never a deploy**. Data-driven render: content is data
+(`{blocks, templateId, wireCss}`), not pre-generated HTML.
 
 - `middleware.ts` splits by `Host` header only: platform hosts (root, `app.`) pass through;
   every other host is a tenant → rewritten to `/s/<host>/<path>` (internal namespace
@@ -47,11 +47,12 @@ not pre-generated HTML.
 - `app/api/onboard` and `app/api/editor-chat` are **SSE** (`text/event-stream`) agent streams.
   `/api/leads` (lead funnel), `/api/upload` (photos → Storage), `/api/telegram/webhook`,
   `/api/events` (analytics beacon). `/api/dev/*` are local-only helpers.
-- **Content states:** `pages.draft_content` vs `pages.published_content`; theme versioned at
-  tenant level (`draft_theme` / `published_theme`). Public render reads **published only**;
-  editor reads/writes **draft only**.
+- **Content states:** `pages.draft_content` vs `pages.published_content` — both carry the
+  blocks AND the design (`templateId` + `wireCss`), so a draft regeneration can never change
+  the live site. Public render reads **published only**; editor reads/writes **draft only**.
+  There is no tenant-level theme: migration `0008` dropped `draft_theme`/`published_theme`.
 - **Edge cache:** per-tenant tags (`tenant:{host}`, `page:{host}:{slug}`) via `lib/cache.ts`.
-  Draft-only content/theme saves must NOT purge. `revalidateTenant` is legitimately called by
+  Draft-only saves must NOT purge. `revalidateTenant` is legitimately called by
   anything that changes the LIVE site: Publish, unversioned `brand` changes (logo), admin
   suspend/restore, admin test-generation. Never `revalidatePath` with a dynamic `[host]`
   segment — it nukes every tenant.
@@ -77,13 +78,20 @@ not pre-generated HTML.
    User-confirmed facts (`tenants.facts`) are the source of truth; marketing wrapper copy may be
    generated, but requisites are copied 1:1 and post-validated by string comparison.
 6. **Publish is human-only:** AI agents write to DRAFT; only the owner clicks «Опублікувати».
-7. **`lead_form` is force-injected by code** before `contacts` in every generated site — not a
+7. **Design is a generated stylesheet, not a choice.** Every site is composed against the ONE
+   wireframe (`components/templates/salonwire`, `lib/design/wire-style.ts` writes its CSS).
+   No template picking, no palette presets, no per-block skins, no design DNA — all deleted
+   2026-07-27. `wire.css` owns layout/responsiveness; the generated sheet owns surface only.
+   The single seeded axis is a hue anchor from `brand.designNonce` (`lib/design/seed.ts`).
+   The eleven old templates stay in `components/templates/**` + `legacyTemplates` as porting
+   source material — never generated into, never named to a model.
+8. **`lead_form` is force-injected by code** before `contacts` in every generated site — not a
    model choice. `/api/leads` resolves tenant from the `Host` header (never the body); the lead
    is always persisted, Telegram push is best-effort.
 
 ## Ownership zones — a PARALLEL agent may be editing these
 
-`components/templates/**`, `lib/blocks/skins.ts`, `lib/templates/**`, and the tenant-site visual
+`components/templates/**`, `lib/templates/**`, and the tenant-site visual
 layer are frequently worked by a **concurrent session**. **Run `git status` before touching them**
 and coordinate rather than collide. (These often show uncommitted changes at session start.)
 

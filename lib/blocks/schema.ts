@@ -324,7 +324,7 @@ export type BlockProps = {
 };
 
 // Section id of the source TEMPLATE this block was composed from (§templates).
-// Absent on pack/legacy sites — the renderer then keys on the block type. Shared
+// Absent → the renderer keys on the block type instead. Shared
 // by the model-emitted instance AND the stored placement so it round-trips.
 // Exported for lib/ai/generate's GENERATION variant of the union (photo casting
 // by id) so the two unions can never drift on these shared fields.
@@ -368,12 +368,6 @@ export const blockInstanceSchema = z.discriminatedUnion("type", [
 ]);
 export type BlockInstance = z.infer<typeof blockInstanceSchema>;
 
-/** Strict page content — used at GENERATION time to reject invalid AI output. */
-export const pageContentSchema = z.object({
-  blocks: z.array(blockInstanceSchema).min(1),
-});
-export type PageContent = z.infer<typeof pageContentSchema>;
-
 // ---------------------------------------------------------------------------
 // Placement — site structure, edited via hide/show + reorder (§3), NOT
 // generated as content. Nav is a projection of these fields (§5.3).
@@ -383,16 +377,12 @@ export const blockPlacementSchema = z.object({
   navLabel: z.string().optional(), // "Послуги"
   showInNav: z.boolean().default(false),
   hidden: z.boolean().default(false), // hide/show the whole section (§3)
-  // Presentation variant («скін») — layout-only, never content. Absent = default.
-  // Mutually exclusive with `section`: template sites carry `section`, pack sites
-  // carry `skin`.
-  skin: z.string().optional(),
-  // Template section this block belongs to (see blockInstanceSchema). Absent on
-  // pack/legacy sites — the renderer then keys on the block type.
+  // Wireframe section this block fills (see blockInstanceSchema); absent → the
+  // renderer keys on the block type.
   section: sectionField,
-  // Alternate LAYOUT of the section (template sites only): the MODEL chooses it
-  // per section; code validates it against the section and the renderer falls
-  // back to the default component when absent/unknown. Presentation-only, like skin.
+  // Alternate LAYOUT of that section: the MODEL chooses it per section; code
+  // validates it against the section and the renderer falls back to the default
+  // component when absent/unknown. Presentation-only, never content.
   variant: z
     .string()
     .optional()

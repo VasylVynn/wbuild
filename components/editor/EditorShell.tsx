@@ -2,31 +2,26 @@
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import Link from "next/link";
-import { Palette, ImageIcon, RefreshCw, Monitor, Tablet, Smartphone, Sparkles, Undo2 } from "lucide-react";
+import { ArrowLeft, ImageIcon, RefreshCw, Monitor, Tablet, Smartphone, Sparkles, Undo2 } from "lucide-react";
 import {
   saveDraftBlocks,
-  switchTheme,
   regenerateSite,
   publishSite,
   customRequestAction,
   type EditorData,
 } from "@/app/app/(protected)/edit/actions";
-import { switchDesignPack } from "@/app/app/(protected)/edit/design-actions";
 import { publicSiteUrl } from "@/lib/config";
 import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-actions";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
 import { getTemplate, type SiteTemplate, type TemplateBrand } from "@/lib/templates/registry";
 import type { StoredBlock } from "@/lib/blocks/schema";
-import { themeToCssVars, type Theme } from "@/lib/theme/tokens";
 import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/components/ui";
 import EditableSection from "./EditableSection";
 import BlockSheet from "./BlockSheet";
 import BlockEditPanel from "./BlockEditPanel";
 import EditorChat from "./EditorChat";
 import PhotoField from "./PhotoField";
-import LogoDisplayPanel from "./LogoDisplayPanel";
-import ThemePicker from "./ThemePicker";
 
 /** Device modes: «Компʼютер» edits inline; tablet/mobile render the draft in an
  * iframe whose width IS the simulated viewport (frame route), read-only. */
@@ -49,7 +44,7 @@ function useIsDesktop(): boolean {
 /**
  * The site EDITOR (§3): the owner sees their DRAFT rendered with the live theme,
  * taps a section to edit its fields, reorders/hides sections, swaps the design
- * preset, regenerates from facts, and publishes. The chrome is the calm neutral
+ * regenerates from facts, and publishes. The chrome is the calm neutral
  * «Небо і мед» product system (paper + blue) wrapped around the framed themed
  * preview so the two never clash; everything is Ukrainian and tuned for a
  * non-technical 50+ owner (big tap targets, plain wording).
@@ -65,11 +60,11 @@ const STATUS_LABELS: Record<string, string> = {
 const statusTone = (s: string): "ok" | "warn" | "neutral" =>
   s === "published" ? "ok" : s === "draft" ? "warn" : "neutral";
 
-// Render one block. On a TEMPLATE site, mirror PageRenderer: render through the
-// template's own section component (honouring the block's `variant`), keyed by
-// `section` and gated on the section actually accepting this block type — so the
-// editor preview matches the published site. Otherwise (pack/legacy sites) use
-// the shared registry with the block's skin. Props were validated on save.
+// Render one block, mirroring PageRenderer: through the wireframe's own section
+// component (honouring the block's `variant`), keyed by `section` and gated on
+// the section actually accepting this block type — so the editor preview matches
+// the published site. A block the wireframe has no section for falls back to the
+// shared registry component. Props were validated on save.
 function BlockView({ block, template }: { block: StoredBlock; template?: SiteTemplate }) {
   if (template) {
     const def = template.sections[block.section ?? block.type];
@@ -81,11 +76,8 @@ function BlockView({ block, template }: { block: StoredBlock; template?: SiteTem
       return <S data={block.props} />;
     }
   }
-  const Comp = blockRegistry[block.type] as unknown as ComponentType<{
-    data: unknown;
-    skin?: string;
-  }>;
-  return <Comp data={block.props} skin={block.skin} />;
+  const Comp = blockRegistry[block.type] as unknown as ComponentType<{ data: unknown }>;
+  return <Comp data={block.props} />;
 }
 
 type Toast = { text: string; href?: string };
@@ -93,7 +85,7 @@ type Toast = { text: string; href?: string };
 /** Immutably patch a stored block (props and/or hidden), keeping its type. */
 function patchBlock(
   block: StoredBlock,
-  patch: Partial<{ props: unknown; hidden: boolean; skin: string }>,
+  patch: Partial<{ props: unknown; hidden: boolean }>,
 ): StoredBlock {
   return { ...block, ...patch } as unknown as StoredBlock;
 }
@@ -101,14 +93,11 @@ function patchBlock(
 export default function EditorShell({ initial }: { initial: EditorData }) {
   const { host } = initial;
   const [blocks, setBlocks] = useState<StoredBlock[]>(initial.blocks);
-  const [theme, setTheme] = useState<Theme>(initial.theme);
-  const [packId, setPackId] = useState<string | undefined>(initial.packId);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [themeOpen, setThemeOpen] = useState(false);
   const [regenConfirmOpen, setRegenConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [busyLabel, setBusyLabel] = useState<string | null>(null); // theme / regenerate
+  const [busyLabel, setBusyLabel] = useState<string | null>(null); // regenerate
   const [dirty, setDirty] = useState(false); // unpublished draft changes
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,49 +171,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     void persist(next);
   };
 
-  // Switch a block's layout skin (content untouched); mirrors hide/reorder —
-  // update local state and persist to the draft, no save button needed.
-  const handleSkinChange = (index: number, skin: string) => {
-    const next = blocks.map((b, i) => (i === index ? patchBlock(b, { skin }) : b));
-    setBlocks(next);
-    setDirty(true);
-    void persist(next);
-  };
 
-  const pickTheme = async (id: string) => {
-    setBusyLabel("theme");
-    const res = await switchTheme(host, id);
-    setBusyLabel(null);
-    if (res.ok && res.theme) {
-      setTheme(res.theme);
-      setDirty(true);
-      setThemeOpen(false);
-      setFrameVersion((v) => v + 1);
-      notify({ text: "Оформлення змінено" });
-    } else {
-      notify({ text: `Не вдалося змінити оформлення: ${res.error ?? "помилка"}` });
-    }
-  };
-
-  // Switch a whole design pack — theme AND every section's skin at once. Like
-  // pickTheme this persists the draft server-side, so we mirror its after-effects
-  // (dirty flag, close the sheet, toast) and also swap the previewed blocks.
-  const pickPack = async (id: string) => {
-    setBusyLabel("theme");
-    const res = await switchDesignPack(host, id);
-    setBusyLabel(null);
-    if (res.ok && res.theme && res.blocks) {
-      setTheme(res.theme);
-      setBlocks(res.blocks);
-      setPackId(id);
-      setDirty(true);
-      setThemeOpen(false);
-      setFrameVersion((v) => v + 1);
-      notify({ text: "Дизайн змінено" });
-    } else {
-      notify({ text: `Не вдалося змінити дизайн: ${res.error ?? "помилка"}` });
-    }
-  };
 
   // Rebuild the site from the owner's facts. Gated behind a confirm dialog; the
   // current draft is kept server-side, so nothing is lost (§5.5).
@@ -235,7 +182,6 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     setRegenConfirmOpen(false);
     if (res.ok && res.blocks) {
       setBlocks(res.blocks);
-      if (res.theme) setTheme(res.theme);
       setDirty(true);
       setFrameVersion((v) => v + 1);
       notify({ text: "Сайт зібрано наново" });
@@ -321,9 +267,8 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
 
   // The agent mutated the draft server-side → adopt its state locally and give
   // the owner one-click undo to the pre-turn snapshot.
-  const applyAgentResult = (nextBlocks: StoredBlock[], nextTheme: Theme) => {
+  const applyAgentResult = (nextBlocks: StoredBlock[]) => {
     setBlocks(nextBlocks);
-    setTheme(nextTheme);
     setDirty(true);
     setFrameVersion((v) => v + 1);
     setSelectedIndex(null);
@@ -343,7 +288,6 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
 
   const statusLabel = STATUS_LABELS[initial.status] ?? STATUS_LABELS.draft;
   const regenerating = busyLabel === "regenerate";
-  const themeBusy = busyLabel === "theme";
   const selected = selectedIndex != null ? blocks[selectedIndex] : null;
 
   const chatPanel = chatOpen ? (
@@ -356,16 +300,9 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     />
   ) : null;
 
-  const previewStyle = {
-    ...themeToCssVars(theme),
-    backgroundColor: "var(--color-background)",
-    color: "var(--color-foreground)",
-    fontFamily: "var(--font-body)",
-  };
-
-  // Template sites render inside the template's OWN wrapper (its palette/fonts +
-  // Nav/Footer), each section through its template component — matching the
-  // published site. Pack/legacy sites keep the theme-vars framed preview.
+  // The preview renders inside the wireframe's OWN wrapper (Nav/Footer + the
+  // generated stylesheet), each section through its wireframe component —
+  // matching the published site.
   const template = getTemplate(initial.templateId);
   const TemplateWrapper = template?.wrapper;
   // Feed the template chrome (Nav/Footer) the REAL business identity — same rule
@@ -417,19 +354,19 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   return (
     <div className="min-h-screen bg-sunken font-ui text-ink">
       {/* Top bar — business + status, then design / regenerate / publish actions. */}
-      <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
             <Link
               href="/sites"
-              className="flex shrink-0 items-center gap-1 text-[15px] font-bold text-ink-muted transition-colors hover:text-ink"
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-canvas px-3 py-1.5 text-[14px] font-semibold text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
             >
-              <span aria-hidden>←</span>
+              <ArrowLeft size={15} aria-hidden />
               <span className="hidden sm:inline">Сайти</span>
             </Link>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="truncate text-[17px] font-extrabold text-ink sm:text-[19px]">
+                <span className="truncate font-brand text-[17px] font-medium tracking-tight text-ink sm:text-[19px]">
                   {initial.businessName}
                 </span>
                 <Chip tone={statusTone(initial.status)} className="shrink-0">
@@ -437,18 +374,27 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
                   {statusLabel}
                 </Chip>
               </div>
-              <div className="truncate text-[13px] font-semibold text-ink-faint">
-                {host}
-                {dirty && <span className="ml-2 text-warn">• є неопубліковані зміни</span>}
+              <div className="flex min-w-0 items-center gap-2 text-[13px] font-semibold text-ink-faint">
+                <span className="truncate">{host}</span>
+                {dirty && (
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-honey-soft px-2 py-0.5 text-[12px] font-bold text-honey-text">
+                    <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-honey" />
+                    <span className="hidden sm:inline">є неопубліковані зміни</span>
+                    <span className="sm:hidden">не опубліковано</span>
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+            {/* Toggle, not a CTA — «Опублікувати» stays the only filled button in
+                the bar; an open panel is marked with an ink ring. */}
             <Button
-              variant={chatOpen ? "primary" : "secondary"}
+              variant="secondary"
               size="sm"
-              className="shrink-0"
+              aria-pressed={chatOpen}
+              className={`shrink-0 ${chatOpen ? "ring-2 ring-brand" : ""}`}
               onClick={() => setChatOpen((v) => !v)}
             >
               <Sparkles size={15} /> Помічник
@@ -467,7 +413,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
             )}
             {/* Device preview toggle — desktop edits inline; tablet/mobile show
                 the draft in a real-viewport iframe (read-only). */}
-            <div className="hidden shrink-0 items-center gap-0.5 rounded-[12px] bg-sunken p-1 md:flex">
+            <div className="hidden shrink-0 items-center gap-0.5 rounded-full border border-line bg-canvas p-0.5 md:flex">
               {(
                 [
                   { id: "desktop", icon: Monitor, title: "Компʼютер — редагування" },
@@ -481,22 +427,14 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
                   title={title}
                   aria-pressed={device === id}
                   onClick={() => setDevice(id)}
-                  className={`flex h-8 w-9 items-center justify-center rounded-[9px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                    device === id ? "bg-surface text-brand shadow-card" : "text-ink-muted hover:text-ink"
+                  className={`flex h-8 w-9 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-honey-deep ${
+                    device === id ? "bg-brand text-white" : "text-ink-muted hover:text-ink"
                   }`}
                 >
                   <Icon size={16} />
                 </button>
               ))}
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="shrink-0"
-              onClick={() => setThemeOpen(true)}
-            >
-              <Palette size={15} /> Оформлення
-            </Button>
             <Button
               variant="secondary"
               size="sm"
@@ -517,11 +455,15 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
                 {regenerating ? "Збираємо…" : "Перегенерувати"}
               </span>
             </Button>
+            {/* Publish is the one filled action in the bar — the owner's decision,
+                never the agent's (§ invariant 6). Unpublished changes ring it honey. */}
             <Button
               variant="primary"
-              size="sm"
+              size="md"
               disabled={publishing}
-              className="w-full sm:w-auto"
+              className={`w-full shrink-0 sm:w-auto ${
+                dirty && !publishing ? "ring-2 ring-honey ring-offset-2 ring-offset-surface" : ""
+              }`}
               onClick={publish}
             >
               {publishing ? "Публікуємо…" : "Опублікувати"}
@@ -546,33 +488,64 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
 
         <div className="min-w-0 flex-1">
           {device === "desktop" ? (
-            <div
-              className="overflow-hidden rounded-[24px] border border-line bg-surface shadow-card"
-              // A template preview's Nav (and theme toggle) use `position: fixed`;
-              // a transform here makes this the containing block for them so they
-              // stay INSIDE the framed preview instead of floating over the editor
-              // chrome. No effect on pack/legacy previews.
-              style={TemplateWrapper ? { transform: "translateZ(0)" } : undefined}
-            >
-              {blocks.length === 0 ? (
-                <div className="px-6 py-24 text-center text-[15px] font-medium text-ink-faint">
-                  Тут поки порожньо. Натисніть «Перегенерувати», щоб зібрати сайт із ваших даних.
-                </div>
-              ) : TemplateWrapper ? (
-                <TemplateWrapper brand={brand}>{sectionEls}</TemplateWrapper>
-              ) : (
-                <div style={previewStyle}>{sectionEls}</div>
-              )}
+            /* Browser-chrome frame: the draft always reads as «your site», never
+               as part of the editor chrome around it. */
+            <div className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+              <div className="flex items-center gap-3 border-b border-line bg-canvas px-4 py-2.5">
+                <span aria-hidden className="flex shrink-0 gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-line-strong" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-line-strong" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-line-strong" />
+                </span>
+                <span className="mx-auto max-w-[70%] truncate rounded-full bg-sunken px-3 py-1 text-[12px] font-semibold text-ink-faint">
+                  {host}
+                </span>
+                <span aria-hidden className="w-[42px] shrink-0" />
+              </div>
+              <div
+                // The preview's Nav uses `position: fixed`; a transform here makes
+                // this the containing block for it so it stays INSIDE the framed
+                // preview instead of floating over the editor chrome.
+                style={TemplateWrapper ? { transform: "translateZ(0)" } : undefined}
+              >
+                {blocks.length === 0 ? (
+                  <div className="flex flex-col items-center gap-3 px-6 py-24 text-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-honey-soft text-honey-text">
+                      <Sparkles size={20} />
+                    </span>
+                    <p className="max-w-sm text-[15px] font-medium text-ink-muted">
+                      Тут поки порожньо. Натисніть «Перегенерувати», щоб зібрати сайт із ваших
+                      даних.
+                    </p>
+                  </div>
+                ) : TemplateWrapper ? (
+                  <TemplateWrapper brand={brand}>{sectionEls}</TemplateWrapper>
+                ) : (
+                  <>{sectionEls}</>
+                )}
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3">
-              <iframe
-                key={`${device}-${frameVersion}`}
-                src={`/edit/${encodeURIComponent(host)}/frame`}
-                title="Перегляд сайту"
-                style={{ width: DEVICE_WIDTH[device], maxWidth: "100%" }}
-                className="h-[calc(100vh-220px)] min-h-[480px] rounded-[24px] border border-line bg-white shadow-card"
-              />
+              {/* Device bezel — the iframe keeps its exact simulated width; the
+                  frame is drawn around it. */}
+              <div
+                className={`max-w-full overflow-hidden bg-ink shadow-card ${
+                  device === "mobile"
+                    ? "rounded-[2.75rem] border-[10px] border-ink"
+                    : "rounded-[2rem] border-[12px] border-ink"
+                }`}
+              >
+                <iframe
+                  key={`${device}-${frameVersion}`}
+                  src={`/edit/${encodeURIComponent(host)}/frame`}
+                  title="Перегляд сайту"
+                  style={{ width: DEVICE_WIDTH[device], maxWidth: "100%" }}
+                  className={`block h-[calc(100vh-220px)] min-h-[480px] bg-white ${
+                    device === "mobile" ? "rounded-[2rem]" : "rounded-[1.25rem]"
+                  }`}
+                />
+              </div>
               <p className="text-[13px] font-semibold text-ink-faint">
                 Перегляд {device === "tablet" ? "планшета" : "телефона"} — редагування в режимі
                 «Компʼютер».
@@ -580,7 +553,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
             </div>
           )}
           {device === "desktop" && (
-            <p className="mx-auto mt-4 max-w-md text-center text-[14px] font-semibold text-ink-faint">
+            <p className="mx-auto mt-4 max-w-md text-center text-[14px] font-medium leading-relaxed text-ink-muted">
               Натисніть на будь-яку секцію, щоб змінити текст або фото. Зміни зберігаються в
               чернетку — натисніть «Опублікувати», щоб вони зʼявились на сайті.
             </p>
@@ -607,10 +580,10 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           slides in on section click, no permanent right column. No backdrop, so
           clicking another section switches the drawer to it. */}
       {isDesktop && selected && selectedIndex != null && (
-        <div className="fixed inset-y-0 right-0 z-40 flex w-[400px] flex-col border-l border-line bg-surface shadow-[-16px_0_48px_rgba(23,36,47,.2)]">
-          <div className="flex items-center justify-between border-b border-sunken px-5 py-3.5">
+        <div className="fixed inset-y-0 right-0 z-40 flex w-[400px] flex-col rounded-l-sheet border-l border-line bg-surface shadow-[-16px_0_48px_rgba(51,41,28,.14)]">
+          <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
             <div>
-              <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink-faint">
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-honey-text">
                 Редагування секції
               </div>
               <div className="font-brand text-[17px] font-medium text-ink">
@@ -632,7 +605,6 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
             host={host}
             saving={saving}
             onSave={(props) => void handleSaveBlock(selectedIndex, props)}
-            onSkinChange={(skin) => handleSkinChange(selectedIndex, skin)}
             onClose={() => setSelectedIndex(null)}
           />
         </div>
@@ -646,22 +618,10 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           host={host}
           saving={saving}
           onSave={(props) => void handleSaveBlock(selectedIndex, props)}
-          onSkinChange={(skin) => handleSkinChange(selectedIndex, skin)}
           onClose={() => setSelectedIndex(null)}
         />
       )}
 
-      {themeOpen && (
-        <ThemePicker
-          options={initial.themeOptions}
-          currentTheme={theme}
-          currentPackId={packId}
-          pending={themeBusy}
-          onPick={(id) => void pickTheme(id)}
-          onPickPack={(id) => void pickPack(id)}
-          onClose={() => setThemeOpen(false)}
-        />
-      )}
 
       <Sheet open={customOpen} onClose={closeCustomSheet} title="Кастомні зміни">
         <p className="mb-4 text-[15px] leading-relaxed text-ink-muted">
@@ -713,7 +673,6 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           onChange={(url) => void saveLogo(url)}
           onClear={() => void saveLogo(null)}
         />
-        <LogoDisplayPanel host={host} logoUrl={logoUrl} />
         {logoUrl && (
           <Button
             variant="danger"

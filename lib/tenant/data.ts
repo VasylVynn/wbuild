@@ -1,14 +1,12 @@
-import type { Tenant, Page, NavItem, PageSeo } from "./types";
-import type { Theme } from "@/lib/theme/tokens";
+import type { Tenant, Page, PageSeo } from "./types";
 import type { StoredBlock } from "@/lib/blocks/schema";
-import { seedTenants, seedPages } from "./seed";
 import { isSupabaseConfigured, getServiceClient } from "@/lib/supabase/server";
 
 /**
- * Read layer. Reads from Supabase when configured, else from the in-memory
- * seed (keeps the app running with no keys — incremental bring-up). Public
- * render reads PUBLISHED content only (brief §5.5): the resolved view exposes
- * `published_theme` / `published_content` as `theme` / `blocks`.
+ * Read layer. Public render reads PUBLISHED content only (brief §5.5) — the
+ * draft half of a page never reaches a visitor. With no Supabase keys there is
+ * nothing to read: a tenant is a DB row, so every lookup returns empty rather
+ * than a fixture, and the host 404s.
  */
 
 // ── DB row shapes (untyped `select('*')` → cast) ──────────────────────────
@@ -16,13 +14,10 @@ interface TenantRow {
   id: string;
   host: string | null;
   canonical_hostname: string | null;
-  nav_mode: "onepage" | "multipage";
   status: Tenant["status"];
   brand: Tenant["brand"];
   footer: Tenant["footer"];
   facts: Record<string, unknown>;
-  draft_theme: Theme;
-  published_theme: Theme | null;
   vertical: string;
 }
 interface PageRow {
@@ -33,8 +28,8 @@ interface PageRow {
   title: string;
   show_in_nav: boolean;
   nav_order: number;
-  draft_content: { blocks: StoredBlock[]; pocket?: StoredBlock[]; seo?: PageSeo };
-  published_content: { blocks: StoredBlock[]; seo?: PageSeo } | null;
+  draft_content: { blocks: StoredBlock[]; pocket?: StoredBlock[]; seo?: PageSeo; templateId?: string; wireCss?: string };
+  published_content: { blocks: StoredBlock[]; seo?: PageSeo; templateId?: string; wireCss?: string } | null;
   is_published: boolean;
 }
 
@@ -43,11 +38,9 @@ function mapTenant(row: TenantRow): Tenant {
     id: row.id,
     host: row.host ?? "",
     canonicalHostname: row.canonical_hostname ?? row.host ?? "",
-    navMode: row.nav_mode,
     status: row.status,
     brand: row.brand,
     footer: row.footer ?? {},
-    theme: row.published_theme ?? row.draft_theme, // public view = published
     facts: row.facts ?? {},
   };
 }
@@ -64,14 +57,18 @@ function mapPage(row: PageRow): Page {
     navOrder: row.nav_order,
     blocks: (row.published_content ?? { blocks: [] }).blocks ?? [],
     seo: row.published_content?.seo,
+    // The design travels WITH the content it was generated for (2026-07-27).
+    // Both used to live on the unversioned `brand`, which meant regenerating a
+    // draft instantly changed the LIVE site — a draft-only action must never do
+    // that (invariant 6). Same split `seo` already uses.
+    templateId: row.published_content?.templateId,
+    wireCss: row.published_content?.wireCss,
   };
 }
 
 // ── public API ────────────────────────────────────────────────────────────
 export async function getTenantByHost(host: string): Promise<Tenant | null> {
-  if (!isSupabaseConfigured()) {
-    return seedTenants.find((t) => t.host === host) ?? null;
-  }
+  if (!isSupabaseConfigured()) return null;
   const sb = getServiceClient();
   const { data, error } = await sb.from("tenants").select("*").eq("host", host).maybeSingle();
   if (error || !data) return null;
@@ -82,13 +79,7 @@ export async function getTenantByHost(host: string): Promise<Tenant | null> {
 }
 
 export async function getPublishedPage(host: string, slug: string): Promise<Page | null> {
-  if (!isSupabaseConfigured()) {
-    const tenant = seedTenants.find((t) => t.host === host);
-    if (!tenant) return null;
-    return (
-      seedPages.find((p) => p.tenantId === tenant.id && p.slug === slug && p.isPublished) ?? null
-    );
-  }
+  if (!isSupabaseConfigured()) return null;
   const tenant = await getTenantByHost(host);
   if (!tenant) return null;
   const { data, error } = await sb_pages()
@@ -101,13 +92,7 @@ export async function getPublishedPage(host: string, slug: string): Promise<Page
 }
 
 export async function getPublishedPages(host: string): Promise<Page[]> {
-  if (!isSupabaseConfigured()) {
-    const tenant = seedTenants.find((t) => t.host === host);
-    if (!tenant) return [];
-    return seedPages
-      .filter((p) => p.tenantId === tenant.id && p.isPublished)
-      .sort((a, b) => a.navOrder - b.navOrder);
-  }
+  if (!isSupabaseConfigured()) return [];
   const tenant = await getTenantByHost(host);
   if (!tenant) return [];
   const { data, error } = await sb_pages()
@@ -116,36 +101,6 @@ export async function getPublishedPages(host: string): Promise<Page[]> {
     .order("nav_order", { ascending: true });
   if (error || !data) return [];
   return (data as PageRow[]).map(mapPage);
-}
-
-/** Nav is a PROJECTION of the data, never hand-edited (§5.3). */
-export async function getNav(host: string): Promise<NavItem[]> {
-  const tenant = await getTenantByHost(host);
-  if (!tenant) return [];
-
-  if (tenant.navMode === "onepage") {
-    const home = await getPublishedPage(host, "");
-    if (!home) return [];
-    // C3: a repeated block type (services ×2) must contribute ONE nav entry —
-    // the first instance's anchor wins (template path dedups the same way in
-    // buildTemplateBrand). Identity is the anchor BASE (#services-2 → #services),
-    // not the label: two distinct blocks sharing a label must both survive.
-    const seenAnchors = new Set<string>();
-    return home.blocks
-      .filter((b) => !b.hidden && b.showInNav && b.anchor)
-      .map((b) => ({ label: b.navLabel ?? b.anchor!.replace(/^#/, ""), href: b.anchor! }))
-      .filter((item) => {
-        const key = item.href.replace(/-\d+$/, "");
-        if (seenAnchors.has(key)) return false;
-        seenAnchors.add(key);
-        return true;
-      });
-  }
-
-  const pages = await getPublishedPages(host);
-  return pages
-    .filter((p) => p.showInNav && p.slug !== "")
-    .map((p) => ({ label: p.title, href: `/${p.slug}` }));
 }
 
 // Small helper so the pages query builder is written once.

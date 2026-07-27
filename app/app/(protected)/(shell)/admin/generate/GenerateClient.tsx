@@ -124,7 +124,7 @@ export default function GenerateClient({
                 href={result.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-bold text-brand hover:underline"
+                className="font-bold text-brand underline underline-offset-2 hover:text-brand-hover"
               >
                 {result.url}
               </a>
@@ -155,7 +155,7 @@ export default function GenerateClient({
                       href={urlFor(s.host)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-bold text-brand hover:underline"
+                      className="font-bold text-brand underline underline-offset-2 hover:text-brand-hover"
                     >
                       {s.host}
                     </a>

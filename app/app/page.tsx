@@ -115,9 +115,9 @@ async function dashboardData() {
 
 // Link needs to render an <a>, so we mirror Button's look here directly.
 const primaryLink =
-  "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[14px] bg-brand px-5 font-ui text-[15px] font-semibold text-white transition-colors hover:bg-brand-hover";
+  "inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-brand px-5 font-ui text-[15px] font-semibold text-white transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-honey-deep focus-visible:ring-offset-2";
 const secondaryLink =
-  "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-surface px-5 font-ui text-[15px] font-semibold text-ink transition-colors hover:bg-sunken";
+  "inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full border-[1.5px] border-line-strong bg-surface px-5 font-ui text-[15px] font-semibold text-ink transition-colors hover:bg-sunken";
 
 export default async function Dashboard() {
   const authOn = isAuthConfigured();
@@ -127,12 +127,12 @@ export default async function Dashboard() {
   if (authOn && !user) {
     return (
       <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center gap-3 bg-canvas px-6 py-24 text-center">
-        <Wordmark className="text-[28px]" />
-        <h1 className="mt-4 text-[17px] font-normal leading-relaxed text-ink-muted">
+        <Wordmark className="text-[30px]" />
+        <h1 className="mt-4 text-balance text-[18px] font-normal leading-relaxed text-ink-muted">
           Створіть свій сайт у простій розмові з помічником — і отримуйте заявки клієнтів у
           Telegram.
         </h1>
-        <div className="mt-5 flex w-full max-w-sm flex-col gap-3">
+        <div className="mt-6 flex w-full max-w-sm flex-col gap-3">
           <Link href="/new" className={primaryLink}>
             Створити сайт
           </Link>

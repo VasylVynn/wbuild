@@ -23,7 +23,6 @@ import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limi
 import { validateFacts } from "@/lib/onboard/validate";
 import { getVertical } from "@/lib/verticals/registry";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
-import { getTemplate, templateDisplayName } from "@/lib/templates/registry";
 import {
   MAX_PHOTOS,
   MAX_PHOTO_META,
@@ -48,7 +47,7 @@ import { isApifyConfigured } from "@/lib/ig/apify";
  *
  * SSE events: {t:"think"} thinking started · {t:"tool",name,label} a tool began ·
  * {t:"d",text} text delta · {t:"final",message,facts,verticalId,ready,confirmed,
- * templateId,templateLabel,quickReplies,progress,media} · {t:"error",message}.
+ * quickReplies,progress,media} · {t:"error",message}.
  * Refusals (rate limit / over-long chat) come back as plain JSON, not a stream.
  */
 
@@ -79,7 +78,6 @@ function parseBody(body: unknown): {
   history: ChatMsg[];
   facts: Partial<BusinessFacts>;
   verticalId?: string;
-  templateId?: string;
   media: SiteMedia;
   conversationId?: string;
 } | null {
@@ -99,8 +97,6 @@ function parseBody(body: unknown): {
   const factsParsed = businessFactsSchema.partial().safeParse(b.facts ?? {});
   if (!factsParsed.success) return null;
   const verticalId = typeof b.verticalId === "string" ? b.verticalId.slice(0, 40) : undefined;
-  const templateId =
-    typeof b.templateId === "string" && getTemplate(b.templateId) ? b.templateId : undefined;
   // Uploaded media feeds the dossier's photo inventory (untrusted → sanitized).
   const media = b.media != null && mediaSchema.safeParse(b.media).success
     ? sanitizeMedia(b.media)
@@ -109,7 +105,7 @@ function parseBody(body: unknown): {
     typeof b.conversationId === "string" && b.conversationId.trim()
       ? b.conversationId.trim().slice(0, 64)
       : undefined;
-  return { history, facts: factsParsed.data, verticalId, templateId, media, conversationId };
+  return { history, facts: factsParsed.data, verticalId, media, conversationId };
 }
 
 const dedupe = (arr: string[]): string[] => [...new Set(arr)];
@@ -143,7 +139,7 @@ export async function POST(req: Request): Promise<Response> {
   }
   const parsed = parseBody(json);
   if (!parsed) return Response.json({ t: "refusal", message: "Некоректний запит." }, { status: 400 });
-  const { history, facts, verticalId, templateId, conversationId } = parsed;
+  const { history, facts, verticalId, conversationId } = parsed;
 
   if (history.length > maxChatMessages()) {
     return Response.json({
@@ -169,7 +165,6 @@ export async function POST(req: Request): Promise<Response> {
     facts,
     verticalId: getVertical(verticalId).id,
     status: "collecting",
-    templateId: getTemplate(templateId) ? templateId : undefined,
     quickReplies: [],
   };
   const apifyEnabled = isApifyConfigured();
@@ -333,7 +328,6 @@ export async function POST(req: Request): Promise<Response> {
           const system = buildOnboardSystem({
             vertical,
             facts: accum.facts,
-            templateId: accum.templateId,
             dossier,
             issues: validateFacts(accum.facts, vertical).map((i) => i.note),
             apifyEnabled,
@@ -480,7 +474,7 @@ export async function POST(req: Request): Promise<Response> {
             accum.status === "confirmed"
               ? "Чудово! Генерую чернетку сайту — за мить покажу превʼю, і ви самі вирішите, коли публікувати."
               : accum.status === "ready"
-                ? buildFactsSummary(accum.facts, templateDisplayName(accum.templateId))
+                ? buildFactsSummary(accum.facts)
                 : fallbackQuestion(accum.facts);
         }
 
@@ -491,8 +485,6 @@ export async function POST(req: Request): Promise<Response> {
           verticalId: accum.verticalId,
           ready: accum.status !== "collecting",
           confirmed: accum.status === "confirmed",
-          templateId: accum.templateId,
-          templateLabel: templateDisplayName(accum.templateId),
           quickReplies: accum.quickReplies,
           progress: computeProgress(accum.facts),
           media: {

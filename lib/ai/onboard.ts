@@ -7,13 +7,6 @@ import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema"
 import { getVertical, VERTICAL_IDS } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
 import { validateFacts } from "@/lib/onboard/validate";
-import {
-  siteTemplates,
-  templatesFor,
-  getTemplate,
-  templateDisplayName,
-  TEMPLATE_IDS,
-} from "@/lib/templates/registry";
 import { isApifyConfigured } from "@/lib/ig/apify";
 import { PHOTO_ROLES } from "@/lib/media/media";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
@@ -46,9 +39,6 @@ const saveFactsSchema = z.object({
   verticalId: z.enum(VERTICAL_IDS as [string, ...string[]]),
   factsPatch: factsPatchSchema,
   status: z.enum(["collecting", "ready", "confirmed"]),
-  // Lenient on parse (validated against the registry in applySaveFacts): a
-  // hallucinated id must not sink the whole patch — facts matter more.
-  templateId: z.string().optional(),
   quickReplies: z.array(z.string()).max(4).optional(),
 });
 
@@ -73,12 +63,6 @@ const saveFactsTool = {
         .enum(["collecting", "ready", "confirmed"])
         .describe(
           "collecting — ще збираєш; ready — зібрано достатньо (покажи резюме і спитай підтвердження); confirmed — ЛИШЕ коли власник явно підтвердив показане резюме.",
-        ),
-      templateId: z
-        .enum(TEMPLATE_IDS)
-        .optional()
-        .describe(
-          "Обраний дизайн зі списку «ДОСТУПНІ ДИЗАЙНИ». Передавай, щойно відчув характер бізнесу; інше значення — якщо передумав (діє останнє).",
         ),
       quickReplies: z
         .array(z.string())
@@ -205,7 +189,6 @@ export interface OnboardAccum {
   facts: Partial<BusinessFacts>;
   verticalId: string;
   status: OnboardStatus;
-  templateId?: string;
   quickReplies: string[];
 }
 
@@ -218,8 +201,6 @@ export function applySaveFacts(input: unknown, base: OnboardAccum): OnboardAccum
     facts: { ...base.facts, ...d.factsPatch },
     verticalId: VERTICAL_IDS.includes(d.verticalId) ? d.verticalId : base.verticalId,
     status: d.status,
-    // B2 last-wins: this turn's pick wins when it resolves in the registry.
-    templateId: getTemplate(d.templateId) ? d.templateId : base.templateId,
     quickReplies: (d.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4),
   };
 }
@@ -248,26 +229,14 @@ function fieldList(v: VerticalConfig): string {
     .join("\n");
 }
 
-/** B1: the design catalog the agent knows from the FIRST message (one-registry). */
-function buildDesignCatalog(vertical: VerticalConfig): string {
-  const affine = new Set(templatesFor(vertical.id).map((t) => t.id));
-  return Object.values(siteTemplates)
-    .map(
-      (t) =>
-        `- ${t.id} — ${t.label}: ${t.description}${affine.has(t.id) ? " (типовий вибір для цієї ніші)" : ""}`,
-    )
-    .join("\n");
-}
-
 export function buildOnboardSystem(args: {
   vertical: VerticalConfig;
   facts: Partial<BusinessFacts>;
-  templateId?: string;
   dossier: Dossier | null;
   issues: string[];
   apifyEnabled: boolean;
 }): string {
-  const { vertical, facts, templateId, dossier, issues, apifyEnabled } = args;
+  const { vertical, facts, dossier, issues, apifyEnabled } = args;
 
   const igLine = apifyEnabled
     ? "- Заглянути в Instagram бізнесу за посиланням чи нікнеймом — сам витягну опис, категорію, контакти-кандидати й фото (інструмент scrape_instagram). Можу зробити це повторно на прохання («пошукай ще раз телефон»)."
@@ -276,9 +245,7 @@ export function buildOnboardSystem(args: {
     ? "- Посилання чи нікнейм Instagram у повідомленні (або прохання «візьми з інстаграма») → ОДРАЗУ виклич scrape_instagram сам, без зайвих питань. Спершу зроби скрейп і подивись результат, тоді підсумовуй."
     : "";
 
-  const templateLine = getTemplate(templateId)
-    ? `\nПоточний обраний дизайн: ${templateId} (можеш змінити, передавши інший templateId).`
-    : "";
+
 
   const issuesBlock = issues.length
     ? `\n\nПЕРЕВІР непевні дані (МАКСИМУМ ОДНЕ мʼяке підтверджувальне питання за хід, природним відлунням):\n${issues.map((n) => `- ${n}`).join("\n")}`
@@ -305,10 +272,6 @@ ${igToolLine ? igToolLine + "\n" : ""}- Хочеш роздивитись фот
 Факти, без яких сайт не вийде (це проста розмова, НЕ анкета; список — мінімум, не стеля):
 ${fieldList(vertical)}
 
-ДОСТУПНІ ДИЗАЙНИ (ти знаєш їх з першого повідомлення):
-${buildDesignCatalog(vertical)}
-ВИБІР ДИЗАЙНУ — твоя робота як дизайнера: щойно відчув ХАРАКТЕР бізнесу, обери і передай templateId у save_facts; можеш змінити будь-якого ходу (діє останній). Скажи одним теплим реченням, який стиль обрав і чому, без термінів. Не проси дозволу — власник змінить після генерації.
-
 СКІЛЬКИ ПИТАТИ (ціль — ≤2 змістовні ходи):
 - Є Instagram: scrape_instagram → ОДНЕ структуроване резюме-підтвердження. Реквізити-кандидати з профілю/фото власник підтверджує в один тап, НЕ передруковує — це і є єдина точка підтвердження.
 - Немає Instagram: згруповані питання («назва, місто і телефон — одним повідомленням») + щонайбільше ОДНЕ поглиблювальне питання порадника → резюме.
@@ -323,7 +286,7 @@ ${buildDesignCatalog(vertical)}
 - quickReplies (чипи): до КОЖНОГО свого питання подумай, чи існують 2–4 очевидні короткі відповіді (Так/Ні, «Пропустити», типові варіанти — напр. години «Пн–Пт 9–18» / «Щодня» / «За записом», типи бізнесу). Якщо існують — ЗАВЖДИ дай їх. НЕ давай лише для справді вільних відповідей (назва бізнесу, телефон, точна адреса).
 
 ПІДСУМОК І ПІДТВЕРДЖЕННЯ (перед генерацією):
-- Ставиш status "ready" → у ЦЬОМУ Ж повідомленні надішли РЕЗЮМЕ, кожен пункт з нового рядка з жирною міткою: **Назва:**, **Місто:**, **Телефон:**, адреса, години, послуги (з цінами, якщо є), про бізнес, лого й фото (є / нема), **Дизайн:** назва стилю простими словами. Лише факти з розмови.
+- Ставиш status "ready" → у ЦЬОМУ Ж повідомленні надішли РЕЗЮМЕ, кожен пункт з нового рядка з жирною міткою: **Назва:**, **Місто:**, **Телефон:**, адреса, години, послуги (з цінами, якщо є), про бізнес, лого й фото (є / нема). Лише факти з розмови.
 - Після резюме додай: «Після генерації ви зможете змінити будь-який текст чи секцію — самі в редакторі або попросивши асистента.» Заверши питанням «Все вірно, чи щось замінити?» з quickReplies ["Все вірно, генеруємо", "Хочу виправити"].
 - Просить правку → онови факти (last-wins), надішли КОРОТКЕ оновлене резюме і знову спитай підтвердження (status лишається "ready").
 - status "confirmed" — ЛИШЕ після явної згоди з резюме («все вірно», «генеруємо», «підтверджую»). Коротко скажи: далі згенерую чернетку — ви переглянете і опублікуєте самі. ЖОДНИХ нових питань після підтвердження: відсутні необовʼязкові факти (години, адреса) власник додасть у редакторі.
@@ -334,7 +297,7 @@ ${buildDesignCatalog(vertical)}
 - НЕ вміємо: інтернет-магазин / кошик / оплату, онлайн-запис із календарем, кабінети, інтеграції (CRM, 1C), довільний дизайн чи власний код, багатосторінкові сайти.
 - Просить те, чого немає — чесно й тепло скажи, що платформа проста й недорога і цього в ній немає (не обіцяй). Додай: у редакторі є кнопка «Хочу кастомні зміни». Тексти, послуги, ціни, фото, кольори, порядок секцій — наша звичайна робота, таке НЕ відхиляй.
 
-Поточні зібрані факти (JSON): ${JSON.stringify(facts)}${templateLine}${issuesBlock}`;
+Поточні зібрані факти (JSON): ${JSON.stringify(facts)}${issuesBlock}`;
 
   const dossierBlock = dossier ? `\n\n${formatDossierForPrompt(dossier)}` : "";
   return `${staticPrompt}${dossierBlock}`;
@@ -387,10 +350,7 @@ export function fallbackQuestion(facts: Partial<BusinessFacts>): string {
  * text must never reference a summary the model didn't actually write, so this
  * renders one from the collected facts (same shape the prompt asks the model for).
  */
-export function buildFactsSummary(
-  facts: Partial<BusinessFacts>,
-  templateLabel?: string,
-): string {
+export function buildFactsSummary(facts: Partial<BusinessFacts>): string {
   const lines: string[] = ["Ось короткий підсумок:"];
   if (facts.businessName) lines.push(`**Назва:** ${facts.businessName}`);
   if (facts.city) lines.push(`**Місто:** ${facts.city}`);
@@ -406,7 +366,6 @@ export function buildFactsSummary(
     );
   }
   if (facts.about) lines.push(`**Про бізнес:** ${facts.about}`);
-  if (templateLabel) lines.push(`**Дизайн:** ${templateLabel}`);
   lines.push("", "Все вірно, чи щось замінити?");
   return lines.join("\n");
 }
@@ -425,8 +384,6 @@ export interface OnboardTurnResult {
   verticalId: string;
   ready: boolean;
   confirmed: boolean;
-  templateId?: string;
-  templateLabel?: string;
   quickReplies: string[];
   progress: ProgressItem[];
 }
@@ -435,7 +392,6 @@ export async function onboardTurn(
   history: ChatMsg[],
   currentFacts: Partial<BusinessFacts>,
   currentVerticalId?: string,
-  currentTemplateId?: string,
 ): Promise<OnboardTurnResult> {
   const vertical = getVertical(currentVerticalId);
   const messages = historyToMessages(history);
@@ -455,7 +411,6 @@ export async function onboardTurn(
   const system = buildOnboardSystem({
     vertical,
     facts: currentFacts,
-    templateId: currentTemplateId,
     dossier: null,
     issues,
     apifyEnabled: isApifyConfigured(),
@@ -478,7 +433,6 @@ export async function onboardTurn(
     facts: currentFacts,
     verticalId: vertical.id,
     status: "collecting",
-    templateId: getTemplate(currentTemplateId) ? currentTemplateId : undefined,
     quickReplies: [],
   };
   for (const b of res.content) {
@@ -500,7 +454,7 @@ export async function onboardTurn(
       acc.status === "confirmed"
         ? "Чудово! Генерую чернетку сайту — за мить покажу превʼю, і ви самі вирішите, коли публікувати."
         : acc.status === "ready"
-          ? buildFactsSummary(acc.facts, templateDisplayName(acc.templateId))
+          ? buildFactsSummary(acc.facts)
           : fallbackQuestion(acc.facts);
   }
 
@@ -510,8 +464,6 @@ export async function onboardTurn(
     verticalId: acc.verticalId,
     ready: acc.status !== "collecting",
     confirmed: acc.status === "confirmed",
-    templateId: acc.templateId,
-    templateLabel: templateDisplayName(acc.templateId),
     quickReplies: acc.quickReplies,
     progress: computeProgress(acc.facts),
   };

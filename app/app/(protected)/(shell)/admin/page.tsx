@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Palette, Puzzle, FlaskConical } from "lucide-react";
+import { Puzzle, FlaskConical } from "lucide-react";
 import { isPlatformAdmin } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase/server";
 import { getVertical } from "@/lib/verticals/registry";
@@ -196,20 +196,14 @@ export default async function AdminPage() {
         <h1 className="font-brand text-[24px] font-medium text-ink">Адмінка</h1>
         <div className="flex shrink-0 items-center gap-2.5">
           <Link
-            href="/admin/packs"
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-surface px-4 font-ui text-[14px] font-semibold text-ink transition-colors hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-          >
-            <Palette size={16} /> Прев&apos;ю дизайнів
-          </Link>
-          <Link
             href="/admin/templates"
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-surface px-4 font-ui text-[14px] font-semibold text-ink transition-colors hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-surface px-4 font-ui text-[14px] font-semibold text-ink transition-colors hover:bg-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-honey-deep"
           >
             <Puzzle size={16} /> Шаблони
           </Link>
           <Link
             href="/admin/generate"
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] bg-brand px-4 font-ui text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-[14px] bg-brand px-4 font-ui text-[14px] font-semibold text-white transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-honey-deep focus-visible:ring-offset-2"
           >
             <FlaskConical size={16} /> Тест-генерація
           </Link>
@@ -254,7 +248,7 @@ export default async function AdminPage() {
                         href={urlFor(host)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block truncate font-bold text-brand hover:underline"
+                        className="block truncate font-bold text-brand underline underline-offset-2 hover:text-brand-hover"
                       >
                         {host}
                       </a>

@@ -15,11 +15,11 @@ import { ArrowUp, ArrowDown, Eye, EyeOff, Pencil } from "lucide-react";
 type CtrlVariant = "float" | "inline" | "brand";
 const ctrlVariants: Record<CtrlVariant, string> = {
   // Floats over the themed preview → white pill with a soft drop shadow.
-  float: "bg-surface text-ink shadow-[0_2px_8px_rgba(23,36,47,.18)] hover:bg-brand-soft",
+  float: "bg-surface/95 text-ink shadow-[0_2px_10px_rgba(51,41,28,.16)] backdrop-blur hover:bg-sunken",
   // Sits inside the neutral placeholder card → white pill with a hairline.
-  inline: "bg-surface text-ink border border-line hover:bg-brand-soft",
-  // The primary "edit" affordance → solid brand blue.
-  brand: "bg-brand text-white shadow-[0_2px_8px_rgba(23,36,47,.18)] hover:bg-brand-hover",
+  inline: "bg-surface text-ink border border-line hover:bg-sunken",
+  // The primary "edit" affordance → the one vivid accent, honey.
+  brand: "bg-honey text-honey-text shadow-[0_2px_10px_rgba(51,41,28,.2)] hover:brightness-95",
 };
 
 function ControlButton({
@@ -42,7 +42,7 @@ function ControlButton({
         e.stopPropagation();
         onClick();
       }}
-      className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${ctrlVariants[variant]}`}
+      className={`flex h-10 w-10 items-center justify-center rounded-full transition-all disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-honey-deep ${ctrlVariants[variant]}`}
     >
       {children}
     </button>
@@ -98,7 +98,7 @@ export default function EditableSection({
   if (hidden) {
     return (
       <div className="bg-surface px-4 py-3">
-        <div className="flex items-center justify-between gap-3 rounded-[16px] border-2 border-dashed border-line-strong bg-canvas px-5 py-4">
+        <div className="flex items-center justify-between gap-3 rounded-card border-2 border-dashed border-line-strong bg-canvas px-5 py-4">
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex items-center gap-2">
               <span className="truncate text-[16px] font-extrabold text-ink-muted">{label}</span>
@@ -126,12 +126,12 @@ export default function EditableSection({
         type="button"
         onClick={onEdit}
         aria-label={`Редагувати: ${label}`}
-        className="absolute inset-0 z-10 cursor-pointer bg-transparent outline-none ring-inset transition group-hover:bg-brand/[0.04] group-hover:ring-2 group-hover:ring-brand/30 focus-visible:bg-brand/[0.04] focus-visible:ring-2 focus-visible:ring-brand/50"
+        className="absolute inset-0 z-10 cursor-pointer bg-transparent outline-none ring-inset transition group-hover:bg-honey/[0.07] group-hover:ring-2 group-hover:ring-honey/60 focus-visible:bg-honey/[0.07] focus-visible:ring-2 focus-visible:ring-honey-deep"
       />
 
       {/* Always-visible label + controls. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between p-3">
-        <span className="pointer-events-none rounded-full bg-surface/95 px-3.5 py-1 text-[14px] font-extrabold text-ink shadow-[0_2px_8px_rgba(23,36,47,.15)] backdrop-blur">
+        <span className="pointer-events-none rounded-full bg-ink/90 px-3.5 py-1 text-[13px] font-bold text-white shadow-[0_2px_10px_rgba(51,41,28,.2)] backdrop-blur">
           {label}
         </span>
         <div className="pointer-events-auto">{controls("float")}</div>

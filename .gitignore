@@ -50,3 +50,9 @@ roxybo*
 
 # Playwright MCP artifacts
 .playwright-mcp/
+
+# design spike 2026-07-27: model-generated wireframe stylesheets (throwaway)
+/.wire-spike/
+
+# v0 design reference (not part of the app)
+/3minsite/

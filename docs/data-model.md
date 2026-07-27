@@ -7,25 +7,27 @@
 
 ## Несучий принцип — версіонування
 
-- **Контент сторінки** версіонується на **рівні сторінки** як jsonb-масиви блоків:
-  `pages.draft_content` = `{ blocks, pocket }`, `pages.published_content` = `{ blocks }`.
+- **Контент сторінки** версіонується на **рівні сторінки** як jsonb:
+  `pages.draft_content` = `{ blocks, pocket, seo, templateId, wireCss, genToken }`,
+  `pages.published_content` — те саме без `pocket`.
   Нормалізована таблиця `blocks` у MVP **не потрібна**: `PageSchema.parse` і так
   валідує весь масив, а окрема таблиця конфліктує з атомарною публікацією і
   «кишенею» switchTemplate.
-- **Тема** версіонується на **рівні tenant**: `tenants.draft_theme` /
-  `tenants.published_theme`. **НЕ** одна «жива» колонка — інакше неопублікований
-  switchTemplate (який міняє тему в чернетці, §4.7 крок 6) миттєво перефарбує
-  **живий** сайт.
-- **«Опублікувати»** — одна транзакція: `draft_theme → published_theme` для
-  tenant **і** `draft_content.blocks → published_content.blocks` для кожної
-  сторінки, далі `revalidateTag('tenant:{host}')` (§9.1). Збереження чернетки
-  кеш **не** чіпає.
+- **Дизайн** їде разом із контентом, у тому ж jsonb (`templateId` + `wireCss`),
+  а не окремою колонкою на tenant. Причина та сама, що колись була в
+  `draft_theme`/`published_theme`: перегенерація чернетки не сміє миттєво
+  перефарбувати **живий** сайт. Міграція `0008` ці дві колонки видалила —
+  теми як окремої сутності більше немає (див. `docs/architecture-brief.md`,
+  журнал 2026-07-27).
+- **«Опублікувати»** — `draft_content → published_content` для кожної сторінки
+  (блоки + seo + дизайн разом), `status='published'` для tenant, далі
+  `revalidateTag('tenant:{host}')` (§9.1). Збереження чернетки кеш **не** чіпає.
 
 ## Резолвінг на рендері
 
 Рантайм-типи (`Tenant`, `Page` у `lib/tenant/types.ts`) — це **resolved view**:
-- публічний рендер → `published_theme` + `published_content.blocks`;
-- редактор → `draft_theme` + `draft_content.blocks`.
+- публічний рендер → `published_content` (блоки + `templateId` + `wireCss`);
+- редактор → `draft_content`.
 
 Data-layer вибирає, який зріз повернути; рендер-код лишається незмінним. Саме
 тому впровадження draft/published **не** зачепило `PageRenderer`, middleware чи
@@ -34,16 +36,17 @@ Data-layer вибирає, який зріз повернути; рендер-к
 ## switchTemplate → «Перегенерувати» (shipped 2026-07-07, журнал #36)
 
 - Реалізовано як **«Перегенерувати»** (адаптація §4.7 до вільної композиції):
-  ре-запуск генерації з `tenants.facts` пише нові блоки+тему в **чернетку**;
-  старі draft-блоки йдуть у `draft_content.pocket` (не видаляються, кеп 40);
-  факти живуть у `tenants.facts`, тож не губляться. Плюс окремий перемикач
-  тема-пресетів (миттєвий, детермінований).
+  ре-запуск генерації з `tenants.facts` пише нові блоки **і новий згенерований
+  CSS** у **чернетку**; старі draft-блоки йдуть у `draft_content.pocket`
+  (не видаляються, кеп 40); факти живуть у `tenants.facts`, тож не губляться.
+  Лічильник `brand.designNonce` зростає, тож новий прогін стартує з іншого
+  відтінку.
 
 ## Таблиці (стисло)
 
 | Таблиця | Призначення | Ключові поля |
 |---|---|---|
-| `tenants` | конфіг сайту + версійована тема + Telegram | `host` (nullable, unique), `canonical_hostname`, `status`, `nav_mode`, `brand`, `footer`, `facts`, `vertical`, `draft_theme`, `published_theme`, `telegram_chat_id`, `telegram_connect_token` |
+| `tenants` | конфіг сайту + Telegram | `host` (nullable, unique), `canonical_hostname`, `status`, `brand` (вкл. `designNonce`), `footer`, `facts`, `vertical`, `telegram_chat_id`, `telegram_connect_token` |
 | `pages` | сторінки + версійований контент | `slug` (`''`=home), `draft_content`, `published_content`, `is_published`, `unique(tenant_id, slug)` |
 | `conversations` | онбординг агент-чат (§4.9) | `tenant_id`, `messages` (інтерфейс чату), `facts_state` (slot-filling стан — `{facts, verticalId, ready}`), `is_complete` |
 | `tenant_members` | auth↔tenant членством (§3.1) | `(tenant_id, user_id)`, `role` |
