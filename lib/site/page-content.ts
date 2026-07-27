@@ -1,6 +1,23 @@
 import type { StoredBlock } from "@/lib/blocks/schema";
 import type { PageSeo } from "@/lib/tenant/types";
 
+/** Result of the style QA gate (css-lint + contrast + model verdict). Draft-only:
+ *  diagnostics for the editor/admin, never published. */
+export interface StyleAuditReport {
+  /** Human-readable notes for every stripped declaration/at-rule. */
+  lintViolations: string[];
+  /** Human-readable notes for every contrast auto-fix. */
+  contrastFixes: string[];
+  verdict: "pass" | "fail";
+  /** Ukrainian corrective note from the model verdict (present on fail). */
+  correctiveNote?: string;
+  /** True when the gate spent its one stylesheet regeneration. */
+  regenerated: boolean;
+  /** Final fail after the regen budget — surfaces in the admin QA column. */
+  flagged: boolean;
+  checkedAt: string;
+}
+
 /**
  * The shape stored in `pages.draft_content` / `pages.published_content`.
  *
@@ -27,10 +44,12 @@ export interface PageContent {
   /** Per-generation token — the deferred image job's CAS key. */
   genToken?: string;
   generatedHero?: string;
+  /** Style QA gate report — editor/admin diagnostics only (see StyleAuditReport). */
+  styleAudit?: StyleAuditReport;
 }
 
 /** Keys that exist only in a draft and must never reach the live site. */
-const DRAFT_ONLY = ["pocket"] as const satisfies readonly (keyof PageContent)[];
+const DRAFT_ONLY = ["pocket", "styleAudit"] as const satisfies readonly (keyof PageContent)[];
 
 /**
  * The published copy of a draft: everything the draft carries except the
