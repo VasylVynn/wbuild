@@ -79,6 +79,7 @@ async function loadAdminData() {
     customRequestsRes,
     conversationsRes,
     conversationsTotalRes,
+    qaRes,
   ] = await Promise.all([
     sb
       .from("tenants")
@@ -101,9 +102,16 @@ async function loadAdminData() {
       .order("created_at", { ascending: false })
       .limit(10),
     sb.from("conversations").select("id", { count: "exact", head: true }),
+    sb.from("pages").select("tenant_id, draft_content->styleAudit").eq("slug", ""),
   ]);
 
   const sites = (sitesRes.data ?? []) as TenantRow[];
+
+  // Style QA flag per tenant, from the home page's draft styleAudit (Task 5/6 write it).
+  const qaByTenant = new Map<string, { flagged?: boolean } | null>();
+  for (const row of (qaRes.data ?? []) as { tenant_id: string; styleAudit: { flagged?: boolean } | null }[]) {
+    qaByTenant.set(row.tenant_id, row.styleAudit);
+  }
 
   const leadCounts = new Map<string, number>();
   const leadRows = (leadsRes.data ?? []) as { tenant_id: string }[];
@@ -156,6 +164,7 @@ async function loadAdminData() {
     customRequests,
     conversations,
     tenantLiteById,
+    qaByTenant,
   };
 }
 
@@ -183,6 +192,7 @@ export default async function AdminPage() {
     customRequests,
     conversations,
     tenantLiteById,
+    qaByTenant,
   } = await loadAdminData();
 
   const publishedCount = sites.filter((s) => s.status === "published").length;
@@ -233,6 +243,7 @@ export default async function AdminPage() {
                 <th className="px-3.5 py-2.5">Статус</th>
                 <th className="px-3.5 py-2.5">Заявок</th>
                 <th className="px-3.5 py-2.5">TG</th>
+                <th className="px-3.5 py-2.5">QA</th>
                 <th className="hidden px-3.5 py-2.5 xl:table-cell">Власник</th>
                 <th className="hidden px-3.5 py-2.5 2xl:table-cell">Створено</th>
               </tr>
@@ -264,6 +275,13 @@ export default async function AdminPage() {
                     </td>
                     <td className="px-3.5 py-2.5 text-ink">{leadCounts.get(s.id) ?? 0}</td>
                     <td className="px-3.5 py-2.5">{s.telegram_chat_id ? "✓" : "—"}</td>
+                    <td className="px-3.5 py-2.5">
+                      {qaByTenant.get(s.id)?.flagged ? (
+                        <Chip tone="danger">стиль</Chip>
+                      ) : (
+                        <span className="text-ink-faint">—</span>
+                      )}
+                    </td>
                     <td className="hidden max-w-[180px] truncate px-3.5 py-2.5 text-ink-muted xl:table-cell">
                       {ownerByTenant.get(s.id) ?? "—"}
                     </td>
