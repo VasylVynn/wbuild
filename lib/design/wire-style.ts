@@ -42,7 +42,7 @@ const SYSTEM = `Ти — сильний веб-дизайнер, який пиш
 
 ЩО КАТЕГОРИЧНО ЗАБОРОНЕНО — усе, що ламає адаптивність:
 - display, flex-direction, grid-template-columns, grid-template-areas, grid-auto-flow
-- position (крім того, що вже є), float
+- position: absolute / fixed / sticky (крім того, що вже є; position: relative на контейнері для якоріння власного декору — можна), float
 - фіксовані width / height / min-width на контейнерах і картках (max-width на тексті — можна)
 - overflow, який ховає контент
 - будь-які @media, що звужують уже наявні брейкпоінти або ламають мобільний вигляд

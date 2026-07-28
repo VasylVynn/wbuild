@@ -2,8 +2,10 @@ import { notFound } from "next/navigation";
 import { getEditorData } from "../actions";
 import EditorShell from "@/components/editor/EditorShell";
 
-// regenerateSite runs thinking-generation (~35s) + one schema retry — headroom.
-export const maxDuration = 120;
+// regenerateSite runs thinking-generation (~35s) + one schema retry, plus the
+// style QA gate (up to two model verdicts + one full generateWireStyle regen,
+// +20-40s per spec) — headroom.
+export const maxDuration = 300;
 
 /**
  * Editor page, reached at app.<root>/edit/<tenant-host> (middleware rewrites the

@@ -329,14 +329,22 @@ export async function regenerateSite(
     // path that mints new CSS, so it gets the same audit as generation.
     let styleAudit: StyleAuditReport | undefined;
     if (wireCss) {
-      const audited = await runStyleAudit({
-        css: wireCss,
-        sectionDigest: buildSectionDigest(site.blocks),
-        brief,
-        hue,
-      });
-      wireCss = audited.css;
-      styleAudit = audited.report;
+      // Fail-open (must-fix from review): this call sits outside the paid
+      // regeneration's own try/catch, so a throw here — before the draft
+      // save below — would abort the whole action and lose the regen the
+      // owner just paid for. Ship the unaudited sheet instead.
+      try {
+        const audited = await runStyleAudit({
+          css: wireCss,
+          sectionDigest: buildSectionDigest(site.blocks),
+          brief,
+          hue,
+        });
+        wireCss = audited.css;
+        styleAudit = audited.report;
+      } catch (e) {
+        console.warn(`[style-audit] redesign gate failed (fail-open): ${e instanceof Error ? e.message : e}`);
+      }
     }
 
     // Regeneration produces fresh SEO meta with the fresh content; keep the

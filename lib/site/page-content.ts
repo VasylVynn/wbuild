@@ -13,7 +13,8 @@ export interface StyleAuditReport {
   correctiveNote?: string;
   /** True when the gate spent its one stylesheet regeneration. */
   regenerated: boolean;
-  /** Final fail after the regen budget — surfaces in the admin QA column. */
+  /** Final fail after the regen budget, OR a code-proven unresolved contrast
+   *  pair (see contrastFixes) — surfaces in the admin QA column. */
   flagged: boolean;
   checkedAt: string;
 }

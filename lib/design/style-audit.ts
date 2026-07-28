@@ -121,8 +121,11 @@ export async function runStyleAudit(opts: {
     console.warn(`[style-audit] model phase failed (fail-open): ${e instanceof Error ? e.message : e}`);
   }
   // Unconditional (plan-review must-fix): a crash mid-regen aborts the block
-  // above — a failing verdict must still surface in the admin QA column.
-  report.flagged = report.verdict === "fail";
+  // above — a failing verdict must still surface in the admin QA column. A
+  // code-proven contrast failure (fixContrast couldn't converge a pair to
+  // 4.5:1) flags too, independent of what the model verdict said.
+  report.flagged =
+    report.verdict === "fail" || report.contrastFixes.some((f) => f.startsWith("unresolved:"));
 
   return { css, report };
 }

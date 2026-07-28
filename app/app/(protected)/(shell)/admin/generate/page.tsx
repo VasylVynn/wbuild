@@ -9,10 +9,12 @@ import GenerateClient from "./GenerateClient";
  * Founders-only test-site generator (gated by lib/admin.ts, fail-closed).
  * One click per vertical → generateAndPublish() with a realistic fixture, no
  * onboarding chat — for iterating on generation quality. maxDuration covers
- * generation (~35-60s) running through this page's server actions.
+ * generateDraft (~35-60s) plus the style QA gate (up to two model verdicts +
+ * one full generateWireStyle regen, +20-40s per spec) running through this
+ * page's server actions.
  */
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export default async function AdminGeneratePage() {
   if (!(await isPlatformAdmin())) notFound();

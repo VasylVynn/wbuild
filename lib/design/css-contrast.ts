@@ -21,7 +21,9 @@ import { parse as parseColor, formatHex, wcagContrast, converter } from "culori"
  * Known limits (accepted, v1): pairs the map doesn't list aren't checked;
  * background-image patterns skip the pair (unknowable statically); gradients
  * are checked against their WORST color stop; multi-pass fixpoint may not converge
- * if chroma bounds are reached before 4.5:1 on all pairs (reported as "unresolved").
+ * — most often because two pairs share one declaration and each pass's fix for
+ * one re-breaks the other (oscillation), occasionally because chroma bounds are
+ * reached before 4.5:1 — either way it's reported honestly as "unresolved".
  */
 export interface ContrastResult {
   css: string;
@@ -158,7 +160,9 @@ export function fixContrast(css: string): ContrastResult {
     if (passApplied === 0) break;
   }
 
-  // Final check pass: honest reporting of any remaining unresolved pairs.
+  // Final check pass: honest reporting of any remaining unresolved pairs, and
+  // of pairs that were never computable at all (see skipped-pairs note below).
+  let computed = 0;
   for (const pair of PAIRS) {
     const textHit = findLast(root, pair.text, ["color"], pair.sameElement ? undefined : pair.surface);
     const bgHit = findLast(root, pair.surface, ["background-color", "background"]);
@@ -172,12 +176,12 @@ export function fixContrast(css: string): ContrastResult {
 
     const bgTokens = colorTokens(bgHit.value);
     if (bgTokens.length === 0) continue;
+    computed++;
 
-    let worst = bgTokens[0];
     let worstRatio = Infinity;
     for (const t of bgTokens) {
       const r = wcagContrast(textColor, t);
-      if (r < worstRatio) { worstRatio = r; worst = t; }
+      if (r < worstRatio) worstRatio = r;
     }
 
     if (worstRatio < MIN_RATIO) {
@@ -185,6 +189,15 @@ export function fixContrast(css: string): ContrastResult {
         `unresolved: ${pair.text} on ${pair.surface} ${worstRatio.toFixed(1)}:1 (shared declaration conflict)`,
       );
     }
+  }
+
+  // Honesty stub (deferred: full var() resolution is a follow-up task): most
+  // real sheets set colors via CSS custom properties (var(--wire-ink) etc.),
+  // which colorTokens can't resolve, so those pairs silently skip above — an
+  // empty `fixes` would otherwise be indistinguishable from "nothing to fix".
+  const skipped = PAIRS.length - computed;
+  if (skipped > 0) {
+    fixes.push(`skipped: ${skipped} of ${PAIRS.length} pairs not computable (var() indirection or missing declarations)`);
   }
 
   return { css: root.toString(), fixes };

@@ -13,7 +13,10 @@ import postcss, { type AtRule, type Declaration, type Rule } from "postcss";
  *   by definition (invariant §7); font-family declarations stripped too;
  * - rules whose EVERY selector targets ::before/::after are the decor layer —
  *   display/position/float are legitimate there and stay;
- * - on ordinary selectors display/position/float are stripped, and
+ * - on ordinary selectors display/float are stripped; position is stripped
+ *   only when it's absolute/fixed/sticky — the wireframe provides no
+ *   containing blocks, so `position: relative` is a legitimate anchor for a
+ *   rule's own ::before/::after decor and stays; and
  *   width/height/min-width/min-height unless the value is fluid
  *   (auto/percentage/fit-content/...); max-width stays (allowed on text);
  * - overflow is stripped only on `.wire-section` selectors (sections must never
@@ -29,7 +32,11 @@ export interface LintResult {
 }
 
 const STRIP_ALWAYS = new Set(["font-family"]);
-const STRIP_ON_REAL_ELEMENTS = new Set(["display", "position", "float"]);
+const STRIP_ON_REAL_ELEMENTS = new Set(["display", "float"]);
+/** `position: relative` is a legitimate anchor for a rule's own ::before/::after
+ *  decor (the wireframe provides no containing blocks) — only the values that
+ *  actually break layout get stripped. */
+const BREAKING_POSITION = /^(absolute|fixed|sticky)$/i;
 const SIZE_PROPS = new Set(["width", "height", "min-width", "min-height"]);
 const FLUID_VALUE = /^(auto|inherit|initial|unset|fit-content|max-content|min-content|100%|\d{1,3}%)$/i;
 
@@ -68,6 +75,11 @@ export function lintWireCss(css: string): LintResult {
         return;
       }
       if (!decor && STRIP_ON_REAL_ELEMENTS.has(prop)) {
+        violations.push(`stripped \`${prop}: ${decl.value.slice(0, 40)}\` from \`${where}\``);
+        decl.remove();
+        return;
+      }
+      if (!decor && prop === "position" && BREAKING_POSITION.test(decl.value.trim())) {
         violations.push(`stripped \`${prop}: ${decl.value.slice(0, 40)}\` from \`${where}\``);
         decl.remove();
         return;
