@@ -31,7 +31,12 @@ export function middleware(req: NextRequest): NextResponse {
     if (isDashboardHost(host)) {
       if (pathname === "/app" || pathname.startsWith("/app/")) return NextResponse.next();
       const dest = pathname === "/" ? "/app" : `/app${pathname}`;
-      return NextResponse.rewrite(new URL(dest, req.url));
+      // new URL(pathname, …) drops the query string — carry it over explicitly,
+      // exactly as the tenant branch below does. Dashboard screens depend on it
+      // (/login?next=, /pay/result?orderReference=).
+      const url = new URL(dest, req.url);
+      url.search = search;
+      return NextResponse.rewrite(url);
     }
     // Root / www: don't expose the /app namespace directly.
     if (pathname === "/app" || pathname.startsWith("/app/")) {
