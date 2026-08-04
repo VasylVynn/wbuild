@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { isPlatformAdmin } from "@/lib/admin";
 import { getServiceClient } from "@/lib/supabase/server";
 import { revalidateTenant } from "@/lib/cache";
+import { normalizeDomain } from "@/lib/domains/rdap";
+import { createLogger } from "@/lib/log";
+
+const log = createLogger("admin");
 
 /**
  * Platform kill-switch (founders only). Server actions are independently
@@ -44,7 +48,7 @@ export async function adminSetTenantStatus(
   const sb = getServiceClient();
   const { data: tenant } = await sb
     .from("tenants")
-    .select("id, host")
+    .select("id, host, custom_domain")
     .eq("id", tenantId)
     .maybeSingle();
   if (!tenant) return { ok: false, error: "Сайт не знайдено." };
@@ -65,7 +69,12 @@ export async function adminSetTenantStatus(
   const { error } = await sb.from("tenants").update({ status }).eq("id", tenantId);
   if (error) return { ok: false, error: error.message };
 
-  if (tenant.host) await revalidateTenant(tenant.host);
+  // A suspended site must go dark on its paid domain too — that host serves the
+  // same pages under its own cache tag, so purging only the subdomain would
+  // leave the custom domain live (or, on restore, still 404ing).
+  if (tenant.host) await revalidateTenant(tenant.host as string);
+  const customDomain = tenant.custom_domain as string | null;
+  if (customDomain && customDomain !== tenant.host) await revalidateTenant(customDomain);
   // Route file lives at app/app/(protected)/admin/page.tsx — the (protected)
   // group doesn't affect the URL, but middleware rewrites the EXTERNAL /admin
   // (on the app.<root> dashboard host) to the INTERNAL /app/admin path that
@@ -74,4 +83,57 @@ export async function adminSetTenantStatus(
   revalidatePath("/app/admin");
 
   return { ok: true, status };
+}
+
+/**
+ * Put a tenant on its own domain (spec 2026-08-05 §4). Ops has already bought
+ * the name and pointed DNS at us; this is the DB half — after it, the host
+ * resolves (getTenantByHost matches custom_domain) and every absolute URL
+ * switches to it, because canonical_hostname is the source of all of them
+ * (invariant 2).
+ *
+ * That makes this a cache event on BOTH names: the subdomain's cached pages
+ * still carry old canonicals, and the new domain has never been rendered. The
+ * previous custom domain, if we're moving off one, gets purged too.
+ */
+export async function adminActivateDomainAction(
+  host: string,
+  customDomain: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!(await isPlatformAdmin())) return { ok: false, error: "Немає доступу." };
+
+  const domain = normalizeDomain(customDomain);
+  if (!domain) return { ok: false, error: "Некоректне доменне ім'я." };
+
+  const sb = getServiceClient();
+  const { data: tenant } = await sb
+    .from("tenants")
+    .select("id, host, custom_domain")
+    .eq("host", host)
+    .maybeSingle();
+  if (!tenant) return { ok: false, error: "Сайт не знайдено." };
+
+  const { error } = await sb
+    .from("tenants")
+    .update({ custom_domain: domain, canonical_hostname: domain, domain_status: "active" })
+    .eq("id", tenant.id);
+  if (error) {
+    // custom_domain is UNIQUE (migration 0009) — the collision is the one DB
+    // error an operator can actually act on, so it gets a real sentence.
+    const taken = error.code === "23505";
+    log.error("domain activation failed", { host, domain, error: error.message });
+    return {
+      ok: false,
+      error: taken ? "Цей домен вже привʼязаний до іншого сайту." : error.message,
+    };
+  }
+
+  await revalidateTenant(host);
+  await revalidateTenant(domain);
+  const previous = tenant.custom_domain as string | null;
+  if (previous && previous !== domain) await revalidateTenant(previous);
+  revalidatePath("/app/admin");
+
+  log.info("domain activated", { host, domain });
+  return { ok: true };
 }

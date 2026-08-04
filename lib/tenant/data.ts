@@ -13,6 +13,7 @@ import { isSupabaseConfigured, getServiceClient } from "@/lib/supabase/server";
 interface TenantRow {
   id: string;
   host: string | null;
+  custom_domain: string | null;
   canonical_hostname: string | null;
   status: Tenant["status"];
   brand: Tenant["brand"];
@@ -71,11 +72,27 @@ export async function getTenantByHost(host: string): Promise<Tenant | null> {
   if (!isSupabaseConfigured()) return null;
   const sb = getServiceClient();
   const { data, error } = await sb.from("tenants").select("*").eq("host", host).maybeSingle();
-  if (error || !data) return null;
+
+  // A tenant answers on its subdomain AND, once ops activates one, on its own
+  // domain (spec 2026-08-05 §4). The subdomain is by far the common case, so the
+  // custom-domain query only runs on a miss — the hot render path keeps its
+  // single round trip. canonical_hostname (invariant 2) is what activation
+  // rewrites, so absolute URLs follow the domain, not the request host.
+  let row = error ? null : (data as TenantRow | null);
+  if (!row) {
+    const { data: byDomain } = await sb
+      .from("tenants")
+      .select("*")
+      .eq("custom_domain", host)
+      .maybeSingle();
+    row = (byDomain as TenantRow | null) ?? null;
+  }
+  if (!row) return null;
+
   // Kill-switch (§11): a suspended tenant must NOT serve publicly. (Cached
   // pages also need a purge on suspend — see revalidateTenant.)
-  if ((data as TenantRow).status === "suspended") return null;
-  return mapTenant(data as TenantRow);
+  if (row.status === "suspended") return null;
+  return mapTenant(row);
 }
 
 export async function getPublishedPage(host: string, slug: string): Promise<Page | null> {
