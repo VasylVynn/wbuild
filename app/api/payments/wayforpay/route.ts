@@ -70,8 +70,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (!isSupabaseConfigured()) {
-    log.error("verified callback dropped: supabase not configured", { orderReference });
-    return ack(orderReference);
+    // A config outage must not swallow a real payment: withholding the ack
+    // makes WayForPay keep retrying until the deploy is fixed.
+    log.error("verified callback NOT acknowledged: supabase not configured", {
+      orderReference,
+    });
+    return NextResponse.json({ error: "storage unavailable" }, { status: 503 });
   }
 
   try {
@@ -91,11 +95,16 @@ async function applyCallback(payload: ServicePayload): Promise<void> {
   const orderReference = payload.orderReference;
   const target = mapTransactionStatus(payload.transactionStatus);
 
-  const { data: order } = await sb
+  // Supabase clients report failures via `error`, they don't throw. Before the
+  // paid-latch, ANY database error must throw → 500 → WayForPay retries.
+  // Treating a transient read failure as "row absent" would acknowledge the
+  // callback and permanently lose a paid entitlement.
+  const { data: order, error: lookupError } = await sb
     .from("orders")
     .select("id, tenant_id, amount, currency, status")
     .eq("order_reference", orderReference)
     .maybeSingle();
+  if (lookupError) throw new Error(`order lookup failed: ${lookupError.message}`);
 
   if (!order) {
     // Signature was valid, so this really is WayForPay — an order we never
@@ -122,10 +131,11 @@ async function applyCallback(payload: ServicePayload): Promise<void> {
       orderReference,
       transactionStatus: payload.transactionStatus,
     });
-    await sb
+    const { error: inflightError } = await sb
       .from("orders")
       .update({ wfp_payload: payload, updated_at: new Date().toISOString() })
       .eq("id", order.id);
+    if (inflightError) throw new Error(`in-flight update failed: ${inflightError.message}`);
     return;
   }
 
@@ -136,12 +146,14 @@ async function applyCallback(payload: ServicePayload): Promise<void> {
     // otherwise a charged-back site keeps serving and the funnel keeps
     // counting its ₴999 as revenue.
     const allowedFrom = target === "refunded" ? ["pending", "paid"] : ["pending"];
-    const { data: transitioned } = await sb
+    const { data: transitioned, error: transitionError } = await sb
       .from("orders")
       .update({ status: target, wfp_payload: payload, updated_at: new Date().toISOString() })
       .eq("id", order.id)
       .in("status", allowedFrom)
       .select("id");
+    if (transitionError)
+      throw new Error(`status transition failed: ${transitionError.message}`);
 
     if (
       target === "refunded" &&
@@ -203,12 +215,16 @@ async function applyCallback(payload: ServicePayload): Promise<void> {
   // the side effects below. Only pending (normal flow) and declined (the same
   // reference retried with a working card) may become paid — a REFUNDED order
   // replayed with an old valid Approved callback must NOT re-grant the year.
-  const { data: claimed } = await sb
+  const { data: claimed, error: claimError } = await sb
     .from("orders")
     .update({ status: "paid", paid_at: now, wfp_payload: payload, updated_at: now })
     .eq("id", order.id)
     .in("status", ["pending", "declined"])
     .select("id");
+  // Pre-latch failure: nothing was claimed, so throwing is safe — the retry
+  // starts over. (Errors AFTER the latch must not throw: the retry would be
+  // ignored as a replay, so they log loudly and get fixed by hand instead.)
+  if (claimError) throw new Error(`paid latch failed: ${claimError.message}`);
 
   if (!claimed || claimed.length === 0) {
     log.info("callback replay ignored (claimed by a concurrent retry)", { orderReference });
@@ -218,11 +234,20 @@ async function applyCallback(payload: ServicePayload): Promise<void> {
   if (!tenantId) {
     log.error("PAID ORDER WITHOUT TENANT — refund manually", { orderReference });
   } else {
-    const { data: tenantRow } = await sb
+    const { data: tenantRow, error: tenantReadError } = await sb
       .from("tenants")
       .select("paid_until")
       .eq("id", tenantId)
       .maybeSingle();
+    if (tenantReadError) {
+      // Post-latch, so no throw: fall back to extending from now — worst case
+      // an early renewal loses its unused remainder, which the log records.
+      log.warn("paid_until read failed — extending from now", {
+        orderReference,
+        tenantId,
+        error: tenantReadError.message,
+      });
+    }
     const { error: tenantError } = await sb
       .from("tenants")
       .update({ paid_until: oneYearFrom(tenantRow?.paid_until as string | null) })
