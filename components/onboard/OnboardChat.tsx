@@ -40,12 +40,16 @@ import { MAX_PHOTOS, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
 import { processImage } from "@/lib/media/client-image";
 import { Button, Chip, Card, ConfirmDialog } from "@/components/ui";
 import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
+import DomainStep from "@/components/onboard/DomainStep";
+import { usePaywallCheckout, PRICE_UAH } from "@/components/pay/usePaywallCheckout";
+import { pixelTrack } from "@/lib/analytics/pixel";
+import { rootSiteUrl } from "@/lib/config";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Phase = "chat" | "gate" | "generating" | "preview" | "done" | "error";
+type Phase = "chat" | "gate" | "generating" | "preview" | "payment" | "done" | "error";
 
 const GREETING: ChatMsg = {
   role: "assistant",
@@ -373,6 +377,9 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   const [siteUrl, setSiteUrl] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState(false);
+  // Quoted on the payment screen. The server sends the real amount with its
+  // paywall refusal; PRICE_UAH is only what we show before that answer arrives.
+  const [price, setPrice] = useState(PRICE_UAH);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -953,11 +960,13 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   };
 
   // Preview → HUMAN publish (invariant 6): publish the draft, celebrate.
-  const handlePublish = async () => {
+  // Behind the paywall (spec §3) the server answers paymentRequired instead —
+  // that is an offer, not an error, so it gets its own screen.
+  const handlePublish = async (opts?: { paywallRetry?: boolean }) => {
     if (loading || !draft) return;
     setLoading(true);
     try {
-      const result = await finalizeAction(draft.host, convIdRef.current ?? undefined);
+      const result = await finalizeAction(draft.host, convIdRef.current ?? undefined, opts);
       if (result.ok) {
         setSiteUrl(result.url);
         setPhase("done");
@@ -965,6 +974,9 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         localStorage.removeItem("vitryna_conv_id");
       } else if (result.authRequired) {
         setPhase("gate");
+      } else if (result.paymentRequired) {
+        if (result.price) setPrice(result.price);
+        setPhase("payment");
       } else {
         setErrorMsg(result.error);
         setPhase("error");
@@ -976,6 +988,23 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       setLoading(false);
     }
   };
+
+  // WayForPay in a second tab; when the signed callback marks the order paid we
+  // simply retry the publish the owner already asked for — flagged as a retry so
+  // the funnel counts one «publish_clicked» per owner, not two.
+  const paywall = usePaywallCheckout({
+    host: draft?.host ?? "",
+    onPaid: () => handlePublish({ paywallRetry: true }),
+  });
+
+  // ViewContent = «побачив свій сайт», the moment the funnel is really working.
+  // Fired once per session, when the preview screen first mounts.
+  const viewContentSent = useRef(false);
+  useEffect(() => {
+    if (phase !== "preview" || viewContentSent.current) return;
+    viewContentSent.current = true;
+    pixelTrack("ViewContent");
+  }, [phase]);
 
   const copyUrl = async () => {
     try {
@@ -1392,6 +1421,123 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   }
 
   // ---------------------------------------------------------------------------
+  // Render — payment (spec §3): the draft is ready, publication is the paid
+  // step. The site itself was free to build — this screen only sells «живий».
+  // ---------------------------------------------------------------------------
+
+  if (phase === "payment" && draft) {
+    const awaiting = paywall.status === "awaiting";
+    const busy = paywall.status === "creating" || awaiting;
+    const failed = paywall.status === "failed" || paywall.status === "error";
+    // Paid, but the publish that followed failed. The site is bought — the only
+    // action left is another publish attempt, never a second checkout.
+    const paid = paywall.status === "paid";
+
+    return (
+      <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 ${rootBase}`}>
+        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
+        <div className="animate-rise flex w-full max-w-md flex-col items-center text-center">
+          <span className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-honey font-brand text-[32px] font-semibold text-honey-text shadow-[0_18px_40px_-14px_rgba(51,41,28,0.4)]">
+            3
+          </span>
+          <h2 className="mt-6 font-brand text-[26px] font-semibold">Сайт готовий до публікації</h2>
+          <p className="mt-2.5 text-[17px] leading-relaxed text-ink-muted">
+            Залишився один крок — і сайт запрацює для ваших клієнтів
+          </p>
+
+          <Card className="mt-5 flex w-full flex-col gap-3 p-5">
+            <div className="text-left">
+              <div className="font-brand text-[22px] font-semibold text-ink">{price} грн</div>
+              <div className="text-[15px] font-semibold text-ink-muted">
+                Сайт + власний домен на 1 рік. Одноразово.
+              </div>
+            </div>
+
+            {paid && (
+              <>
+                <Button
+                  size="lg"
+                  disabled={loading || paywall.retrying}
+                  onClick={() => void paywall.retryPublish()}
+                  className="min-h-[56px] w-full text-[18px] shadow-[0_10px_28px_rgba(51,41,28,0.22)]"
+                >
+                  {loading || paywall.retrying ? "Публікуємо…" : "Спробувати опублікувати ще раз"}
+                </Button>
+                <p className="text-[14px] leading-snug text-ink-muted">
+                  Оплату отримано — повторно платити не потрібно.
+                </p>
+              </>
+            )}
+
+            {!awaiting && !paid && (
+              <Button
+                size="lg"
+                disabled={busy}
+                onClick={() => void paywall.start()}
+                className="min-h-[56px] w-full text-[18px] shadow-[0_10px_28px_rgba(51,41,28,0.22)]"
+              >
+                {paywall.status === "creating"
+                  ? "Готуємо оплату…"
+                  : failed
+                    ? "Спробувати ще раз"
+                    : `Опублікувати — ${price} грн`}
+              </Button>
+            )}
+
+            {awaiting && (
+              <div className="flex flex-col items-center gap-2 py-1" role="status">
+                <span className="flex items-center gap-2.5 text-[16px] font-bold text-ink">
+                  <span
+                    className="inline-block h-4 w-4 animate-spin rounded-full border-[2.5px] border-honey border-t-transparent"
+                    aria-hidden
+                  />
+                  Очікуємо оплату…
+                </span>
+                <span className="text-[14px] leading-snug text-ink-muted">
+                  Оплата відкрилась у новій вкладці. Поверніться сюди — щойно платіж пройде,
+                  сайт опублікується сам.
+                </span>
+              </div>
+            )}
+
+            {failed && paywall.error && (
+              <p className="rounded-[14px] bg-danger-soft px-4 py-3 text-left text-[14px] font-semibold leading-relaxed text-danger">
+                {paywall.status === "failed" ? "Оплата не пройшла. " : ""}
+                {paywall.error}
+              </p>
+            )}
+          </Card>
+
+          <p className="mt-3 text-[13px] leading-relaxed text-ink-faint">
+            Оплата через WayForPay. Умови — у{" "}
+            {/* The offer lives on the marketing root — this chat runs on the app
+                host, where middleware rewrites /oferta into /app and it 404s. */}
+            <a
+              href={rootSiteUrl("/oferta")}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2 hover:text-ink-muted"
+            >
+              публічній оферті
+            </a>
+            .
+          </p>
+
+          <Button
+            variant="quiet"
+            size="md"
+            className="mt-4"
+            disabled={awaiting}
+            onClick={() => setPhase("preview")}
+          >
+            <ArrowLeft size={17} /> Назад до перегляду
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Render — login gate (journal #43): save the site behind an account
   // ---------------------------------------------------------------------------
 
@@ -1529,6 +1675,10 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
           <p className="mt-3 text-[14px] text-ink-muted">
             Перегляньте сайт — фото й зображення можна замінити в редакторі.
           </p>
+
+          {/* Domain step (spec §4) — the second half of what the ₴999 buys.
+              Skippable: the site is already live on its subdomain. */}
+          {draft && <DomainStep host={draft.host} />}
 
           <div className="mt-3.5 flex w-full items-center gap-3.5 rounded-[20px] border border-line bg-surface px-5 py-4 text-left shadow-card">
             <TelegramMark />

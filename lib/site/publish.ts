@@ -14,6 +14,9 @@ import { designSeed, mulberry32 } from "@/lib/design/seed";
 import { generateWireStyle } from "@/lib/design/wire-style";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { publishedFromDraft, type PageContent } from "@/lib/site/page-content";
+import { createLogger } from "@/lib/log";
+
+const log = createLogger("publish");
 
 /**
  * DRAFT/PUBLISH split (refactor 04 §4): generation lands in the DRAFT only —
@@ -23,6 +26,32 @@ import { publishedFromDraft, type PageContent } from "@/lib/site/page-content";
 
 /** Generated gallery size for photo-less sites (hero comes on top of these). */
 const GENERATED_GALLERY_COUNT = 4;
+
+/**
+ * Purge the live site on EVERY host it answers on. A tenant that has been moved
+ * to its paid domain serves the same pages under a second cache tag
+ * (getTenantByHost matches custom_domain), so purging only the subdomain leaves
+ * the domain the owner actually paid for on stale content.
+ *
+ * The custom domain is read separately and best-effort on purpose: it ships with
+ * migration 0009, and publishing must keep working on a DB that hasn't applied
+ * it (the bypassPaywall path below). A read failure here is a missing column,
+ * never a reason to fail a publish.
+ */
+async function revalidateLiveHosts(
+  sb: ReturnType<typeof getServiceClient>,
+  tenantId: string,
+  host: string,
+): Promise<void> {
+  await revalidateTenant(host);
+  const { data } = await sb
+    .from("tenants")
+    .select("custom_domain")
+    .eq("id", tenantId)
+    .maybeSingle();
+  const custom = (data as { custom_domain?: string | null } | null)?.custom_domain;
+  if (custom && custom !== host) await revalidateTenant(custom);
+}
 
 export async function generateDraft(opts: {
   host: string;
@@ -120,9 +149,7 @@ export async function generateDraft(opts: {
     try {
       wireCss = (await generateWireStyle(brief, { hue })).css;
     } catch (e) {
-      console.error(
-        `[generate] styling failed for ${host}: ${e instanceof Error ? e.message : e}`,
-      );
+      log.error("styling failed", { host, error: e });
     }
 
     const sb = getServiceClient();
@@ -228,7 +255,7 @@ export async function generateDraft(opts: {
           hero = gen.hero;
           gallery = gen.gallery;
         } catch (e) {
-          console.warn(`[publish] deferred image gen failed: ${e instanceof Error ? e.message : e}`);
+          log.warn("deferred image gen failed", { host, error: e });
         }
         // ALWAYS patch — even on total failure (hero=null, gallery=[]). The
         // pending gallery MUST be resolved: real images when we have them, an
@@ -239,7 +266,7 @@ export async function generateDraft(opts: {
         try {
           await patchGeneratedImages({ host, hero, gallery, altBase, genToken });
         } catch (e) {
-          console.warn(`[publish] deferred image patch failed: ${e instanceof Error ? e.message : e}`);
+          log.warn("deferred image patch failed", { host, error: e });
         }
       });
     }
@@ -324,7 +351,7 @@ async function patchGeneratedImages(opts: {
     .eq("draft_content->>genToken", genToken)
     .select("id");
   if (dErr) {
-    console.warn(`[publish] draft image patch failed: ${dErr.message}`);
+    log.warn("draft image patch failed", { host, error: dErr.message });
     return;
   }
   if (!dRows?.length) return; // a newer generation won — nothing more to do.
@@ -346,30 +373,85 @@ async function patchGeneratedImages(opts: {
     .eq("published_content->>genToken", genToken)
     .select("id");
   if (pErr) {
-    console.warn(`[publish] published image patch failed: ${pErr.message}`);
+    log.warn("published image patch failed", { host, error: pErr.message });
     return;
   }
 
   // Purge only when the LIVE copy actually changed (§5.5).
-  if (pRows?.length) await revalidateTenant(host);
+  if (pRows?.length) await revalidateLiveHosts(sb, tenant.id as string, host);
 }
+
+/**
+ * Machine-readable refusal from the paywall gate. Callers translate it into
+ * their own UI (the payment panel) — it is never shown to an owner as-is.
+ */
+export const PAYMENT_REQUIRED = "payment_required";
 
 /**
  * Promote the draft to the live site: draft_content → published_content,
  * status "published", purge the tenant
  * cache (§5.5/§9.1). The ONLY path that publishes — human- (or admin-)
  * triggered, never called by an agent loop (invariant 6).
+ *
+ * Also the single paywall choke point (spec 2026-08-05 §3): both entries
+ * (finalizeAction in onboarding, publishSite in the editor) come through here,
+ * so there is exactly one place where «сайт стає живим» is gated on payment.
+ * Unlike the rate limits, this fails CLOSED — a broken read means no publish.
  */
-export async function publishDraft(host: string): Promise<{ ok: boolean; url: string; error?: string }> {
+export async function publishDraft(
+  host: string,
+  opts: { bypassPaywall?: boolean } = {},
+): Promise<{ ok: boolean; url: string; error?: string }> {
   const url = publicSiteUrl(host);
+  // Admin test-generation and the /api/dev helpers publish fixtures that were
+  // never sold, so the explicit opts flag always wins. PAYWALL_DISABLED is a
+  // LOCAL escape hatch only: in production one stray env var must never switch
+  // billing off silently, so it is ignored there and logged loudly instead.
+  const envDisabled = process.env.PAYWALL_DISABLED === "1";
+  const inProduction = process.env.NODE_ENV === "production";
+  if (envDisabled && inProduction) {
+    log.error("PAYWALL_DISABLED set in production — ignored", { host });
+  }
+  const bypassPaywall = opts.bypassPaywall === true || (envDisabled && !inProduction);
   try {
     const sb = getServiceClient();
-    const { data: tenant, error: tErr } = await sb
+    // paid_until only when it matters: with the paywall bypassed a DB whose
+    // migration 0009 is still unapplied must keep working (admin fixtures, dev).
+    const { data: tenantRow, error: tErr } = await sb
       .from("tenants")
-      .select("id")
+      .select(bypassPaywall ? "id" : "id, paid_until")
       .eq("host", host)
       .maybeSingle();
-    if (tErr || !tenant) throw new Error(`tenant read failed: ${tErr?.message ?? "not found"}`);
+    const tenant = tenantRow as { id: string; paid_until?: string | null } | null;
+    if (tErr || !tenant) {
+      // Distinguish «column paid_until missing» (migration not applied) from a
+      // genuine tenant-read failure: the first must fail CLOSED as unpaid, not
+      // surface as a generic error the owner can do nothing about.
+      if (tErr && !bypassPaywall) {
+        const { data: probe } = await sb
+          .from("tenants")
+          .select("id")
+          .eq("host", host)
+          .maybeSingle();
+        if (probe) {
+          log.error("paywall column unreadable — treating tenant as unpaid", {
+            host,
+            error: tErr.message,
+            hint: "apply supabase/migrations/0009_payments.sql",
+          });
+          return { ok: false, url, error: PAYMENT_REQUIRED };
+        }
+      }
+      throw new Error(`tenant read failed: ${tErr?.message ?? "not found"}`);
+    }
+
+    if (!bypassPaywall) {
+      const paidUntil = tenant.paid_until ? Date.parse(tenant.paid_until) : NaN;
+      if (!Number.isFinite(paidUntil) || paidUntil <= Date.now()) {
+        log.info("publish blocked — not paid", { host, paidUntil: tenant.paid_until ?? null });
+        return { ok: false, url, error: PAYMENT_REQUIRED };
+      }
+    }
 
     const { data: page, error: pReadErr } = await sb
       .from("pages")
@@ -435,7 +517,7 @@ export async function publishDraft(host: string): Promise<{ ok: boolean; url: st
       }
     }
 
-    await revalidateTenant(host); // §5.5 / §9.1 purge-on-publish
+    await revalidateLiveHosts(sb, tenant.id, host); // §5.5 / §9.1 purge-on-publish
     return { ok: true, url };
   } catch (e) {
     return { ok: false, url, error: e instanceof Error ? e.message : String(e) };

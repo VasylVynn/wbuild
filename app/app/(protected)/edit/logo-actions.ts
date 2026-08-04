@@ -36,7 +36,11 @@ export async function setLogoAction(host: string, url: string | null): Promise<L
   if (url !== null && !isStorageUrl(url)) return { ok: false, error: "invalid url" };
 
   const sb = getServiceClient();
-  const { data: t } = await sb.from("tenants").select("id, brand").eq("host", host).maybeSingle();
+  const { data: t } = await sb
+    .from("tenants")
+    .select("id, brand, custom_domain")
+    .eq("host", host)
+    .maybeSingle();
   if (!t) return { ok: false, error: "tenant not found" };
 
   const brand = { ...((t.brand ?? {}) as BrandRow) };
@@ -46,6 +50,11 @@ export async function setLogoAction(host: string, url: string | null): Promise<L
   const { error } = await sb.from("tenants").update({ brand }).eq("id", t.id);
   if (error) return { ok: false, error: error.message };
 
-  await revalidateTenant(host); // brand is unversioned — purge so the header updates
+  // brand is unversioned — purge so the header updates. A tenant on its paid
+  // domain answers under a second cache tag; miss it and the new logo shows on
+  // the subdomain but not on the domain the owner paid for.
+  await revalidateTenant(host);
+  const customDomain = t.custom_domain as string | null;
+  if (customDomain && customDomain !== host) await revalidateTenant(customDomain);
   return { ok: true, ...(url && { logoUrl: url }) };
 }

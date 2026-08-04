@@ -118,7 +118,9 @@ export async function adminTestGenerate(verticalId: string): Promise<AdminGenera
   try {
     const draft = await generateDraft({ facts: fixture, host, verticalId });
     if (!draft.ok) return { ok: false, error: draft.error ?? "Помилка генерації." };
-    const pub = await publishDraft(host);
+    // Founders' fixture — nobody paid for it, and it must publish on a DB where
+    // the payments migration may not be applied yet (spec §3).
+    const pub = await publishDraft(host, { bypassPaywall: true });
     if (!pub.ok) return { ok: false, error: pub.error ?? "Помилка публікації." };
     const ms = Date.now() - started;
 

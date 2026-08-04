@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "generation failed", detail: draft.error }, { status: 500 });
   }
   if (publish) {
-    const pub = await publishDraft(host);
+    const pub = await publishDraft(host, { bypassPaywall: true }); // local smoke, never a sale
     if (!pub.ok) {
       return NextResponse.json({ error: "publish failed", detail: pub.error }, { status: 500 });
     }

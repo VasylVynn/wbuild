@@ -29,6 +29,17 @@ export function publicSiteUrl(host: string): string {
   return `http://${bare}${port ? `:${port}` : ""}`;
 }
 
+/**
+ * Absolute URL for a page that lives on the MARKETING ROOT (/oferta, /privacy).
+ * The dashboard host has no such routes — middleware rewrites every path there
+ * into the /app namespace, so a bare href="/oferta" from the editor or the
+ * onboarding chat resolves to /app/oferta and 404s. Same dev/prod protocol rule
+ * as publicSiteUrl, and client-safe for the same reason.
+ */
+export function rootSiteUrl(path = "/"): string {
+  return `${publicSiteUrl(ROOT_DOMAIN)}${path}`;
+}
+
 /** Subdomain labels reserved for the platform itself (never tenants). */
 const PLATFORM_SUBDOMAINS = ["www", "app"] as const;
 

@@ -1,6 +1,6 @@
 "use server";
 
-import { getServiceClient } from "@/lib/supabase/server";
+import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { requireMember } from "@/lib/tenant/membership";
 import { parseBlockProps, type StoredBlock } from "@/lib/blocks/schema";
 import { blockPlacementSchema } from "@/lib/blocks/schema";
@@ -12,7 +12,9 @@ import type { SiteMedia } from "@/lib/media/media";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import { type PageSeo } from "@/lib/tenant/types";
 import type { PageContent } from "@/lib/site/page-content";
-import { publishDraft } from "@/lib/site/publish";
+import { publishDraft, PAYMENT_REQUIRED } from "@/lib/site/publish";
+import { trackFunnel } from "@/lib/analytics/funnel";
+import { priceUah } from "@/lib/payments/wayforpay";
 import { runStyleAudit } from "@/lib/design/style-audit";
 import { buildSectionDigest } from "@/lib/site/inspect";
 import type { StyleAuditReport } from "@/lib/site/page-content";
@@ -385,14 +387,50 @@ export async function regenerateSite(
 
 /**
  * «Опублікувати»: draft → published + cache purge (§5.5/§9.1). The promotion
- * itself lives in publishDraft() — this action only adds the ownership gate.
- * Duplicating the promotion here once cost the live site its deferred-image
- * self-correction, so there is exactly one implementation.
+ * itself lives in publishDraft() — this action only adds the ownership gate,
+ * the rate limit and the paywall hand-off. Duplicating the promotion here once
+ * cost the live site its deferred-image self-correction, so there is exactly
+ * one implementation.
  */
-export async function publishSite(host: string): Promise<{ ok: boolean; error?: string }> {
+export async function publishSite(
+  host: string,
+  /** `paywallRetry` — the automatic republish after a confirmed payment. It is
+   *  the same click continuing, so it must not be counted a second time. */
+  opts?: { paywallRetry?: boolean },
+): Promise<{ ok: boolean; error?: string; paymentRequired?: true; price?: number }> {
   const gate = await requireMember({ host }); // §3.1
   if (!gate.ok) return { ok: false, error: gate.error };
+
+  // Publishing purges the tenant cache and rewrites live content — cheap for
+  // the owner, not free for us. Fails open like every other limiter.
+  const limit = await checkRateLimit("publish", ipFromHeaders(await headers()));
+  if (!limit.ok) return { ok: false, error: rateLimitMessage(limit.retryAfterSec) };
+
+  // Without Supabase there is nothing to publish and getServiceClient() throws —
+  // an unhandled server-action error the owner can do nothing with. Answer the
+  // same way the sibling actions do (§3.1 degrade-open).
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Сервіс тимчасово недоступний. Спробуйте пізніше." };
+  }
+
+  if (!opts?.paywallRetry) {
+    const { data: t } = await getServiceClient()
+      .from("tenants")
+      .select("id")
+      .eq("host", host)
+      .maybeSingle();
+    await trackFunnel("publish_clicked", { tenantId: (t?.id as string) ?? undefined, meta: { host, source: "editor" } });
+  }
+
   const res = await publishDraft(host);
+  if (!res.ok && res.error === PAYMENT_REQUIRED) {
+    return {
+      ok: false,
+      error: "Щоб опублікувати сайт, потрібна оплата.",
+      paymentRequired: true,
+      price: priceUah(),
+    };
+  }
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 

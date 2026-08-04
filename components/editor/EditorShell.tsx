@@ -10,13 +10,14 @@ import {
   customRequestAction,
   type EditorData,
 } from "@/app/app/(protected)/edit/actions";
-import { publicSiteUrl } from "@/lib/config";
+import { publicSiteUrl, rootSiteUrl } from "@/lib/config";
 import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-actions";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
 import { getTemplate, type SiteTemplate, type TemplateBrand } from "@/lib/templates/registry";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/components/ui";
+import { usePaywallCheckout, PRICE_UAH } from "@/components/pay/usePaywallCheckout";
 import EditableSection from "./EditableSection";
 import BlockSheet from "./BlockSheet";
 import BlockEditPanel from "./BlockEditPanel";
@@ -97,6 +98,11 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   const [regenConfirmOpen, setRegenConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // Paywall modal (spec §3): publishing an unpaid site opens the offer instead
+  // of failing with a toast the owner can do nothing about. The price comes
+  // back with that refusal — PRICE_UAH is only the pre-answer fallback.
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [price, setPrice] = useState(PRICE_UAH);
   const [busyLabel, setBusyLabel] = useState<string | null>(null); // regenerate
   const [dirty, setDirty] = useState(false); // unpublished draft changes
   const [toast, setToast] = useState<Toast | null>(null);
@@ -190,17 +196,39 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     }
   };
 
-  const publish = async () => {
+  const publish = async (opts?: { paywallRetry?: boolean }): Promise<boolean> => {
     setPublishing(true);
-    const res = await publishSite(host);
+    const res = await publishSite(host, opts);
     setPublishing(false);
     if (res.ok) {
       const url = publicSiteUrl(host);
       setDirty(false);
       notify({ text: "Опубліковано! Зміни вже на сайті", href: url });
-    } else {
-      notify({ text: `Не вдалося опублікувати: ${res.error ?? "помилка"}` });
+      return true;
     }
+    if (res.paymentRequired) {
+      if (res.price) setPrice(res.price);
+      setPaywallOpen(true);
+      return false;
+    }
+    notify({ text: `Не вдалося опублікувати: ${res.error ?? "помилка"}` });
+    return false;
+  };
+
+  // Same checkout + polling as the onboarding chat — one implementation, two
+  // surfaces. A confirmed payment simply retries the publish — flagged as a
+  // retry so the funnel counts one «publish_clicked» per owner, not two.
+  const paywall = usePaywallCheckout({
+    host,
+    onPaid: async () => {
+      if (await publish({ paywallRetry: true })) setPaywallOpen(false);
+    },
+  });
+
+  const closePaywall = () => {
+    if (paywall.status === "awaiting" || paywall.status === "creating") return;
+    paywall.reset();
+    setPaywallOpen(false);
   };
 
   const closeCustomSheet = () => {
@@ -464,7 +492,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
               className={`w-full shrink-0 sm:w-auto ${
                 dirty && !publishing ? "ring-2 ring-honey ring-offset-2 ring-offset-surface" : ""
               }`}
-              onClick={publish}
+              onClick={() => void publish()}
             >
               {publishing ? "Публікуємо…" : "Опублікувати"}
             </Button>
@@ -685,6 +713,98 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           </Button>
         )}
       </Sheet>
+
+      {/* Paywall (spec §3): same offer and same checkout as the onboarding
+          chat, in the editor's dialog shape. */}
+      {paywallOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+          <button
+            aria-label="Закрити"
+            className="absolute inset-0 h-full w-full bg-ink/40"
+            onClick={closePaywall}
+          />
+          <div className="relative w-full max-w-sm rounded-[20px] bg-surface p-6 shadow-card">
+            <h3 className="text-[19px] font-bold text-ink">Сайт готовий до публікації</h3>
+            <p className="mt-2 text-[15px] leading-relaxed text-ink-muted">
+              {price} грн одноразово — сайт і власний домен на 1 рік.
+            </p>
+
+            {paywall.status === "paid" ? (
+              /* Paid, but the publish that followed it failed. The site is
+                 bought — the only way forward is another publish attempt, never
+                 a second checkout. */
+              <div className="mt-5 flex flex-col gap-2">
+                <Button
+                  size="lg"
+                  className="w-full"
+                  disabled={publishing || paywall.retrying}
+                  onClick={() => void paywall.retryPublish()}
+                >
+                  {publishing || paywall.retrying ? "Публікуємо…" : "Спробувати опублікувати ще раз"}
+                </Button>
+                <span className="text-[14px] leading-snug text-ink-muted">
+                  Оплату отримано — повторно платити не потрібно.
+                </span>
+              </div>
+            ) : paywall.status === "awaiting" ? (
+              <div className="mt-5 flex flex-col gap-2" role="status">
+                <span className="flex items-center gap-2.5 text-[16px] font-bold text-ink">
+                  <span
+                    className="inline-block h-4 w-4 animate-spin rounded-full border-[2.5px] border-honey border-t-transparent"
+                    aria-hidden
+                  />
+                  Очікуємо оплату…
+                </span>
+                <span className="text-[14px] leading-snug text-ink-muted">
+                  Оплата відкрилась у новій вкладці. Поверніться сюди — щойно платіж пройде, сайт
+                  опублікується сам.
+                </span>
+              </div>
+            ) : (
+              <Button
+                size="lg"
+                className="mt-5 w-full"
+                disabled={paywall.status === "creating" || publishing}
+                onClick={() => void paywall.start()}
+              >
+                {paywall.status === "creating"
+                  ? "Готуємо оплату…"
+                  : paywall.status === "failed" || paywall.status === "error"
+                    ? "Спробувати ще раз"
+                    : `Опублікувати — ${price} грн`}
+              </Button>
+            )}
+
+            {(paywall.status === "failed" || paywall.status === "error") && paywall.error && (
+              <p className="mt-3 rounded-[14px] bg-danger-soft px-4 py-3 text-[14px] font-semibold leading-relaxed text-danger">
+                {paywall.status === "failed" ? "Оплата не пройшла. " : ""}
+                {paywall.error}
+              </p>
+            )}
+
+            <div className="mt-4 flex items-center justify-between gap-3">
+              {/* The offer lives on the marketing root — the editor host has no
+                  /oferta route (middleware rewrites it into /app). */}
+              <a
+                href={rootSiteUrl("/oferta")}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[13px] text-ink-faint underline underline-offset-2 hover:text-ink-muted"
+              >
+                Публічна оферта
+              </a>
+              <Button
+                variant="quiet"
+                size="sm"
+                disabled={paywall.status === "awaiting" || paywall.status === "creating"}
+                onClick={closePaywall}
+              >
+                Пізніше
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={regenConfirmOpen}

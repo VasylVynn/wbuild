@@ -5,6 +5,7 @@ import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
 import type { ChatMsg } from "@/lib/ai/onboard";
 import { isStorageUrl, MAX_PHOTOS, mediaSchema, type SiteMedia } from "@/lib/media/media";
+import { trackFunnel } from "@/lib/analytics/funnel";
 
 // Shape stored inside conversations.facts_state
 type FactsState = {
@@ -65,6 +66,10 @@ export async function startConversation(): Promise<{ conversationId: string } | 
     .single();
 
   if (convErr || !conv) return null;
+
+  // Top of the funnel: this row is created on the first real user message, so it
+  // counts people who started talking, not people who loaded /new.
+  await trackFunnel("chat_start", { tenantId: tenant.id, conversationId: conv.id });
 
   return { conversationId: conv.id };
 }
