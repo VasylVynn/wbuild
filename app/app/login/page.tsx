@@ -61,7 +61,7 @@ function BrandPanel() {
           </div>
         </div>
 
-        <p className="text-[14px] text-white/50">Без карток і без технічних знань.</p>
+        <p className="text-[14px] text-white/50">Без технічних знань і складних налаштувань.</p>
       </div>
     </aside>
   );

@@ -3,8 +3,9 @@ import { Logo } from "./Logo";
 import { Reveal } from "./Reveal";
 
 /**
- * Closing CTA card + the page's only footer. Nav here is anchors plus the two
- * real destinations on the dashboard host, passed down from the page.
+ * Closing CTA card + the page's only footer. Nav here is anchors, the two legal
+ * pages (WayForPay merchant review requires both reachable from the landing)
+ * and the two real destinations on the dashboard host, passed down from the page.
  */
 export function SiteFooter({ newUrl, loginUrl }: { newUrl: string; loginUrl: string }) {
   return (
@@ -26,10 +27,12 @@ export function SiteFooter({ newUrl, loginUrl }: { newUrl: string; loginUrl: str
             href={newUrl}
             className="group mt-8 inline-flex min-h-13 items-center justify-center gap-2 rounded-full bg-honey px-8 font-ui text-[16px] font-bold text-honey-text transition-all hover:brightness-95"
           >
-            Створити сайт безкоштовно
+            Створити сайт
             <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
           </a>
-          <p className="mt-4 text-[14px] text-white/60">Без карток і без технічних знань</p>
+          <p className="mt-4 text-[14px] text-white/60">
+            Спробувати — безкоштовно. 999 грн одноразово за публікацію і власний домен на рік.
+          </p>
         </div>
       </Reveal>
 
@@ -44,6 +47,12 @@ export function SiteFooter({ newUrl, loginUrl }: { newUrl: string; loginUrl: str
           </a>
           <a href="#features" className="transition-colors hover:text-ink">
             Можливості
+          </a>
+          <a href="/oferta" className="transition-colors hover:text-ink">
+            Публічна оферта
+          </a>
+          <a href="/privacy" className="transition-colors hover:text-ink">
+            Конфіденційність
           </a>
           <a href={loginUrl} className="transition-colors hover:text-ink">
             Увійти

@@ -5,9 +5,9 @@ import { Plus } from "lucide-react";
 import { Reveal } from "./Reveal";
 
 /**
- * The four objections a non-technical owner actually raises. Answers stay
- * inside what the product really does today — no plan ladder, no promises the
- * funnel cannot keep.
+ * The objections a non-technical owner actually raises. Answers stay inside
+ * what the product really does today — no plan ladder, no promises the funnel
+ * cannot keep, and nothing about renewal pricing (undecided, spec 2026-08-05).
  */
 const items = [
   {
@@ -24,7 +24,15 @@ const items = [
   },
   {
     q: "Скільки це коштує?",
-    a: "Створити й опублікувати сайт можна безкоштовно — без карток і без прихованих умов.",
+    a: "999 грн одноразово — це готовий сайт і власний домен на рік. Створити сайт і подивитись, що вийшло, можна безкоштовно: оплата потрібна лише тоді, коли ви вирішите його опублікувати.",
+  },
+  {
+    q: "Коли запрацює мій домен?",
+    a: "Одразу після оплати сайт публікується і працює. Далі ви обираєте назву домену, ми перевіряємо, чи вона вільна, реєструємо її та підключаємо до сайту — зазвичай протягом чотирьох годин.",
+  },
+  {
+    q: "Що буде через рік?",
+    a: "Сайт і домен оплачені на рік від дня оплати. Умови продовження ми надішлемо вам перед завершенням терміну — нічого не спишеться автоматично.",
   },
 ];
 

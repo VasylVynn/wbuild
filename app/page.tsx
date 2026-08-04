@@ -7,6 +7,7 @@ import { TelegramSection } from "@/components/landing/TelegramSection";
 import { Features } from "@/components/landing/Features";
 import { Faq } from "@/components/landing/Faq";
 import { SiteFooter } from "@/components/landing/SiteFooter";
+import { MetaPixel } from "@/lib/analytics/pixel";
 
 /**
  * 3minsite marketing landing — served on the root/www platform hosts (§2.5).
@@ -27,6 +28,8 @@ const LOGIN_URL = `${APP_HOST}/login`;
 export default function PlatformHome() {
   return (
     <main className="min-h-screen bg-canvas text-ink">
+      {/* Ad traffic lands here — PageView is the top of the measured funnel (§5). */}
+      <MetaPixel />
       <SiteHeader newUrl={NEW_URL} loginUrl={LOGIN_URL} />
       <Hero newUrl={NEW_URL} />
       <HowItWorks />

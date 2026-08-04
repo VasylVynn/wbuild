@@ -7,6 +7,8 @@ import { getVertical } from "@/lib/verticals/registry";
 import { ROOT_DOMAIN } from "@/lib/config";
 import { Card, Chip } from "@/components/ui";
 import SiteRow from "./SiteRow";
+import FunnelCard from "./FunnelCard";
+import DomainActivation from "./DomainActivation";
 
 /**
  * Founders-only platform overview + kill-switch (gated by lib/admin.ts,
@@ -50,6 +52,13 @@ interface CustomRequestRow {
   created_at: string;
 }
 
+interface DomainRow {
+  id: string;
+  host: string | null;
+  requested_domain: string | null;
+  custom_domain: string | null;
+}
+
 interface ConversationRow {
   id: string;
   is_complete: boolean;
@@ -67,6 +76,22 @@ function formatDate(iso: string): string {
   });
 }
 
+/**
+ * Domain queue, read on its own so migration 0009 can be un-applied without
+ * taking the whole console down: a missing column errors here and nowhere else.
+ */
+async function loadDomainQueue(sb: ReturnType<typeof getServiceClient>): Promise<DomainRow[]> {
+  const { data, error } = await sb
+    .from("tenants")
+    .select("id, host, requested_domain, custom_domain")
+    .not("host", "is", null)
+    .or("requested_domain.not.is.null,custom_domain.not.is.null")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) return [];
+  return (data ?? []) as DomainRow[];
+}
+
 async function loadAdminData() {
   const sb = getServiceClient();
 
@@ -80,6 +105,7 @@ async function loadAdminData() {
     conversationsRes,
     conversationsTotalRes,
     qaRes,
+    domainQueue,
   ] = await Promise.all([
     sb
       .from("tenants")
@@ -103,6 +129,7 @@ async function loadAdminData() {
       .limit(10),
     sb.from("conversations").select("id", { count: "exact", head: true }),
     sb.from("pages").select("tenant_id, draft_content->styleAudit").eq("slug", ""),
+    loadDomainQueue(sb),
   ]);
 
   const sites = (sitesRes.data ?? []) as TenantRow[];
@@ -165,6 +192,7 @@ async function loadAdminData() {
     conversations,
     tenantLiteById,
     qaByTenant,
+    domainQueue,
   };
 }
 
@@ -193,6 +221,7 @@ export default async function AdminPage() {
     conversations,
     tenantLiteById,
     qaByTenant,
+    domainQueue,
   } = await loadAdminData();
 
   const publishedCount = sites.filter((s) => s.status === "published").length;
@@ -226,6 +255,11 @@ export default async function AdminPage() {
         <StatCard label="Заявок" value={totalLeads} />
         <StatCard label="Розмов без сайту" value={draftlessCount} />
         <StatCard label="Розмов усього" value={totalConversations} />
+      </div>
+
+      {/* Paid funnel (spec §5) — self-gating, renders nothing on an empty funnel. */}
+      <div className="mb-10">
+        <FunnelCard />
       </div>
 
       <section className="mb-10">
@@ -305,6 +339,27 @@ export default async function AdminPage() {
           )}
         </div>
       </section>
+
+      {/* Domain ops (spec §4): the owner ordered a name in the funnel, a human
+          registered it and pointed DNS — this flips the tenant over. Empty
+          until someone orders (or when migration 0009 is not applied yet). */}
+      {domainQueue.length > 0 && (
+        <section className="mb-10">
+          <h2 className="mb-3 font-brand text-[19px] font-medium text-ink">
+            Домени <span className="text-ink-faint">({domainQueue.length})</span>
+          </h2>
+          <div className="flex flex-col gap-3">
+            {domainQueue.map((d) => (
+              <DomainActivation
+                key={d.id}
+                host={d.host as string}
+                requestedDomain={d.requested_domain}
+                currentDomain={d.custom_domain}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="mb-10">
         <h2 className="mb-3 font-brand text-[19px] font-medium text-ink">
