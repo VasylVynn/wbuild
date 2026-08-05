@@ -51,20 +51,42 @@ function rootHost(): string {
   return stripPort(ROOT_DOMAIN);
 }
 
-/** True for the marketing root and platform subdomains (www, app). */
+/**
+ * Additional platform ROOT domains during the brand migration overlap
+ * (wizz-app.net primary while 3minsite.com.ua comes online, or vice versa).
+ * Comma-separated bare domains. Every listed root serves the marketing page,
+ * its `www.` variant, and its `app.` dashboard — WITHOUT it, an added Vercel
+ * domain falls through to the tenant branch and 404s (no tenant has that
+ * host). ROOT_DOMAIN stays the single source for URL BUILDING
+ * (publicSiteUrl/rootSiteUrl) and for minting new tenant subdomains.
+ */
+function extraPlatformRoots(): string[] {
+  return (process.env.NEXT_PUBLIC_EXTRA_PLATFORM_ROOTS ?? "")
+    .split(",")
+    .map((s) => stripPort(s.trim()).toLowerCase())
+    .filter(Boolean);
+}
+
+function platformRoots(): string[] {
+  return [rootHost(), ...extraPlatformRoots()];
+}
+
+/** True for the marketing root and platform subdomains (www, app) of ANY platform root. */
 export function isPlatformHost(host: string): boolean {
   const h = stripPort(host);
-  const root = rootHost();
   if (!h) return true; // no host → treat as platform (serves marketing)
-  if (h === root) return true;
-  if (h.endsWith(`.${root}`)) {
-    const label = h.slice(0, -(root.length + 1));
-    return (PLATFORM_SUBDOMAINS as readonly string[]).includes(label);
+  for (const root of platformRoots()) {
+    if (h === root) return true;
+    if (h.endsWith(`.${root}`)) {
+      const label = h.slice(0, -(root.length + 1));
+      if ((PLATFORM_SUBDOMAINS as readonly string[]).includes(label)) return true;
+    }
   }
   return false; // custom domains are tenants, not platform
 }
 
-/** True for the dashboard/editor host (`app.<root>`). */
+/** True for the dashboard/editor host (`app.<root>`) of ANY platform root. */
 export function isDashboardHost(host: string): boolean {
-  return stripPort(host) === `app.${rootHost()}`;
+  const h = stripPort(host);
+  return platformRoots().some((root) => h === `app.${root}`);
 }
