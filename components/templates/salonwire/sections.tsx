@@ -1,4 +1,12 @@
 import type { BlockProps } from "@/lib/blocks/schema";
+import {
+  instagramHref,
+  normalizeIgHandle,
+  normalizeUaPhoneDigits,
+  telegramHref,
+  viberHref,
+} from "@/lib/blocks/contact-links";
+import WireLeadFormClient from "./WireLeadForm.client";
 
 /*
  * salonwire sections — the WIREFRAME (design spike, 2026-07-27).
@@ -224,23 +232,9 @@ export function WireLeadForm({ data }: { data: unknown }) {
       <div className="wire-container wire-stack wire-leadform__inner">
         {d.title && <h2 className="wire-title">{d.title}</h2>}
         {d.subtitle && <p className="wire-subtitle">{d.subtitle}</p>}
-        <form className="wire-stack wire-leadform__form">
-          <div className="wire-field">
-            <label className="wire-eyebrow" htmlFor="wire-name">Імʼя</label>
-            <input className="wire-input" id="wire-name" name="name" />
-          </div>
-          <div className="wire-field">
-            <label className="wire-eyebrow" htmlFor="wire-phone">Телефон</label>
-            <input className="wire-input" id="wire-phone" name="phone" inputMode="tel" />
-          </div>
-          <div className="wire-field">
-            <label className="wire-eyebrow" htmlFor="wire-msg">Повідомлення</label>
-            <textarea className="wire-textarea" id="wire-msg" name="message" />
-          </div>
-          <button className="wire-btn wire-btn--primary" type="submit">
-            {d.buttonLabel ?? "Надіслати"}
-          </button>
-        </form>
+        {/* Interactive half lives in the client component — the wireframe's only
+            one; it posts to /api/leads (invariant #8: the form must WORK). */}
+        <WireLeadFormClient data={d} />
       </div>
     </section>
   );
@@ -369,25 +363,35 @@ export function WireInstagramCta({ data }: { data: unknown }) {
 
 export function WireContacts({ data }: { data: unknown }) {
   const d = data as BlockProps["contacts"];
-  const rows: [string, string | undefined][] = [
-    ["Телефон", d.phone],
-    ["Адреса", d.address],
-    ["Години", d.hours],
-    ["Email", d.email],
-  ];
+  const phoneDigits = d.phone ? normalizeUaPhoneDigits(d.phone) : "";
+  const igHandle = normalizeIgHandle(d.instagram);
+  const rows: { label: string; value: string; href?: string }[] = [];
+  if (d.phone) rows.push({ label: "Телефон", value: d.phone, href: phoneDigits ? `tel:+${phoneDigits}` : undefined });
+  if (d.address) rows.push({ label: "Адреса", value: d.address });
+  if (d.hours) rows.push({ label: "Години", value: d.hours });
+  if (d.email) rows.push({ label: "Email", value: d.email, href: `mailto:${d.email}` });
+  const tg = telegramHref(d.telegram);
+  if (d.telegram && tg) rows.push({ label: "Telegram", value: d.telegram, href: tg });
+  const vb = viberHref(d.viber);
+  if (d.viber && vb) rows.push({ label: "Viber", value: d.viber, href: vb });
+  if (igHandle) rows.push({ label: "Instagram", value: `@${igHandle}`, href: instagramHref(igHandle) ?? undefined });
   return (
     <section className="wire-section wire-contacts">
       <div className="wire-container wire-stack">
         {d.title && <h2 className="wire-title">{d.title}</h2>}
         <div className="wire-grid-2">
-          {rows
-            .filter(([, v]) => Boolean(v))
-            .map(([label, value]) => (
-              <div className="wire-card wire-contact" key={label}>
-                <span className="wire-eyebrow">{label}</span>
+          {rows.map(({ label, value, href }) => (
+            <div className="wire-card wire-contact" key={label}>
+              <span className="wire-eyebrow">{label}</span>
+              {href ? (
+                <a className="wire-heading wire-contact__value wire-contact__link" href={href}>
+                  {value}
+                </a>
+              ) : (
                 <span className="wire-heading wire-contact__value">{value}</span>
-              </div>
-            ))}
+              )}
+            </div>
+          ))}
         </div>
       </div>
     </section>

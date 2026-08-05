@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
+import {
+  instagramHref,
+  normalizeIgHandle,
+  normalizeUaPhoneDigits,
+  telegramHref,
+} from "@/lib/blocks/contact-links";
 import "./wire.css";
 
 /**
@@ -48,6 +54,11 @@ export function SalonWireWrapper({
 }) {
   const generated = brand?.wireCss ? sanitizeCss(brand.wireCss) : null;
   const links = brand?.navLinks ?? [];
+  const contact = brand?.contact;
+  const phoneDigits = contact?.phone ? normalizeUaPhoneDigits(contact.phone) : "";
+  const tgHref = telegramHref(contact?.telegram);
+  const igHandle = normalizeIgHandle(contact?.instagram);
+  const igLink = instagramHref(contact?.instagram);
 
   return (
     <div className="tpl-salonwire">
@@ -60,7 +71,13 @@ export function SalonWireWrapper({
               The wireframe has no two-tone treatment, so it must re-join them —
               rendering brandName alone silently dropped the last word of every
               multi-word business name («Барбершоп Кузня» → «Барбершоп»). */}
-          <span className="wire-nav__brand">{fullBrandName(brand)}</span>
+          <span className="wire-nav__brandlock">
+            {brand?.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="wire-nav__logo" src={brand.logoUrl} alt="" />
+            )}
+            <span className="wire-nav__brand">{fullBrandName(brand)}</span>
+          </span>
           <nav className="wire-nav__links">
             {links.map((l) => (
               <a className="wire-nav__link" href={l.href} key={l.href}>
@@ -79,16 +96,42 @@ export function SalonWireWrapper({
       <footer className="wire-footer">
         <div className="wire-container wire-footer__inner">
           <div className="wire-stack">
+            {brand?.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="wire-footer__logo" src={brand.logoUrl} alt="" />
+            )}
             <span className="wire-heading">{fullBrandName(brand)}</span>
           </div>
           <div className="wire-stack">
             <span className="wire-eyebrow">Контакти</span>
-            {brand?.contact?.phone && <span className="wire-text">{brand.contact.phone}</span>}
-            {brand?.contact?.address && <span className="wire-text">{brand.contact.address}</span>}
+            {contact?.phone &&
+              (phoneDigits ? (
+                <a className="wire-text wire-footer__link" href={`tel:+${phoneDigits}`}>
+                  {contact.phone}
+                </a>
+              ) : (
+                <span className="wire-text">{contact.phone}</span>
+              ))}
+            {contact?.email && (
+              <a className="wire-text wire-footer__link" href={`mailto:${contact.email}`}>
+                {contact.email}
+              </a>
+            )}
+            {contact?.address && <span className="wire-text">{contact.address}</span>}
+            {tgHref && contact?.telegram && (
+              <a className="wire-text wire-footer__link" href={tgHref}>
+                Telegram
+              </a>
+            )}
+            {igLink && (
+              <a className="wire-text wire-footer__link" href={igLink}>
+                Instagram{igHandle ? ` — @${igHandle}` : ""}
+              </a>
+            )}
           </div>
           <div className="wire-stack">
             <span className="wire-eyebrow">Години</span>
-            {brand?.contact?.hours && <span className="wire-text">{brand.contact.hours}</span>}
+            {contact?.hours && <span className="wire-text">{contact.hours}</span>}
           </div>
           <div className="wire-stack">
             <span className="wire-eyebrow">Розділи</span>
