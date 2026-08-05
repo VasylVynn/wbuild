@@ -11,10 +11,25 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * Graceful degradation: with no url+anon key the whole auth layer is OFF and
  * every guard treats the app as open (behaves exactly as before auth landed).
  */
-export function isAuthConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+/**
+ * The browser-safe Supabase key under EITHER of its dashboard names: the 2025
+ * "publishable" key (sb_publishable_…) or the legacy "anon" JWT. Accepting both
+ * matters because a missing key doesn't fail loudly — it silently switches the
+ * whole auth layer OFF (degrade-open, §3.1), so an env built from the other
+ * dashboard wording would ship production with every ownership gate open.
+ */
+function publicSupabaseKey(): string | undefined {
+  // `||`, not `??`: an env file with a blank `NEXT_PUBLIC_SUPABASE_ANON_KEY=`
+  // line yields "" (defined), which must still fall through to the other name.
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    undefined
   );
+}
+
+export function isAuthConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && publicSupabaseKey());
 }
 
 /**
@@ -25,10 +40,10 @@ export function isAuthConfigured(): boolean {
  */
 export async function getAuthClient(): Promise<SupabaseClient> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const key = publicSupabaseKey();
   if (!url || !key) {
     throw new Error(
-      "Supabase auth not configured: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "Supabase auth not configured: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)",
     );
   }
   const store = await cookies();
