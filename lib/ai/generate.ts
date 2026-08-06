@@ -563,14 +563,15 @@ function assemble(
           ? `Атмосферне зображення — ${altBase}`
           : undefined;
       // Layout: the model's choice when the section actually defines it, else
-      // the seeded roll — vetoing `banner` when the photo that would fill the
-      // screen isn't good enough for it. groundAndPlace re-validates either way.
+      // the seeded roll. The `banner` photo veto applies to BOTH paths — the
+      // model is briefed on photo quality but must not be trusted with it: a
+      // blurry or text-covered shot blown up full-bleed is worse than any
+      // other layout. groundAndPlace re-validates either way.
+      const allowBanner = bannerWorthy(heroPhoto ? metaByUrl.get(heroPhoto) : undefined);
+      const chosen = resolvedVariant(template, resolvedSection(template, b), b.variant);
       const variant =
-        resolvedVariant(template, resolvedSection(template, b), b.variant) ??
-        heroVariantForSeed(
-          variantSeed,
-          bannerWorthy(heroPhoto ? metaByUrl.get(heroPhoto) : undefined),
-        );
+        (chosen === "banner" && !allowBanner ? undefined : chosen) ??
+        heroVariantForSeed(variantSeed, allowBanner);
       return { type: "hero", props: { ...props, imageUrl, imageAlt }, section: b.section, variant };
     }
     if (b.type === "gallery") {
