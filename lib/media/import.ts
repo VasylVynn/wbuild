@@ -69,8 +69,11 @@ function sniffImage(buf: Buffer): string | null {
  * Classical quality pass, identical in spirit to the upload route's: sharp is a
  * NATIVE module that can fail to load, so it rides lazily and fail-open — any
  * load/processing error means "proceed with the original bytes" (returns null).
- * Warnings are intentionally discarded here; the vision layer reports them
- * separately, this path only cares about the corrected buffer.
+ * Warnings are intentionally discarded here; this path only cares about the
+ * corrected buffer. They are not lost: analyzePhoto re-runs analyzeImage on the
+ * bytes we actually stored (i.e. post-correction — the honest reading) and
+ * carries them into PhotoMeta.warnings, where the ranker penalizes blur and
+ * darkness (lib/media/rank.ts).
  */
 async function qualityPass(buf: Buffer): Promise<Buffer | null> {
   try {

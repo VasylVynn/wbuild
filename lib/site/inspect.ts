@@ -421,6 +421,8 @@ export async function runDraftQualityLoop(opts: {
    *  (legacy callers), the text loop runs unchanged. */
   styleBrief?: string;
   styleHue?: number;
+  /** Independent second hue roll for the audit's one regen (style-audit altHue). */
+  styleAltHue?: number;
   /** generateDraft's chain-wide deadline — every model call in the loop
    *  (inspection, rebuilds, style audit + regen) shares it, so the loop can
    *  never outlive the caller's serverless budget. Fail-open throughout. */
@@ -454,6 +456,7 @@ export async function runDraftQualityLoop(opts: {
             sectionDigest: sectionDigest(sectionEntries(blocks)),
             brief: opts.styleBrief,
             hue: opts.styleHue,
+            altHue: opts.styleAltHue,
             signal: opts.signal,
           }).catch((e) => {
             console.warn(`[style-audit] failed (fail-open): ${e instanceof Error ? e.message : e}`);

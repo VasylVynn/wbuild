@@ -2,6 +2,7 @@ import "server-only";
 import { stripLoneSurrogates, safeSlice } from "@/lib/ai/sanitize";
 import { getAnthropic, isAnthropicConfigured, VISION_MODEL } from "@/lib/ai/anthropic";
 import { isStorageUrl, PHOTO_KINDS, type PhotoKind, type ExtractedInfo } from "./media";
+import { DEFAULT_SITE_QUALITY } from "./rank";
 
 /**
  * Photo intelligence (wave G, extended by refactor §1.4): one vision pass per
@@ -49,6 +50,17 @@ export type PhotoAnalysis = {
   extractedInfo: ExtractedInfo;
   /** Vision verdict: suitable as an actual SITE photo (text-heavy info → false). */
   useOnSite: boolean;
+  /** 0–10 photographic quality as a SITE photo (sharpness, framing, light).
+   *  Drives the ranking that decides which photos survive the MAX_PHOTOS cut
+   *  and which one becomes the hero (wave A). */
+  siteQuality: number;
+  /** The main subject reads clearly and isn't cropped at the edges. */
+  subjectCentered: boolean;
+  /** Text/stickers/collage/meme captions BURNED INTO the pixels — distinct from
+   *  `textHeavy`, which is an OCR-sense verdict about the image's purpose. */
+  burnedText: boolean;
+  /** Survives a full-width hero banner (wide, sharp, room around the subject). */
+  heroCandidate: boolean;
   /** Technical warnings from the classical sharp layer (may be empty). */
   warnings: string[];
 };
@@ -140,6 +152,28 @@ const analysisTool = {
         description:
           "Чи варто ставити це саме зображення як ФОТО на сайт (герой/галерея). false для textHeavy-картинок, скріншотів, прайсів — вони цінні як джерело даних, але не як фото. true для якісних предметних/інтерʼєрних/командних фото.",
       },
+      siteQuality: {
+        type: "integer",
+        minimum: 0,
+        maximum: 10,
+        description:
+          "Від 0 до 10: наскільки фото годиться на сайт бізнесу — різкість, композиція, світло. 0–3 — розмите, темне, шумне або зняте «як вийде»; 4–6 — звичайне робоче фото з телефона; 7–10 — чітке, добре освітлене, з чистим кадром. Оцінюй ЯКІСТЬ знімка, а не привабливість самого товару чи місця.",
+      },
+      subjectCentered: {
+        type: "boolean",
+        description:
+          "true, якщо головний обʼєкт (товар, страва, майстер, приміщення) добре читається і не обрізаний по краях. false, якщо обʼєкт скраю, наполовину за кадром або губиться серед іншого.",
+      },
+      burnedText: {
+        type: "boolean",
+        description:
+          "true, якщо НА зображення накладено текст, стікери, рамки, емодзі, колаж чи мем-підписи — вигоріле в пікселі, прибрати неможливо. false для природного тексту самої сцени: вивіска, етикетка, меню на стіні, напис на упаковці.",
+      },
+      heroCandidate: {
+        type: "boolean",
+        description:
+          "true, якщо фото витримає великий головний банер на всю ширину екрана: горизонтальне або квадратне, різке, з вільним простором навколо обʼєкта і без накладеного тексту. Сумніваєшся — false.",
+      },
       extractedInfo: {
         type: "object",
         description:
@@ -174,9 +208,15 @@ const analysisTool = {
           "ЛИШЕ для kind=review: імʼя автора, якщо воно ВИДНЕ на скріншоті. Не вигадуй.",
       },
     },
-    required: ["kind", "suitable", "reason", "ocrText", "textHeavy", "useOnSite"],
+    required: ["kind", "suitable", "reason", "ocrText", "textHeavy", "useOnSite", "siteQuality"],
   },
 };
+
+/** Model score → an integer inside 0…10; anything else → the neutral default. */
+function clampQuality(v: unknown): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) return DEFAULT_SITE_QUALITY;
+  return Math.min(10, Math.max(0, Math.round(v)));
+}
 
 /** Trimmed non-empty string capped at `max`, else undefined. */
 function clean(s: unknown, max: number): string | undefined {
@@ -250,7 +290,7 @@ export async function analyzePhoto(url: string): Promise<PhotoAnalysis | null> {
               { type: "image", source: { type: "base64", media_type: img.mime, data: img.b64 } },
               {
                 type: "text",
-                text: "Власник малого бізнесу завантажив це фото для свого сайту. Класифікуй його, перепиши ВЕСЬ видимий текст дослівно (ocrText), познач, чи це радше інформаційна картинка з текстом (textHeavy) чи справжнє фото для сайту (useOnSite), і витягни телефони/ціни/адреси/години/акції, якщо вони написані на зображенні. Пиши лише те, що бачиш — нічого не вигадуй. Виклич photo_analysis.",
+                text: "Власник малого бізнесу завантажив це фото для свого сайту. Класифікуй його, перепиши ВЕСЬ видимий текст дослівно (ocrText), познач, чи це радше інформаційна картинка з текстом (textHeavy) чи справжнє фото для сайту (useOnSite), оціни якість знімка (siteQuality, subjectCentered, burnedText, heroCandidate) і витягни телефони/ціни/адреси/години/акції, якщо вони написані на зображенні. Оцінюй суворо: з цих оцінок ми обираємо, які фото взагалі потраплять на сайт і яке стане головним банером. Пиши лише те, що бачиш — нічого не вигадуй. Виклич photo_analysis.",
               },
             ],
           },
@@ -284,6 +324,12 @@ export async function analyzePhoto(url: string): Promise<PhotoAnalysis | null> {
       // Trust the model's verdict; fall back to a sane default if it omitted it.
       useOnSite:
         typeof input.useOnSite === "boolean" ? input.useOnSite : input.suitable && !textHeavy,
+      // A missing/garbled score becomes the neutral default, so an unrated photo
+      // ranks with the ordinary ones instead of being buried (see lib/media/rank).
+      siteQuality: clampQuality(input.siteQuality),
+      subjectCentered: input.subjectCentered === true,
+      burnedText: input.burnedText === true,
+      heroCandidate: input.heroCandidate === true,
       warnings: await warningsP,
     };
   } catch (e) {

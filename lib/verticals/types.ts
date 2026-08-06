@@ -1,5 +1,15 @@
 import type { BusinessFactKey } from "./schema";
 
+/**
+ * A window on the colour wheel, in OKLCH hue degrees. `to` may be smaller than
+ * `from` — the window then wraps past 360° (e.g. `{ from: 330, to: 20 }` is
+ * pink→peach through red). `{ from: 0, to: 360 }` is the whole circle.
+ */
+export interface HueRange {
+  from: number;
+  to: number;
+}
+
 /** Per-field metadata for the onboarding form + prompt (labels, grounding). */
 export interface FieldMeta {
   label: string; // Ukrainian label
@@ -41,4 +51,13 @@ export interface VerticalConfig {
    * can tune wording without touching logic. A random variant is picked per site.
    */
   imagePrompts: string[];
+  /**
+   * Where the seeded colour anchor (`lib/design/hue.ts`) is allowed to land for
+   * this niche. The seed still decides WHICH hue — so two bakeries don't
+   * converge — but it now rolls inside a window that suits the trade instead of
+   * the full circle, which used to hand a bakery an acid green. Several windows
+   * = several defensible colour worlds; the roll splits between them in
+   * proportion to their width. Omitted = the whole circle (see `hueForVertical`).
+   */
+  hueRanges?: HueRange[];
 }

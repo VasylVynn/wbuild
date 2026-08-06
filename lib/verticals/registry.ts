@@ -50,6 +50,11 @@ export const verticals: Record<string, VerticalConfig> = {
       heroPrompt("extreme macro of soft rose and peony petals with dewy bokeh, delicate pastel botanicals"),
       heroPrompt("blurred abstract garden of out-of-focus wildflowers and greenery in gentle morning light"),
     ],
+    // Petal pinks/magentas, or the stem-and-leaf greens they sit against.
+    hueRanges: [
+      { from: 320, to: 360 },
+      { from: 90, to: 150 },
+    ],
   },
   bakery: {
     id: "bakery",
@@ -66,6 +71,8 @@ export const verticals: Record<string, VerticalConfig> = {
       heroPrompt("warm flour-dust light drifting over rustic wheat stalks and golden grain textures"),
       heroPrompt("soft out-of-focus glow over linen and baked-dough textures in cozy warm morning tones"),
     ],
+    // Crust, grain, caramel, butter — the warm end, nothing cold.
+    hueRanges: [{ from: 20, to: 70 }],
   },
   lawyer: {
     id: "lawyer",
@@ -82,6 +89,8 @@ export const verticals: Record<string, VerticalConfig> = {
       heroPrompt("calm abstract architectural light falling across clean stone columns and paper textures"),
       heroPrompt("muted geometric play of soft window light on layered paper and marble surfaces"),
     ],
+    // Deep blues into indigo — the trust colours; the seed picks the shade.
+    hueRanges: [{ from: 210, to: 260 }],
   },
   autoservice: {
     id: "autoservice",
@@ -98,6 +107,8 @@ export const verticals: Record<string, VerticalConfig> = {
       heroPrompt("dark metallic bokeh with faint silhouettes of tools receding into shadow, brushed-steel highlights"),
       heroPrompt("abstract reflections on polished metal surfaces under cool industrial light and depth"),
     ],
+    // Steel and slate through to workshop blue — cool, technical, never pastel.
+    hueRanges: [{ from: 195, to: 250 }],
   },
   "pet-grooming": {
     id: "pet-grooming",
@@ -115,6 +126,11 @@ export const verticals: Record<string, VerticalConfig> = {
       heroPrompt("soft pastel towels and gentle foam bubbles in warm cozy light, fluffy textures"),
       heroPrompt("out-of-focus soft fur textures and pastel grooming ribbons in airy morning light"),
     ],
+    // Soft mint/aqua, or the pink→peach band that wraps past 360°.
+    hueRanges: [
+      { from: 160, to: 200 },
+      { from: 330, to: 20 },
+    ],
   },
   generic: {
     id: "generic",
@@ -131,6 +147,8 @@ export const verticals: Record<string, VerticalConfig> = {
       heroPrompt("soft brand-colored abstract gradient with gentle flowing light and subtle grain texture"),
       heroPrompt("minimal out-of-focus abstract shapes in warm neutral tones with soft diffused light"),
     ],
+    // Unknown trade — no defensible narrowing, so the whole wheel stays open.
+    hueRanges: [{ from: 0, to: 360 }],
   },
 };
 

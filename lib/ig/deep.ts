@@ -212,6 +212,13 @@ export async function scrapeInstagramDeep(args: {
         textHeavy: r.analysis.textHeavy,
         extractedInfo: r.analysis.extractedInfo,
         useOnSite: r.analysis.useOnSite,
+        // Vetting signals (wave A): a feed is not a portfolio — these are what
+        // rank the import down to the photos the site actually shows.
+        siteQuality: r.analysis.siteQuality,
+        subjectCentered: r.analysis.subjectCentered,
+        burnedText: r.analysis.burnedText,
+        heroCandidate: r.analysis.heroCandidate,
+        ...(r.analysis.warnings.length && { warnings: r.analysis.warnings }),
       }),
     };
     photoMeta.push(meta);

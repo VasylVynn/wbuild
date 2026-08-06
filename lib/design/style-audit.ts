@@ -12,8 +12,11 @@ import type { StyleAuditReport } from "@/lib/site/page-content";
  * The style QA gate (spec 2026-07-28): deterministic lint + contrast first,
  * then ONE bounded model verdict on gross aesthetics. A failing verdict spends
  * the single regen budget — generateWireStyle re-run with the corrective note
- * appended to the brief, same hue — and the regenerated sheet is re-linted and
- * re-judged. Still failing → the sheet with fewer deterministic violations
+ * appended to the brief and, when the caller supplies one, a DIFFERENT hue —
+ * and the regenerated sheet is re-linted and re-judged. Re-rolling the hue
+ * matters because a rejected sheet is often rejected FOR its colour, and the
+ * same anchor plus one corrective sentence tends to reproduce it.
+ * Still failing → the sheet with fewer deterministic violations
  * ships (tie → the original) and the report is flagged for the admin QA column.
  * Fail-open throughout: any error keeps the current css and never throws.
  */
@@ -78,6 +81,13 @@ export async function runStyleAudit(opts: {
   sectionDigest: string;
   brief: string;
   hue: number;
+  /**
+   * Hue for the ONE regeneration a failing verdict buys. The caller supplies a
+   * fresh roll for the same vertical (`hueForVertical` with the next nonce), so
+   * the retry starts from a different colour world instead of re-deriving the
+   * one the art director just rejected. Omitted → the retry reuses `hue`.
+   */
+  altHue?: number;
   /** Caller's chain-wide deadline — covers both verdicts AND the regen call. */
   signal?: AbortSignal;
 }): Promise<{ css: string | undefined; report: StyleAuditReport }> {
@@ -106,7 +116,10 @@ export async function runStyleAudit(opts: {
     if (first.verdict === "fail") {
       report.regenerated = true;
       const correctedBrief = `${opts.brief}\nПопередня версія стилю мала ваду — обов'язково уникни її: ${first.note ?? "нечитабельний, конфліктний стиль"}.`;
-      const regen = await generateWireStyle(correctedBrief, { hue: opts.hue, signal: opts.signal });
+      const regen = await generateWireStyle(correctedBrief, {
+        hue: opts.altHue ?? opts.hue,
+        signal: opts.signal,
+      });
       const relint = lintWireCss(regen.css);
       const recontrast = fixContrast(relint.cleanCss);
       const second = await auditStyleWithModel(recontrast.css, opts.sectionDigest, opts.signal);

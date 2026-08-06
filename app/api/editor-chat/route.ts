@@ -83,6 +83,13 @@ type ToolOutcome = {
  */
 function formatPhotoAnalysis(a: PhotoAnalysis): string {
   const bits = [`тип: ${a.kind}`, `підходить для сайту: ${a.useOnSite ? "так" : "ні"}`];
+  const quality = [
+    `якість знімка: ${a.siteQuality}/10`,
+    ...(a.heroCandidate ? ["годиться на головний банер"] : []),
+    ...(a.burnedText ? ["на фото накладено текст/стікери"] : []),
+    ...a.warnings,
+  ];
+  bits.push(quality.join("; "));
   if (a.alt) bits.push(`опис: «${a.alt}»`);
   if (a.ocrText) bits.push(`текст на фото: «${a.ocrText.slice(0, 300)}»`);
   const info = a.extractedInfo;

@@ -35,6 +35,7 @@ import type { VerticalConfig } from "@/lib/verticals/types";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
 import { photoIdFor, type SiteMedia } from "@/lib/media/media";
 import { isStorageUrl } from "@/lib/media/media";
+import { isEligiblePhoto, pickHeroUrl } from "@/lib/media/rank";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
 import {
   normalizeUaPhoneDigits,
@@ -414,12 +415,7 @@ function assemble(
   // info source (text_source), hidden, or vision-rejected (useOnSite === false)
   // never renders on the site — it feeds the dossier only. Photos without meta
   // are eligible (pre-refactor uploads).
-  const eligible = photos.filter((url) => {
-    const m = metaByUrl.get(url);
-    if (!m) return true;
-    if (m.role === "text_source" || m.role === "hidden") return false;
-    return m.useOnSite !== false;
-  });
+  const eligible = photos.filter((url) => isEligiblePhoto(metaByUrl.get(url)));
   // id → URL, derived in code (photoIdFor fallback for legacy meta rows) — the
   // model casts by these ids and NEVER supplies a URL; an unknown id maps to
   // nothing and the deterministic fallbacks below take over.
@@ -443,12 +439,15 @@ function assemble(
   };
 
   // Hero photo := the model's cast id when it maps to an eligible photo → the
-  // first eligible → the generated atmospheric hero (assigned at conversion
-  // below). The gallery pool is everything eligible minus the hero's photo, so
-  // the hero background never repeats inside the gallery.
+  // best-vetted eligible photo → the generated atmospheric hero (assigned at
+  // conversion below). The fallback used to be `eligible[0]`, i.e. whatever the
+  // owner posted most recently — a banner-sized bet on feed order (plan §1).
+  // The gallery pool is everything eligible minus the hero's photo, so the hero
+  // background never repeats inside the gallery.
   const genHero = raw.find((b) => b.type === "hero");
   const castHeroId = genHero?.type === "hero" ? genHero.props.photoId : undefined;
-  const heroPhoto = (castHeroId ? urlById.get(castHeroId) : undefined) ?? eligible[0];
+  const heroPhoto =
+    (castHeroId ? urlById.get(castHeroId) : undefined) ?? pickHeroUrl(eligible, metaByUrl);
   const galleryPool = eligible.filter((u) => u !== heroPhoto);
 
   type StoredGalleryImage = { url: string; alt?: string; title?: string; category?: string };
@@ -496,19 +495,23 @@ function assemble(
       return { type: "hero", props: { ...props, imageUrl, imageAlt }, section: b.section, variant: b.variant };
     }
     if (b.type === "gallery") {
-      // Background image generation (owner decision): with no real photos but
-      // pending generated ones, the gallery ships EMPTY with `pendingImages`
-      // shimmer placeholders — the after()-job patches real URLs in later.
+      // Background image generation (owner decision): a gallery too thin to
+      // render ships with `pendingImages` shimmer placeholders and the after()
+      // job patches real URLs in later.
+      //
+      // The placeholders TOP UP the owner's photos — they never replace them
+      // (§4.8). Since the trigger moved from «zero photos» to «fewer than three
+      // USABLE photos», this branch now also runs for sites that DO have one or
+      // two real photos, and emptying the array here would have deleted them.
       const images = galleryFromCast(b.props.images);
       const pending = media?.generatedPending ?? 0;
+      const topUp = images.length < 2 ? pending : 0;
       return {
         type: "gallery",
         props:
-          images.length >= 2
-            ? { title: b.props.title, images }
-            : pending > 0
-              ? { title: b.props.title, images: [], pendingImages: pending }
-              : { title: b.props.title, images },
+          topUp > 0
+            ? { title: b.props.title, images, pendingImages: topUp }
+            : { title: b.props.title, images },
         section: b.section,
         variant: b.variant,
       };

@@ -8,7 +8,7 @@ import { getBlockFields } from "@/lib/blocks/fields";
 import { getVertical } from "@/lib/verticals/registry";
 import { generateSite } from "@/lib/ai/generate";
 import { buildDossier } from "@/lib/dossier";
-import type { SiteMedia } from "@/lib/media/media";
+import { sanitizeMedia, type PhotoMeta, type SiteMedia } from "@/lib/media/media";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import { type PageSeo } from "@/lib/tenant/types";
 import type { PageContent } from "@/lib/site/page-content";
@@ -254,6 +254,7 @@ export async function regenerateSite(
     const brand = (t.brand ?? {}) as {
       logoUrl?: string;
       photos?: string[];
+      photoMeta?: PhotoMeta[];
       generatedHero?: string;
       designNonce?: number;
     };
@@ -279,15 +280,17 @@ export async function regenerateSite(
         }
       | null;
 
-    // The dossier is the bare facts+media build — the tenant path has no
-    // photoMeta/snapshot, so photo casting falls back deterministically. The
-    // generated hero is REUSED (already paid for): regeneration never mints a
-    // new image.
-    const media: SiteMedia = {
+    // The dossier is the bare facts+media build — the tenant path has no IG
+    // snapshot, but it DOES carry the photo vetting written at generation time
+    // (plan §1.7), so the hero fallback and the gallery keep ranking by quality
+    // instead of by array order. The generated hero is REUSED (already paid
+    // for): regeneration never mints a new image.
+    const media: SiteMedia = sanitizeMedia({
       logoUrl: brand.logoUrl,
       photos: brand.photos ?? [],
       generatedHero: oldDraft?.generatedHero ?? brand.generatedHero,
-    };
+      photoMeta: brand.photoMeta,
+    });
     const site = await generateSite(buildDossier({ facts: t.facts, media }), t.vertical, media);
     const oldBlocks = oldDraft?.blocks ?? [];
     const oldPocket = oldDraft?.pocket ?? [];
@@ -308,16 +311,19 @@ export async function regenerateSite(
     // new composition degrades gracefully — every section styles through the
     // same `wire-*` class contract — so it is a genuinely better fallback than
     // nothing.
-    const brief = [
-      `${t.facts.businessName}, ${t.facts.city}.`,
-      t.facts.about ?? "",
-      t.facts.services?.length
-        ? `Послуги: ${t.facts.services.map((s: { name: string }) => s.name).slice(0, 8).join(", ")}.`
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-    const hue = Math.floor(mulberry32(designSeed(`${host}:hue`, designNonce))() * 360);
+    const vertical = getVertical(t.vertical);
+    const brief = buildStyleBrief({
+      facts: t.facts,
+      vertical,
+      sectionTypes: site.blocks.map((b) => b.type),
+    });
+    // Same seeding contract as generation: hue confined to the vertical's
+    // ranges, an independent second roll for the audit's one regen.
+    const hue = hueForVertical(mulberry32(designSeed(`${host}:hue`, designNonce))(), vertical.id);
+    const altHue = hueForVertical(
+      mulberry32(designSeed(`${host}:hue-alt`, designNonce))(),
+      vertical.id,
+    );
     try {
       wireCss = (await generateWireStyle(brief, { hue })).css;
     } catch (e) {
@@ -340,6 +346,7 @@ export async function regenerateSite(
           sectionDigest: buildSectionDigest(site.blocks),
           brief,
           hue,
+          altHue,
         });
         wireCss = audited.css;
         styleAudit = audited.report;
@@ -428,6 +435,8 @@ import { headers } from "next/headers";
 import { sendTelegramMessage } from "@/lib/telegram/push";
 import { isAnthropicConfigured } from "@/lib/ai/anthropic";
 import { designSeed, mulberry32 } from "@/lib/design/seed";
+import { hueForVertical } from "@/lib/design/hue";
+import { buildStyleBrief } from "@/lib/design/style-brief";
 import { generateWireStyle } from "@/lib/design/wire-style";
 
 /**

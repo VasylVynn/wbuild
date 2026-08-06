@@ -39,6 +39,11 @@ export type MediaInventoryItem = {
   textHeavy?: boolean;
   useOnSite?: boolean;
   role?: string;
+  /** Vetting signals (wave A) — the model casts hero/gallery, so it gets the
+   *  same quality numbers the deterministic ranker uses. */
+  siteQuality?: number;
+  burnedText?: boolean;
+  heroCandidate?: boolean;
 };
 
 export type Dossier = {
@@ -210,6 +215,9 @@ export function buildDossier(input: {
     ...(m.textHeavy !== undefined && { textHeavy: m.textHeavy }),
     ...(m.useOnSite !== undefined && { useOnSite: m.useOnSite }),
     ...(m.role && { role: m.role }),
+    ...(m.siteQuality !== undefined && { siteQuality: m.siteQuality }),
+    ...(m.burnedText !== undefined && { burnedText: m.burnedText }),
+    ...(m.heroCandidate !== undefined && { heroCandidate: m.heroCandidate }),
   }));
 
   const transcriptDigest = buildTranscriptDigest(transcript);
@@ -306,7 +314,17 @@ export function formatDossierForPrompt(dossier: Dossier): string {
     scraped.push("Фото (медіа-інвентар — кастинг за id, URL модель не бачить):");
     for (const m of dossier.mediaInventory) {
       const site = m.useOnSite === false ? "ні" : "так";
-      const parts = [`id=${m.id} [${m.kind ?? "?"}, наСайт:${site}${m.role ? `, роль:${m.role}` : ""}]`];
+      // Quality tags ride inside the same bracket — the model picks the hero and
+      // the gallery, so it needs the vetting numbers, not just the class.
+      const tags = [
+        m.kind ?? "?",
+        `наСайт:${site}`,
+        ...(m.role ? [`роль:${m.role}`] : []),
+        ...(m.siteQuality !== undefined ? [`якість:${m.siteQuality}/10`] : []),
+        ...(m.heroCandidate ? ["годиться на банер"] : []),
+        ...(m.burnedText ? ["текст поверх фото"] : []),
+      ];
+      const parts = [`id=${m.id} [${tags.join(", ")}]`];
       if (m.alt) parts.push(m.alt);
       if (m.sourceCaption) parts.push(`підпис:"${m.sourceCaption}"`);
       if (m.ocrExcerpt) parts.push(`OCR:"${m.ocrExcerpt}"`);

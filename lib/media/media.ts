@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { createLogger } from "@/lib/log";
+
+const log = createLogger("media");
 
 /**
  * Owner-uploaded media (§4.8 honesty invariant). Only REAL uploaded photos ever
@@ -77,6 +80,10 @@ export type ExtractedInfo = {
  * - `useOnSite`  vision verdict: suitable as an actual site photo.
  * - `sourceCaption` the IG post caption attached to this photo at import.
  * - `role`       the agent's persisted per-image verdict (set_media_role).
+ *
+ * The vetting block (wave A) is what `lib/media/rank.ts` ranks by — every field
+ * is optional, because rows written before the wave carry none and must keep
+ * working (unrated = the benefit of the doubt, never a penalty).
  */
 export type PhotoMeta = {
   url: string;
@@ -90,6 +97,16 @@ export type PhotoMeta = {
   useOnSite?: boolean;
   sourceCaption?: string;
   role?: PhotoRole;
+  /** 0–10 photographic quality as a site photo (sharpness, framing, light). */
+  siteQuality?: number;
+  /** The main subject reads clearly and isn't cropped at the edges. */
+  subjectCentered?: boolean;
+  /** Text/stickers/collage burned into the pixels (≠ `textHeavy`, an OCR verdict). */
+  burnedText?: boolean;
+  /** Survives a full-width hero banner. */
+  heroCandidate?: boolean;
+  /** Owner-facing warnings from the classical sharp pass (blur/dark/too small). */
+  warnings?: string[];
 };
 
 /**
@@ -215,48 +232,148 @@ const extractedInfoSchema = z.object({
   promos: z.array(z.string()).default([]),
 });
 
+/**
+ * One analyzed image. `.passthrough()` so a NEW analyzePhoto field added by a
+ * later wave survives a round-trip through the DB even before this schema names
+ * it (refactor §1.4: "persist ALL of it" — the old schema silently dropped
+ * suitable/reason). The wave-A vetting numbers are deliberately loose (plain
+ * `number`, no int/range refinement): a value drifting out of 0…10 is clamped by
+ * the ranker, and must never be a reason to drop the whole photo.
+ */
+const photoMetaSchema = z
+  .object({
+    url: storageUrl,
+    id: z.string().max(32).optional(),
+    kind: z.enum(PHOTO_KINDS).optional(),
+    alt: z.string().max(200).optional(),
+    ocrText: z.string().max(4000).optional(),
+    textHeavy: z.boolean().optional(),
+    extractedInfo: extractedInfoSchema.optional(),
+    useOnSite: z.boolean().optional(),
+    sourceCaption: z.string().max(2200).optional(),
+    role: z.enum(PHOTO_ROLES).optional(),
+    siteQuality: z.number().optional(),
+    subjectCentered: z.boolean().optional(),
+    burnedText: z.boolean().optional(),
+    heroCandidate: z.boolean().optional(),
+    warnings: z.array(z.string().max(300)).max(4).optional(),
+  })
+  .passthrough();
+
 /** Strict media schema: ≤MAX_PHOTOS photos, every URL under our Storage bucket. */
 export const mediaSchema = z.object({
   logoUrl: storageUrl.optional(),
   photos: z.array(storageUrl).max(MAX_PHOTOS).default([]),
   generatedHero: storageUrl.optional(),
   // One meta entry per analyzed image (logo + site + text_source), keyed by URL.
-  // `.passthrough()` so a NEW analyzePhoto field added by a later wave survives a
-  // round-trip through the DB even before this schema names it (refactor §1.4:
-  // "persist ALL of it" — the old schema silently dropped suitable/reason).
-  photoMeta: z
-    .array(
-      z
-        .object({
-          url: storageUrl,
-          id: z.string().max(32).optional(),
-          kind: z.enum(PHOTO_KINDS).optional(),
-          alt: z.string().max(200).optional(),
-          ocrText: z.string().max(4000).optional(),
-          textHeavy: z.boolean().optional(),
-          extractedInfo: extractedInfoSchema.optional(),
-          useOnSite: z.boolean().optional(),
-          sourceCaption: z.string().max(2200).optional(),
-          role: z.enum(PHOTO_ROLES).optional(),
-        })
-        .passthrough(),
-    )
-    .max(MAX_PHOTO_META)
-    .optional(),
+  photoMeta: z.array(photoMetaSchema).max(MAX_PHOTO_META).optional(),
 });
 
 /**
  * Coerce untrusted input to safe media. Invalid input (bad/foreign URLs, too
- * many photos) collapses to `{ photos: [] }` rather than throwing — used on the
- * generation path where media is optional and must never block a site.
+ * many photos) is DROPPED PER ITEM rather than throwing — used on the generation
+ * path where media is optional and must never block a site.
+ *
+ * Per-item, not all-or-nothing (plan «якість генерації» §1.4): the old version
+ * collapsed to `{ photos: [] }` on a single bad entry, so one URL written before
+ * a `NEXT_PUBLIC_SUPABASE_URL` change silently erased a site's twenty imported
+ * photos — and the empty result then triggered pointless AI image generation.
+ * Only input that is not an object at all, or whose every field is invalid,
+ * still ends up empty.
  */
 export function sanitizeMedia(input: unknown): SiteMedia {
+  // Happy path: fully valid input skips the per-item work entirely.
   const parsed = mediaSchema.safeParse(input);
-  if (!parsed.success) return { photos: [] };
+  if (parsed.success) {
+    return {
+      ...(parsed.data.logoUrl && { logoUrl: parsed.data.logoUrl }),
+      photos: parsed.data.photos,
+      ...(parsed.data.generatedHero && { generatedHero: parsed.data.generatedHero }),
+      ...(parsed.data.photoMeta?.length && { photoMeta: parsed.data.photoMeta as PhotoMeta[] }),
+    };
+  }
+
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    log.warn("media dropped: not an object", { type: typeof input });
+    return { photos: [] };
+  }
+  const rec = input as Record<string, unknown>;
+
+  const logoUrl = pickUrl(rec.logoUrl, "logoUrl");
+  const generatedHero = pickUrl(rec.generatedHero, "generatedHero");
+
+  const rawPhotos = Array.isArray(rec.photos) ? rec.photos : [];
+  if (rec.photos !== undefined && !Array.isArray(rec.photos)) {
+    log.warn("media photos dropped: not an array", { type: typeof rec.photos });
+  }
+  const photos: string[] = [];
+  for (const [i, url] of rawPhotos.entries()) {
+    if (photos.length >= MAX_PHOTOS) break;
+    const ok = storageUrl.safeParse(url);
+    if (ok.success) photos.push(ok.data);
+    else log.warn("photo dropped", { index: i, reason: ok.error.issues[0]?.message ?? "invalid" });
+  }
+
+  const rawMeta = Array.isArray(rec.photoMeta) ? rec.photoMeta : [];
+  const photoMeta: PhotoMeta[] = [];
+  for (const [i, entry] of rawMeta.entries()) {
+    if (photoMeta.length >= MAX_PHOTO_META) break;
+    const ok = photoMetaSchema.safeParse(entry);
+    if (ok.success) photoMeta.push(ok.data as PhotoMeta);
+    else {
+      const issue = ok.error.issues[0];
+      log.warn("photo meta dropped", {
+        index: i,
+        field: issue?.path.join(".") || "(root)",
+        reason: issue?.message ?? "invalid",
+      });
+    }
+  }
+
   return {
-    ...(parsed.data.logoUrl && { logoUrl: parsed.data.logoUrl }),
-    photos: parsed.data.photos,
-    ...(parsed.data.generatedHero && { generatedHero: parsed.data.generatedHero }),
-    ...(parsed.data.photoMeta?.length && { photoMeta: parsed.data.photoMeta as PhotoMeta[] }),
+    ...(logoUrl && { logoUrl }),
+    photos,
+    ...(generatedHero && { generatedHero }),
+    ...(photoMeta.length && { photoMeta }),
   };
+}
+
+/** One optional storage URL: kept when valid, logged and dropped when not. */
+function pickUrl(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const ok = storageUrl.safeParse(value);
+  if (ok.success) return ok.data;
+  log.warn(`${field} dropped`, { reason: ok.error.issues[0]?.message ?? "invalid" });
+  return undefined;
+}
+
+/**
+ * The photo meta worth carrying on the unversioned `tenants.brand`, which every
+ * tenant render reads (`select *`). Scoped to the images the site actually shows
+ * and stripped of the dossier-only bulk (OCR text, extracted requisites) — the
+ * editor's «Згенерувати ще раз» needs the casting signals, not the fact-mining
+ * ones, and those already live in the conversation record.
+ */
+export function siteScopedPhotoMeta(media: SiteMedia | undefined): PhotoMeta[] {
+  if (!media?.photoMeta?.length) return [];
+  const keep = new Set([...(media.photos ?? []), ...(media.logoUrl ? [media.logoUrl] : [])]);
+  return media.photoMeta
+    .filter((m) => keep.has(m.url))
+    .slice(0, MAX_PHOTOS + 1)
+    .map((m) => ({
+      url: m.url,
+      ...(m.id && { id: m.id }),
+      ...(m.kind && { kind: m.kind }),
+      ...(m.alt && { alt: m.alt }),
+      ...(m.useOnSite !== undefined && { useOnSite: m.useOnSite }),
+      ...(m.role && { role: m.role }),
+      ...(m.siteQuality !== undefined && { siteQuality: m.siteQuality }),
+      ...(m.subjectCentered !== undefined && { subjectCentered: m.subjectCentered }),
+      ...(m.burnedText !== undefined && { burnedText: m.burnedText }),
+      ...(m.heroCandidate !== undefined && { heroCandidate: m.heroCandidate }),
+      ...(m.warnings?.length && { warnings: m.warnings }),
+      // Gallery titles fall back to the real caption (03 §2.4) — excerpted here
+      // because the renderer only ever shows the first 60 chars anyway.
+      ...(m.sourceCaption && { sourceCaption: m.sourceCaption.slice(0, 200) }),
+    }));
 }

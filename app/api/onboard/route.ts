@@ -32,6 +32,7 @@ import {
   type SiteMedia,
   type PhotoMeta,
 } from "@/lib/media/media";
+import { isEligiblePhoto, rankPhotoUrls } from "@/lib/media/rank";
 import { scrapeInstagramDeep } from "@/lib/ig/deep";
 import { getLatestSnapshot, type IgSnapshot } from "@/lib/ig/snapshots";
 import { buildDossier } from "@/lib/dossier";
@@ -188,10 +189,17 @@ export async function POST(req: Request): Promise<Response> {
       for (const m of res.media.photoMeta) photoMeta = upsertMeta(photoMeta, m);
       photoMeta = photoMeta.slice(0, MAX_PHOTO_META);
       const logoUrl = media.logoUrl ?? res.media.logo;
-      const eligible = res.media.photoMeta
-        .filter((m) => m.useOnSite !== false && m.role !== "text_source" && m.role !== "hidden")
-        .map((m) => m.url)
-        .filter((u) => u !== logoUrl);
+      // Feed order is not quality order: an import arrives newest-first, so the
+      // MAX_PHOTOS cut used to keep whatever the owner posted last. Rank the
+      // freshly imported batch by the vision score (wave A) before it competes
+      // for slots; photos already on the site keep their place at the front.
+      const eligible = rankPhotoUrls(
+        res.media.photoMeta
+          .filter(isEligiblePhoto)
+          .map((m) => m.url)
+          .filter((u) => u !== logoUrl),
+        res.media.photoMeta,
+      );
       const photos = dedupe([...media.photos, ...eligible])
         .filter((u) => u !== logoUrl)
         .slice(0, MAX_PHOTOS);
@@ -252,6 +260,11 @@ export async function POST(req: Request): Promise<Response> {
         textHeavy: result.textHeavy,
         extractedInfo: result.extractedInfo,
         useOnSite: result.useOnSite,
+        siteQuality: result.siteQuality,
+        subjectCentered: result.subjectCentered,
+        burnedText: result.burnedText,
+        heroCandidate: result.heroCandidate,
+        ...(result.warnings.length && { warnings: result.warnings }),
       });
       // A text-heavy/unsuitable image leaves the visible gallery (still an info source).
       if (result.useOnSite === false) photos = photos.filter((u) => u !== url);

@@ -1,6 +1,6 @@
 import "server-only";
 import postcss, { type Rule } from "postcss";
-import { parse as parseColor, formatHex, wcagContrast, converter } from "culori";
+import { parse as parseColor, formatHex, wcagContrast, converter, type Oklch } from "culori";
 
 /**
  * Static WCAG contrast check over the generated sheet. A browser would resolve
@@ -9,6 +9,8 @@ import { parse as parseColor, formatHex, wcagContrast, converter } from "culori"
  * approximates "which text sits on which background". Below 4.5:1 the TEXT
  * color's OKLCH lightness is pushed away from the background until the ratio
  * passes — a single-declaration rewrite, never a palette change (spec §2).
+ * Lightness moves first and chroma is preserved; see `repairTextColor` for why
+ * the repair no longer snaps to black.
  *
  * Color resolution reads the base state only (no :hover/:focus/:active/:before/:after);
  * class matching respects word boundaries (`.wire-hero` does not match `.wire-hero__inner`).
@@ -19,11 +21,13 @@ import { parse as parseColor, formatHex, wcagContrast, converter } from "culori"
  * fails a pair.
  *
  * Known limits (accepted, v1): pairs the map doesn't list aren't checked;
- * background-image patterns skip the pair (unknowable statically); gradients
- * are checked against their WORST color stop; multi-pass fixpoint may not converge
- * — most often because two pairs share one declaration and each pass's fix for
- * one re-breaks the other (oscillation), occasionally because chroma bounds are
- * reached before 4.5:1 — either way it's reported honestly as "unresolved".
+ * background-image patterns skip the pair (unknowable statically); keyword
+ * non-colors (`transparent`, `currentcolor`, …) skip it too — what sits under a
+ * transparent surface is unknowable without a browser, and guessing it black is
+ * how text got "repaired" into invisibility; gradients are checked against their
+ * WORST color stop; multi-pass fixpoint may not converge — most often because two
+ * pairs share one declaration and each pass's fix for one re-breaks the other
+ * (oscillation) — reported honestly as "unresolved".
  */
 export interface ContrastResult {
   css: string;
@@ -54,10 +58,65 @@ function hasClass(selector: string, cls: string): boolean {
   return new RegExp(escaped + "(?![\\w-])").test(selector);
 }
 
+/**
+ * Keywords culori happily parses but which carry NO colour of their own.
+ * `transparent` is the dangerous one: culori reads it as rgba(0,0,0,0), so a
+ * `background: transparent` used to be judged as BLACK and the text on it got
+ * "repaired" towards white — invisible on the real (light) surface underneath.
+ * A pair whose colour we can't know statically must be skipped, not guessed.
+ */
+const NON_COLOR_KEYWORDS = new Set([
+  "transparent",
+  "currentcolor",
+  "inherit",
+  "initial",
+  "unset",
+  "revert",
+  "revert-layer",
+  "none",
+]);
+
 /** Every parseable color token in a value (covers gradients stop-by-stop). */
 function colorTokens(value: string): string[] {
   const tokens = value.match(/#[0-9a-f]{3,8}\b|\b(?:rgb|rgba|hsl|hsla|oklch|oklab|lab|lch|hwb|color)\([^)]*\)|\b[a-z]{3,20}\b/gi) ?? [];
-  return tokens.filter((t) => parseColor(t) !== undefined);
+  return tokens.filter(
+    (t) => !NON_COLOR_KEYWORDS.has(t.toLowerCase()) && parseColor(t) !== undefined,
+  );
+}
+
+/** Chroma budget, spent only when lightness alone can't reach 4.5:1. */
+const CHROMA_STEPS = [1, 0.75, 0.5, 0.25, 0];
+
+/**
+ * Move a text colour until it clears 4.5:1, spending as little of its chroma as
+ * possible.
+ *
+ * The old repair snapped to pure black or white the moment a lightness sweep
+ * fell short, which cost the sheet its palette: a warm rose heading became
+ * #000000 and the whole design read as a template with an accident in it.
+ * Lightness is a free variable — it is what actually buys contrast — so the
+ * full lightness range is tried at FULL chroma first, and chroma is given away
+ * in steps only if that whole range fails. Grey is the last thing tried.
+ *
+ * Ratios are measured on the serialized hex, not the OKLCH object: a colour
+ * outside sRGB is clipped when written, and the clipped colour is what the
+ * visitor sees — scoring the unclipped one would report contrast that isn't there.
+ */
+function repairTextColor(text: Oklch, bg: string, bgL: number): { hex: string; ratio: number } {
+  const chroma = text.c;
+  const step = bgL > 0.5 ? -0.05 : 0.05; // away from the background
+  for (const factor of CHROMA_STEPS) {
+    const candidate: Oklch = { ...text, c: chroma * factor };
+    for (let i = 0; i <= 20; i++) {
+      const hex = formatHex(candidate);
+      const ratio = wcagContrast(hex, bg);
+      if (ratio >= MIN_RATIO) return { hex, ratio };
+      candidate.l = Math.min(1, Math.max(0, candidate.l + step));
+    }
+  }
+  // Nothing on this hue works against this background — pure ink or paper.
+  const hex = bgL > 0.5 ? "#000000" : "#ffffff";
+  return { hex, ratio: wcagContrast(hex, bg) };
 }
 
 interface Hit { rule: Rule; declIndex: number; value: string }
@@ -127,27 +186,14 @@ export function fixContrast(css: string): ContrastResult {
 
       const textOklch = toOklch(textColor);
       if (!textOklch) continue;
-      const adjusted = { ...textOklch };
 
-      // Push text lightness AWAY from the background until readable (≤20 steps).
-      for (let i = 0; i < 20 && wcagContrast(adjusted, bg) < MIN_RATIO; i++) {
-        adjusted.l = Math.min(1, Math.max(0, adjusted.l + (bgL > 0.5 ? -0.05 : 0.05)));
-      }
-      if (wcagContrast(adjusted, bg) < MIN_RATIO) {
-        // Bound hit (extreme chroma) — snap to black/white, always passes on a
-        // mid-or-extreme background at 20 steps of travel.
-        adjusted.l = bgL > 0.5 ? 0 : 1;
-        adjusted.c = 0;
-      }
-
-      const newHex = formatHex(adjusted);
+      const { hex: newHex, ratio: newRatio } = repairTextColor(textOklch, worst, bgL);
       const decl = textHit.rule.nodes?.[textHit.declIndex];
       if (decl?.type !== "decl") continue;
 
       // Check if this would change the value (only apply if different).
       if (decl.value.toLowerCase() === newHex.toLowerCase()) continue;
 
-      const newRatio = wcagContrast(adjusted, bg);
       fixes.push(
         `contrast ${pair.text} on ${pair.surface} in "${textHit.rule.selector}": ` +
           `${worstRatio.toFixed(1)}:1 → ${newRatio.toFixed(1)}:1 (${decl.value} → ${newHex})`,

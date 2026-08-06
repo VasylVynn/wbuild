@@ -7,10 +7,13 @@ import { generateSite } from "@/lib/ai/generate";
 import { generateSiteImages, isImageGenConfigured } from "@/lib/media/generate-image";
 import { getVertical } from "@/lib/verticals/registry";
 import type { BusinessFacts } from "@/lib/verticals/schema";
-import type { SiteMedia } from "@/lib/media/media";
+import { siteScopedPhotoMeta, type SiteMedia } from "@/lib/media/media";
+import { MIN_USABLE_PHOTOS, usablePhotoCount } from "@/lib/media/rank";
 import { buildDossier, type Dossier } from "@/lib/dossier";
 import { runDraftQualityLoop } from "@/lib/site/inspect";
 import { designSeed, mulberry32 } from "@/lib/design/seed";
+import { hueForVertical } from "@/lib/design/hue";
+import { buildStyleBrief } from "@/lib/design/style-brief";
 import { generateWireStyle } from "@/lib/design/wire-style";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { publishedFromDraft, type PageContent } from "@/lib/site/page-content";
@@ -114,8 +117,22 @@ export async function generateDraft(opts: {
     // below, patched into the draft AND the published copy if already live.
     // Gated on an image-gen key: without it the placeholders would never
     // resolve, so we skip the shimmer path entirely (site renders text-only).
+    //
+    // The trigger is USABLE photos, not «zero photos» (plan §1.5): a site whose
+    // photos were all vision-rejected used to read as "has photos" and shipped
+    // a gallery of nothing, while a site whose photos were merely wiped by a
+    // sanitize failure bought AI imagery it didn't need. Three usable photos are
+    // enough to carry a site — past that we NEVER generate, which was the
+    // owner's actual complaint.
+    const usable = media ? usablePhotoCount(media) : 0;
     const needGeneratedImages =
-      !media?.photos?.length && !media?.generatedHero && isImageGenConfigured();
+      usable < MIN_USABLE_PHOTOS && !media?.generatedHero && isImageGenConfigured();
+    log.info("generated images decision", {
+      host,
+      usable,
+      total: media?.photos?.length ?? 0,
+      generate: needGeneratedImages,
+    });
     if (needGeneratedImages) {
       media = { ...(media ?? { photos: [] }), generatedPending: GENERATED_GALLERY_COUNT };
     }
@@ -136,20 +153,21 @@ export async function generateDraft(opts: {
     // just produced. Fail-open: if styling dies the draft still ships — grey,
     // but complete, editable and publishable.
     let wireCss: string | undefined = prevWireCss;
-    const brief = [
-      `${facts.businessName}, ${facts.city}.`,
-      facts.about ?? "",
-      facts.services?.length
-        ? `Послуги: ${facts.services.map((s) => s.name).slice(0, 8).join(", ")}.`
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-    // Hue seeded off host+nonce: two businesses in one niche start from
-    // different colour worlds, and «згенерувати ще раз» moves to another.
-    // Without this the model returns its default palette for the niche —
-    // measured in the spike, two grooming salons both landed in warm cream.
-    const hue = Math.floor(mulberry32(designSeed(`${host}:hue`, designNonce))() * 360);
+    const brief = buildStyleBrief({
+      facts,
+      vertical,
+      sectionTypes: site.blocks.map((b) => b.type),
+    });
+    // Hue seeded off host+nonce, CONFINED to the vertical's declared ranges
+    // (lib/design/hue.ts): two businesses in one niche start from different
+    // colour worlds, but a bakery can no longer draw acid green. «Згенерувати
+    // ще раз» moves to another roll. altHue = an independent second roll for
+    // the style-audit's one regen, so a rejected colour world isn't retried.
+    const hue = hueForVertical(mulberry32(designSeed(`${host}:hue`, designNonce))(), vertical.id);
+    const altHue = hueForVertical(
+      mulberry32(designSeed(`${host}:hue-alt`, designNonce))(),
+      vertical.id,
+    );
     try {
       wireCss = (await generateWireStyle(brief, { hue, signal: modelDeadline })).css;
     } catch (e) {
@@ -157,6 +175,7 @@ export async function generateDraft(opts: {
     }
 
     const sb = getServiceClient();
+    const brandPhotoMeta = siteScopedPhotoMeta(media);
 
     // DRAFT-scope upsert: nothing here reaches the live site. The design rides
     // draft_content and is promoted only by publishDraft(); status drops to
@@ -178,6 +197,11 @@ export async function generateDraft(opts: {
             designNonce,
             ...(media?.logoUrl && { logoUrl: media.logoUrl }),
             ...(media?.photos?.length && { photos: media.photos }),
+            // The vision verdicts travel WITH the photos: `brand` is the only
+            // thing the editor's «Згенерувати ще раз» reads, so without this the
+            // regeneration lost every vetting signal and re-picked a hero blind
+            // (plan §1.7). Trimmed — see siteScopedPhotoMeta.
+            ...(brandPhotoMeta.length && { photoMeta: brandPhotoMeta }),
             ...(media?.generatedHero && { generatedHero: media.generatedHero }),
           },
           footer: {
@@ -237,6 +261,7 @@ export async function generateDraft(opts: {
       dossier,
       styleBrief: brief,
       styleHue: hue,
+      styleAltHue: altHue,
       signal: modelDeadline,
     });
 
@@ -317,12 +342,15 @@ async function patchGeneratedImages(opts: {
         return { ...b, props: { ...b.props, imageUrl: hero, imageAlt: `Атмосферне зображення — ${altBase}` } };
       }
       if (b.type === "gallery" && (b.props.pendingImages ?? 0) > 0) {
-        // ≥2 real images → fill; else drop the placeholders (renderer hides an
-        // empty gallery — a lonely tile reads as a bug).
-        const images =
-          gallery.length >= 2
-            ? gallery.map((url, i) => ({ url, alt: `Атмосферне зображення ${i + 1} — ${altBase}` }))
-            : b.props.images;
+        // Generated images come AFTER the owner's own (§4.8: real photos are
+        // never displaced — with the usable-photo trigger this block can carry
+        // one real photo already). ≥2 tiles → fill; else resolve to an empty
+        // gallery, which the renderer hides — a lonely tile reads as a bug.
+        const merged = [
+          ...b.props.images,
+          ...gallery.map((url, i) => ({ url, alt: `Атмосферне зображення ${i + 1} — ${altBase}` })),
+        ];
+        const images = merged.length >= 2 ? merged : [];
         return { ...b, props: { title: b.props.title, images } };
       }
       return b;
