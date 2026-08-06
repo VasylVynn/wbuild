@@ -126,21 +126,22 @@ function reviewsWord(n: number): string {
 
 /**
  * Human copy for a THROWN server-action call (network layer, not our
- * {ok:false} contract). Two distinct real-world causes get distinct advice:
- *  - deployment skew — a tab opened before a deploy holds stale action IDs,
- *    the POST 404s (x-nextjs-action-not-found): only a refresh helps, and it
- *    is safe to promise continuity (conv id lives in localStorage);
+ * {ok:false} contract). Distinct causes get distinct advice:
  *  - a dropped connection («failed to fetch»/«load failed») — offline or
- *    flaky mobile network: refreshing is pointless, retrying is the fix, and
- *    claiming «ми оновили застосунок» would be false.
+ *    flaky mobile network: refreshing is pointless, retrying is the fix;
+ *  - «unexpected response» — the server answered, but not with our action
+ *    result. In the wild this is EITHER deployment skew (stale tab, action id
+ *    404) or a gateway timeout (504, live 2026-08-06) — the client cannot
+ *    tell them apart, so the copy promises only what is true for both:
+ *    refresh is safe (conv id lives in localStorage) and then try again.
  */
 function actionErrorMessage(err: unknown): string {
   const m = err instanceof Error ? err.message : "";
-  if (/server action|unexpected response/i.test(m)) {
-    return "Ми щойно оновили застосунок. Оновіть сторінку (Ctrl+R або ⌘R) — розмова збережеться, і продовжимо з того ж місця.";
-  }
   if (/failed to fetch|load failed|network/i.test(m)) {
     return "Схоже, зник інтернет. Перевірте з'єднання і натисніть кнопку ще раз.";
+  }
+  if (/server action|unexpected response/i.test(m)) {
+    return "З'єднання із сервером перервалося. Оновіть сторінку (Ctrl+R або ⌘R) — розмова збережеться — і спробуйте ще раз.";
   }
   return m || "Невідома помилка";
 }
