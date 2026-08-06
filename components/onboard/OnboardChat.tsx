@@ -126,16 +126,21 @@ function reviewsWord(n: number): string {
 
 /**
  * Human copy for a THROWN server-action call (network layer, not our
- * {ok:false} contract). The dominant real-world cause is deployment skew: a
- * tab opened before a deploy holds stale action IDs, the POST 404s
- * (x-nextjs-action-not-found) and the raw message is unhelpful English. The
- * conversation itself survives a refresh (conv id in localStorage), so
- * «оновіть сторінку» genuinely continues where they were.
+ * {ok:false} contract). Two distinct real-world causes get distinct advice:
+ *  - deployment skew — a tab opened before a deploy holds stale action IDs,
+ *    the POST 404s (x-nextjs-action-not-found): only a refresh helps, and it
+ *    is safe to promise continuity (conv id lives in localStorage);
+ *  - a dropped connection («failed to fetch»/«load failed») — offline or
+ *    flaky mobile network: refreshing is pointless, retrying is the fix, and
+ *    claiming «ми оновили застосунок» would be false.
  */
 function actionErrorMessage(err: unknown): string {
   const m = err instanceof Error ? err.message : "";
-  if (/server action|unexpected response|failed to fetch|load failed/i.test(m)) {
+  if (/server action|unexpected response/i.test(m)) {
     return "Ми щойно оновили застосунок. Оновіть сторінку (Ctrl+R або ⌘R) — розмова збережеться, і продовжимо з того ж місця.";
+  }
+  if (/failed to fetch|load failed|network/i.test(m)) {
+    return "Схоже, зник інтернет. Перевірте з'єднання і натисніть кнопку ще раз.";
   }
   return m || "Невідома помилка";
 }
