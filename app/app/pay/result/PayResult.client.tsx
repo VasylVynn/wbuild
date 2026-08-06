@@ -77,7 +77,10 @@ export function PayResult({
   }, [orderReference, amount]);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 bg-canvas px-6 py-16 text-center">
+    // Full-width canvas, content constrained INSIDE — max-w on the <main>
+    // itself would clip the background to a centered stripe on desktop.
+    <main className="flex min-h-screen flex-col items-center justify-center bg-canvas px-6 py-16">
+      <div className="flex w-full max-w-md flex-col items-center gap-2 text-center">
       {view === "checking" && (
         <>
           <Badge tone="honey">
@@ -157,6 +160,7 @@ export function PayResult({
           </Link>
         </>
       )}
+      </div>
     </main>
   );
 }

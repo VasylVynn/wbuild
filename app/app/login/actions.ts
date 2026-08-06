@@ -1,8 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { isAuthConfigured, getAuthClient } from "@/lib/supabase/auth";
-import { ROOT_DOMAIN } from "@/lib/config";
+import { ROOT_DOMAIN, isDashboardHost, publicSiteUrl } from "@/lib/config";
 
 /**
  * Auth server actions (§3.1). Sign-in/up run here (not in the browser) so the
@@ -84,10 +85,18 @@ export async function signOutAction(): Promise<void> {
   redirect("/login");
 }
 
-/** Public origin of the dashboard host — reset links must land back on app.<root>. */
-function appOrigin(): string {
-  const isProd = process.env.NODE_ENV === "production";
-  return `${isProd ? "https" : "http"}://app.${ROOT_DOMAIN}`;
+/**
+ * Public origin of the dashboard host THE USER IS ON. During the brand-domain
+ * overlap the dashboard answers on several `app.<root>` hosts — email links
+ * (reset, OAuth callback) must land back on the same one, or the PKCE
+ * verifier cookie set on host A is missing on host B and the code exchange
+ * fails. The request Host is trusted only when it IS a known dashboard host
+ * (isDashboardHost); anything else falls back to the primary root.
+ */
+async function appOrigin(): Promise<string> {
+  const host = (await headers()).get("host") ?? "";
+  if (isDashboardHost(host)) return publicSiteUrl(host);
+  return publicSiteUrl(`app.${ROOT_DOMAIN}`);
 }
 
 export type ResetRequestResult = { error: string } | { sent: true };
@@ -99,10 +108,38 @@ export async function resetPasswordAction(email: string): Promise<ResetRequestRe
 
   const sb = await getAuthClient();
   const { error } = await sb.auth.resetPasswordForEmail(e, {
-    redirectTo: `${appOrigin()}/reset/confirm`,
+    redirectTo: `${await appOrigin()}/reset/confirm`,
   });
   if (error) return { error: uaError(error.message) };
   return { sent: true };
+}
+
+export type OAuthResult = { error: string } | undefined;
+
+/**
+ * Google sign-in via Supabase OAuth (PKCE). The action writes the verifier
+ * cookie server-side and redirects the browser to Google; Supabase then lands
+ * on /auth/callback?code=… (same dashboard host), where the route handler
+ * exchanges the code for a session. Requires the Google provider to be
+ * enabled in the Supabase dashboard — until then Supabase errors and the user
+ * sees the Ukrainian fallback message.
+ */
+export async function signInWithGoogleAction(next?: string): Promise<OAuthResult> {
+  if (!isAuthConfigured()) return { error: "Вхід тимчасово недоступний." };
+
+  const sb = await getAuthClient();
+  const origin = await appOrigin();
+  const { data, error } = await sb.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(safeNext(next))}`,
+      skipBrowserRedirect: true,
+    },
+  });
+  if (error || !data?.url) {
+    return { error: "Вхід через Google зараз недоступний. Спробуйте пошту і пароль." };
+  }
+  redirect(data.url);
 }
 
 export type UpdatePasswordResult = { error: string } | undefined;
