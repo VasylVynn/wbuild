@@ -330,9 +330,16 @@ export function WireMap({ data }: { data: unknown }) {
       <div className="wire-container wire-stack">
         {d.title && <h2 className="wire-title">{d.title}</h2>}
         <p className="wire-heading wire-map__address">{d.address}</p>
-        {/* Structural placeholder — the real renderer embeds a map; the wireframe
-            only reserves its footprint so the generated sheet can style it. */}
-        <div className="wire-media wire-map__canvas" aria-hidden="true" />
+        {/* Geocode-free embed: Google resolves the address string itself, so no
+            API key. The footprint keeps wire-map__canvas for the generated sheet. */}
+        <iframe
+          className="wire-media wire-map__canvas"
+          src={`https://www.google.com/maps?q=${encodeURIComponent(d.address)}&output=embed`}
+          title={`Карта: ${d.address}`}
+          style={{ border: 0 }}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
       </div>
     </section>
   );
