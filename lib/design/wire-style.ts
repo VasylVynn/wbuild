@@ -38,7 +38,9 @@ const SYSTEM = `Ти — сильний веб-дизайнер, який пиш
 - align-items, justify-content, text-align, gap
 - ::before / ::after для декору, роздільників, лічильників, акцентних смуг
 - transition і hover-стани
+- 1–2 делікатні анімації через @keyframes (напр. мʼяке проявлення акценту, легкий підйом картки на hover). Каркас уже має власний scroll-reveal і базові transition — не дублюй їх і не роби нічого, що смикається чи блимає. НЕ загортай анімації в @media: усі @media з твого CSS вирізаються, лишиться порожньо
 - --wire-split-order, щоб перекинути фото switchback ліворуч або праворуч
+- --wire-scrim і --wire-banner-ink, якщо hero прийшов у макеті banner (фото на весь екран): затемнення поверх фото і колір тексту на ньому
 
 ЩО КАТЕГОРИЧНО ЗАБОРОНЕНО — усе, що ламає адаптивність:
 - display, flex-direction, grid-template-columns, grid-template-areas, grid-auto-flow

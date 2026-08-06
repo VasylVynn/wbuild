@@ -67,6 +67,13 @@ const LABELS: Record<string, string> = {
 
 const TEXTAREA_KEYS = new Set(["body", "description", "quote", "answer", "message", "subtitle"]);
 const IMAGE_KEYS = new Set(["imageUrl", "url"]);
+/**
+ * Props the OWNER never edits because code always overwrites them (map.mapQuery
+ * is rebuilt from the confirmed address + city on every generation). They stay
+ * in the schema — that is what makes them storable and renderable — but a field
+ * whose value is discarded on the next save is worse than no field at all.
+ */
+const CODE_OWNED_KEYS = new Set(["mapQuery"]);
 
 function labelFor(key: string): string {
   return LABELS[key] ?? key;
@@ -99,6 +106,7 @@ export function getBlockFields(type: BlockType): AnyFieldDescriptor[] {
   const out: AnyFieldDescriptor[] = [];
 
   for (const [key, raw] of Object.entries(schema.shape as Record<string, z.ZodType>)) {
+    if (CODE_OWNED_KEYS.has(key)) continue;
     const s = unwrap(raw);
     if (s instanceof z.ZodArray) {
       const el = unwrap(s.element as z.ZodType);

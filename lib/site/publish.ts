@@ -147,7 +147,15 @@ export async function generateDraft(opts: {
     // business needs, in WHAT order, and writes the copy. No template choice,
     // no seeded variant juggling, no section shuffle — the composition is the
     // model's, end to end.
-    const site = await generateSite(dossier, vertical.id, media, modelDeadline);
+    // Fifth arg seeds the hero-variant default (wave B): same nonce contract
+    // as the hue, so «згенерувати ще раз» can change the composition too.
+    const site = await generateSite(
+      dossier,
+      vertical.id,
+      media,
+      modelDeadline,
+      mulberry32(designSeed(`${host}:variant`, designNonce))(),
+    );
 
     // The model then writes this tenant's stylesheet for the composition it
     // just produced. Fail-open: if styling dies the draft still ships — grey,

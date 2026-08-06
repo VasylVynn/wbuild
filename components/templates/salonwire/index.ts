@@ -8,6 +8,8 @@ import {
   WireFaq,
   WireGallery,
   WireHero,
+  WireHeroBanner,
+  WireHeroMirror,
   WireInstagramCta,
   WireLeadForm,
   WireMap,
@@ -36,8 +38,15 @@ export const salonwireSections: Record<string, TemplateSectionDef> = {
   hero: {
     block: "hero",
     label: "Головний екран",
-    description: "Каркас героя: eyebrow, заголовок, підзаголовок, дві кнопки, фото праворуч на десктопі.",
+    description:
+      "Каркас героя: eyebrow, заголовок, підзаголовок, дві кнопки, фото. Три макети: " +
+      "split — фото праворуч (універсальний); mirror — дзеркальний, фото ліворуч; " +
+      "banner — фото на весь екран тлом зі світлим текстом по центру (лише для сильного " +
+      "атмосферного фото без напису; без фото стає центрованим текстовим екраном).",
     component: WireHero,
+    // `split` is registered explicitly as well as being the default component,
+    // so the model and the seeded fallback can NAME the layout they mean.
+    variants: { split: WireHero, mirror: WireHeroMirror, banner: WireHeroBanner },
   },
   services: {
     block: "services",

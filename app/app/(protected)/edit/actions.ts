@@ -291,14 +291,20 @@ export async function regenerateSite(
       generatedHero: oldDraft?.generatedHero ?? brand.generatedHero,
       photoMeta: brand.photoMeta,
     });
-    const site = await generateSite(buildDossier({ facts: t.facts, media }), t.vertical, media);
+    // The nonce advances so the re-styling starts from a different hue AND a
+    // different seeded hero variant than the previous run — «згенерувати ще
+    // раз» must look different, not just read differently.
+    const designNonce = typeof brand.designNonce === "number" ? brand.designNonce + 1 : 0;
+    const site = await generateSite(
+      buildDossier({ facts: t.facts, media }),
+      t.vertical,
+      media,
+      undefined,
+      mulberry32(designSeed(`${host}:variant`, designNonce))(),
+    );
     const oldBlocks = oldDraft?.blocks ?? [];
     const oldPocket = oldDraft?.pocket ?? [];
 
-    // The nonce advances so the re-styling starts from a different hue
-    // than the previous run — «згенерувати ще раз» must look different, not
-    // just read differently.
-    const designNonce = typeof brand.designNonce === "number" ? brand.designNonce + 1 : 0;
     let wireCss: string | undefined = oldDraft?.wireCss;
     // Regeneration produced a NEW composition — different sections, different
     // order — so the stylesheet must be rewritten too, or the page renders

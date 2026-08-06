@@ -147,13 +147,75 @@
   .wire-nav__links { width: auto; order: 0; flex-wrap: nowrap; padding-bottom: 0; gap: 1.5rem; }
 }
 
-/* ── Hero ──────────────────────────────────────────────────────────────── */
+/* ── Hero — three structural layouts (wave B) ──────────────────────────────
+ *
+ * The block's `variant` picks the component (WireHero / WireHeroMirror /
+ * WireHeroBanner in sections.tsx); the modifier classes below carry the layout:
+ *   .wire-hero            split  — text left, photo right from lg
+ *   .wire-hero--mirror    mirror — same grid, photo moved to the LEFT column
+ *   .wire-hero--banner    banner — photo as a full-bleed backdrop, text on top
+ *   .wire-hero--scrim     present on a banner WITH a photo: the text sits on a
+ *                         dark scrim and must stay LIGHT
+ *
+ * For the generated stylesheet: style these like any other surface — the scrim
+ * (--wire-scrim) and the banner ink (--wire-banner-ink) are yours to set. The
+ * grid, the stacking and the backdrop positioning are locked here.
+ */
 
 .wire-hero__inner { display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: center; }
-.wire-hero__media { width: 100%; }
+/* Same freedom as --wire-split-order: only the ORDER moves, never the grid. */
+.wire-hero__media { width: 100%; order: var(--wire-hero-media-order, 0); }
 
 @media (min-width: 1024px) {
   .wire-hero__inner { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; }
+  /* Mobile keeps text first in both layouts — reading order beats symmetry. */
+  .wire-hero--mirror { --wire-hero-media-order: -1; }
+}
+
+/* Banner. `position: relative/absolute` here is STRUCTURE — the wireframe's one
+   containing block, so the photo can sit behind the copy without leaving flow. */
+.wire-hero--banner { position: relative; overflow: hidden; }
+.wire-hero--banner .wire-hero__inner {
+  grid-template-columns: 1fr;
+  min-height: 20rem;
+  align-content: center;
+  position: relative;
+  z-index: 1;
+}
+.wire-hero--banner .wire-hero__body { align-items: center; text-align: center; }
+.wire-hero--banner .wire-hero__actions { justify-content: center; }
+.wire-hero--banner .wire-subtitle { max-width: 52ch; }
+.wire-hero__backdrop { position: absolute; inset: 0; }
+.wire-hero__bg { display: block; width: 100%; height: 100%; object-fit: cover; }
+.wire-hero__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--wire-scrim, linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.72)));
+}
+
+@media (min-width: 1024px) {
+  .wire-hero--banner .wire-hero__inner { min-height: 28rem; }
+}
+
+/* Legibility over the scrim — the only rules in this file carrying the
+   .tpl-salonwire prefix, and the only ones stacked four classes deep. Measured,
+   not defensive: generated sheets reliably write `.tpl-salonwire .wire-hero
+   .wire-eyebrow { color: <accent> }` (0,3,0) and land AFTER wire.css, which put
+   dark accent copy straight onto the photo. Legibility on a banner outranks
+   palette fidelity, so these win at 0,4,0 — a sheet that deliberately restyles
+   the banner still beats them by naming .wire-hero--scrim itself, and it can
+   recolour without any specificity fight through --wire-banner-ink. */
+.wire-hero--scrim .wire-hero__body { color: var(--wire-banner-ink, #fff); }
+.tpl-salonwire .wire-hero--scrim .wire-hero__body .wire-title,
+.tpl-salonwire .wire-hero--scrim .wire-hero__body .wire-subtitle,
+.tpl-salonwire .wire-hero--scrim .wire-hero__body .wire-eyebrow { color: inherit; }
+/* A light text-shadow meant for a pale section reads as an outline on a photo. */
+.tpl-salonwire .wire-hero--scrim .wire-hero__body .wire-title { text-shadow: none; }
+/* The outline CTA borrows the ink instead of the sheet's dark-on-light pair. */
+.tpl-salonwire .wire-hero--scrim .wire-hero__body .wire-btn--ghost {
+  color: inherit;
+  border-color: currentColor;
+  background: transparent;
 }
 
 /* ── Footer ────────────────────────────────────────────────────────────── */
@@ -206,3 +268,61 @@
 .wire-faq__item { border-bottom: 1px solid var(--wire-line); padding-block: 1rem; }
 .wire-faq__q { font-weight: 600; cursor: pointer; }
 .wire-faq__a { margin-top: 0.5rem; color: var(--wire-ink-soft); }
+
+/* ── Motion — CSS only, zero JS (plan §4, wave D) ──────────────────────────
+ *
+ * Two layers:
+ *  1. base TRANSITIONS on the interactive primitives. Hover states are the
+ *     generated sheet's business, but a colour that snaps reads cheap — with a
+ *     base duration here every hover it writes eases, even when it forgot to
+ *     say so. It may override the timing like any other surface property.
+ *  2. a scroll-linked REVEAL through `animation-timeline: view()` — no observer,
+ *     no hydration. Behind @supports on purpose: where the timeline is missing
+ *     the declaration is simply never applied, so nothing is hidden by default
+ *     and there is no fallback to write. The HERO is excluded — its heading is
+ *     the LCP element and must paint opaque on the first frame.
+ *
+ * The reduce-motion block is the ONE place this file uses !important: it also
+ * has to neutralise animations the GENERATED sheet wrote. That sheet cannot
+ * honour the preference itself — css-lint keeps its @keyframes but strips every
+ * @media it writes, so the switch has to live in the base layer.
+ */
+
+@media (prefers-reduced-motion: no-preference) {
+  .wire-btn {
+    transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease,
+      border-color 160ms ease, color 160ms ease;
+  }
+  .wire-card,
+  .wire-gallery__item,
+  .wire-marquee__item {
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  }
+  .wire-nav__link,
+  .wire-footer__link,
+  .wire-contact__link,
+  .wire-faq__q { transition: color 160ms ease, opacity 160ms ease; }
+
+  @supports (animation-timeline: view()) {
+    @keyframes wire-rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+    .wire-section:not(.wire-hero) > .wire-container > * {
+      animation: wire-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 6% cover 20%;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tpl-salonwire *,
+  .tpl-salonwire *::before,
+  .tpl-salonwire *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

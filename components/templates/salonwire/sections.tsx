@@ -20,35 +20,106 @@ import WireLeadFormClient from "./WireLeadForm.client";
  * file so it styles the real class names rather than guessing them.
  */
 
-/* ── Hero ──────────────────────────────────────────────────────────────── */
+/* ── Hero ──────────────────────────────────────────────────────────────────
+ *
+ * THREE structural layouts of the same hero content (plan §2, wave B). Each is
+ * its own component because the registry selects layouts that way
+ * (`salonwireSections.hero.variants` — the block's stored `variant` id picks
+ * one, PageRenderer resolves it). They differ in markup and ONE modifier class;
+ * every layout rule lives in `wire.css`:
+ *
+ *   .wire-hero                 split  — text left, photo right from lg (default)
+ *   .wire-hero--mirror         mirror — the same grid, photo in the LEFT column
+ *   .wire-hero--banner         banner — photo as a full-bleed backdrop, text
+ *                              centred over it; with no photo it degrades to a
+ *                              centred text-only opener
+ *   .wire-hero--scrim          on a banner that HAS a photo: the text sits on a
+ *                              dark scrim, so it must stay LIGHT
+ *
+ * The generated stylesheet still owns surface only — it sees this file verbatim
+ * (lib/design/wire-style.ts), which is why the modifiers are named, not inline.
+ */
 
+function WireHeroContent({ d }: { d: BlockProps["hero"] }) {
+  return (
+    <>
+      {d.eyebrow && <span className="wire-eyebrow">{d.eyebrow}</span>}
+      <h1 className="wire-title">{d.title}</h1>
+      {d.subtitle && <p className="wire-subtitle">{d.subtitle}</p>}
+      <div className="wire-row wire-hero__actions">
+        {d.ctaLabel && (
+          <a className="wire-btn wire-btn--primary" href={d.ctaHref ?? "#lead_form"}>
+            {d.ctaLabel}
+          </a>
+        )}
+        {d.secondaryCtaLabel && (
+          <a className="wire-btn wire-btn--ghost" href={d.secondaryCtaHref ?? "#contacts"}>
+            {d.secondaryCtaLabel}
+          </a>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** split (default) — text and photo side by side, photo on the right from lg. */
 export function WireHero({ data }: { data: unknown }) {
   const d = data as BlockProps["hero"];
   return (
     <section className="wire-section wire-hero">
       <div className="wire-container wire-hero__inner">
         <div className="wire-stack wire-hero__body">
-          {d.eyebrow && <span className="wire-eyebrow">{d.eyebrow}</span>}
-          <h1 className="wire-title">{d.title}</h1>
-          {d.subtitle && <p className="wire-subtitle">{d.subtitle}</p>}
-          <div className="wire-row wire-hero__actions">
-            {d.ctaLabel && (
-              <a className="wire-btn wire-btn--primary" href={d.ctaHref ?? "#lead_form"}>
-                {d.ctaLabel}
-              </a>
-            )}
-            {d.secondaryCtaLabel && (
-              <a className="wire-btn wire-btn--ghost" href={d.secondaryCtaHref ?? "#contacts"}>
-                {d.secondaryCtaLabel}
-              </a>
-            )}
-          </div>
+          <WireHeroContent d={d} />
         </div>
         {d.imageUrl && (
           <div className="wire-hero__media">
             <img className="wire-media" src={d.imageUrl} alt={d.imageAlt ?? ""} />
           </div>
         )}
+      </div>
+    </section>
+  );
+}
+
+/** mirror — identical structure, photo moved to the left column (lg and up).
+ *  Mobile still stacks text first: reading order beats symmetry. */
+export function WireHeroMirror({ data }: { data: unknown }) {
+  const d = data as BlockProps["hero"];
+  return (
+    <section className="wire-section wire-hero wire-hero--mirror">
+      <div className="wire-container wire-hero__inner">
+        <div className="wire-stack wire-hero__body">
+          <WireHeroContent d={d} />
+        </div>
+        {d.imageUrl && (
+          <div className="wire-hero__media">
+            <img className="wire-media" src={d.imageUrl} alt={d.imageAlt ?? ""} />
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** banner — the photo becomes the background under a scrim, text centred on
+ *  top. Without a photo there is no backdrop and no scrim class, so the same
+ *  markup renders as a centred text opener on the section's own surface. */
+export function WireHeroBanner({ data }: { data: unknown }) {
+  const d = data as BlockProps["hero"];
+  return (
+    <section
+      className={`wire-section wire-hero wire-hero--banner${d.imageUrl ? " wire-hero--scrim" : ""}`}
+    >
+      {d.imageUrl && (
+        <div className="wire-hero__backdrop">
+          <img className="wire-hero__bg" src={d.imageUrl} alt={d.imageAlt ?? ""} />
+          <span className="wire-hero__scrim" aria-hidden="true" />
+        </div>
+      )}
+      <div className="wire-container wire-hero__inner">
+        <div className="wire-stack wire-hero__body">
+          <WireHeroContent d={d} />
+        </div>
       </div>
     </section>
   );
@@ -325,6 +396,10 @@ export function WirePublications({ data }: { data: unknown }) {
 
 export function WireMap({ data }: { data: unknown }) {
   const d = data as BlockProps["map"];
+  // The VISIBLE address is the owner's confirmed requisite, copied 1:1. The
+  // QUERY may be richer — code appends the city, because a bare street name
+  // resolves to the wrong town (plan §4.4). Never model-written.
+  const query = d.mapQuery?.trim() || d.address;
   return (
     <section className="wire-section wire-map">
       <div className="wire-container wire-stack">
@@ -334,7 +409,7 @@ export function WireMap({ data }: { data: unknown }) {
             API key. The footprint keeps wire-map__canvas for the generated sheet. */}
         <iframe
           className="wire-media wire-map__canvas"
-          src={`https://www.google.com/maps?q=${encodeURIComponent(d.address)}&output=embed`}
+          src={`https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`}
           title={`Карта: ${d.address}`}
           style={{ border: 0 }}
           loading="lazy"

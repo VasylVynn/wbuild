@@ -33,9 +33,9 @@ import { WIRE_TEMPLATE_ID } from "@/lib/design/wire-style";
 import { getVertical } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
-import { photoIdFor, type SiteMedia } from "@/lib/media/media";
+import { photoIdFor, type PhotoMeta, type SiteMedia } from "@/lib/media/media";
 import { isStorageUrl } from "@/lib/media/media";
-import { isEligiblePhoto, pickHeroUrl } from "@/lib/media/rank";
+import { isEligiblePhoto, photoScore, pickHeroUrl, USABLE_SITE_QUALITY } from "@/lib/media/rank";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
 import {
   normalizeUaPhoneDigits,
@@ -155,10 +155,30 @@ export interface GeneratedSite {
   seo?: { title?: string; description?: string };
 }
 
+/**
+ * Block types the composition pipeline CANNOT ship, and therefore must not
+ * advertise (plan §4, wave D — «спалені слоти»):
+ *
+ *  - `switchback` needs a trusted image per row, and the model casts photos by
+ *    id only for hero and gallery — a free-form `imageUrl` would be invented, so
+ *    assemble() has always dropped the whole block. Wiring it properly means a
+ *    photoId-cast arm plus a photo budget shared with the gallery; until then,
+ *    advertising it burns a slot the model spends on a section that never
+ *    renders. The `story` section stays REGISTERED so already-stored content
+ *    keeps rendering through WireSwitchback — it is only hidden from the model.
+ *  - `richText` has no section in the wireframe at all, so resolvedSection()
+ *    drops it. The schema stays for storage compatibility.
+ *
+ * One list, read by both prompt docs and the drop filter — so re-enabling
+ * either block is deleting one entry, not hunting three call sites.
+ */
+const UNREACHABLE_TYPES = new Set<BlockType>(["switchback", "richText"]);
+
 function buildLibraryDoc(): string {
   return (Object.keys(blockLibrary) as BlockType[])
     // autoInjected blocks (lead_form) are added by code, never offered to the model.
     .filter((t) => !blockLibrary[t].autoInjected)
+    .filter((t) => !UNREACHABLE_TYPES.has(t))
     .map((t) => {
       const e = blockLibrary[t];
       return `- ${t} (${e.label}; роль: ${e.role}; макс ${e.maxPerPage}× на сторінку): ${e.description}`;
@@ -184,6 +204,9 @@ function buildSectionDoc(template: SiteTemplate): string {
     .map((id) => {
       const def = template.sections[id];
       if (!def) return null;
+      // A section fed by an unreachable block type is a slot the model would
+      // spend on nothing (see UNREACHABLE_TYPES).
+      if (UNREACHABLE_TYPES.has(def.block)) return null;
       const vs = def.variants
         ? ` [layout: default | ${Object.keys(def.variants).join(" | ")}]`
         : "";
@@ -231,6 +254,10 @@ GROUNDING (критично для довіри):
 ${templateRule}
 - Для КОЖНОГО блоку вкажи section = id секції шаблону; тип блоку має відповідати вказаному («блок X»).
 - Якщо секція має layout-варіанти [layout: default | …] — обери variant, що найкраще пасує цьому бізнесу; якщо не впевнений, не вказуй (буде default).
+- HERO має РІВНО три макети, обирай свідомо під бізнес і під ФОТО:
+  · split — текст ліворуч, фото праворуч. Універсальний; бери, коли фото важливе, але не самодостатнє (прайс-орієнтований бізнес, багато тексту).
+  · mirror — те саме дзеркально, фото ліворуч. Коли фото має вести око першим (візуальні ніші: квіти, кондитерська, б'юті).
+  · banner — фото на весь екран тлом, світлий текст по центру. Найсильніший, але ЛИШЕ якщо в медіа-інвентарі є фото з високою «якість:N/10» і БЕЗ позначки «текст поверх фото» (ідеально — з «годиться на банер»). Слабке, темне чи «текстове» фото на весь екран виглядає гірше за будь-який інший макет — тоді бери split або mirror.
 - hero-секція — перша, contacts-секція — остання; порядок — орієнтир, не догма.
 - Кожну секцію зазвичай один раз. Якщо контенту СПРАВДІ багато — секцію можна використати ДВІЧІ (напр. послуги: основні + додаткові), але лише секцію з layout-варіантами, і повтори МУСЯТЬ мати РІЗНІ variant і РІЗНІ заголовки — сусідні однакові макети виглядають як помилка верстки. РІЗНІ секції можуть живитись ОДНИМ типом блоку (ліміт «макс ×» діє на секцію, не на тип).
 
@@ -272,6 +299,11 @@ export async function generateSite(
   // Caller's overall deadline (generateDraft threads one across its whole
   // model chain so the serverless budget can't be outlived).
   signal?: AbortSignal,
+  // Uniform roll in [0, 1) — the seeded FALLBACK hero layout, used only when the
+  // model named none or named an unknown one (see heroVariantForSeed). Same
+  // convention as the hue roll (lib/design/hue.ts). Default 0 → "split", i.e.
+  // exactly today's behaviour for a caller that doesn't thread a seed yet.
+  variantSeed = 0,
 ): Promise<GeneratedSite> {
   const client = getAnthropic();
   const vertical = getVertical(verticalId);
@@ -352,10 +384,41 @@ ${formatDossierForPrompt(dossier)}
 
   return {
     templateId: template.id,
-    blocks: assemble(parsed.data.blocks, facts, media, template, dossier),
+    blocks: assemble(parsed.data.blocks, facts, media, template, dossier, variantSeed),
     imageSubject: parsed.data.imageSubject,
     seo: clampSeo(parsed.data.seo),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Hero layout (plan §2, wave B). The wireframe ships three structural heroes;
+// the model picks one from the content. When it doesn't — or names one the
+// section doesn't define — the choice is SEEDED rather than always landing on
+// `split`. That silent always-split default is why two test bakeries got the
+// same first screen: the model had an empty variant set to choose from, so
+// every site opened identically.
+// ---------------------------------------------------------------------------
+const HERO_VARIANTS = ["split", "mirror", "banner"] as const;
+
+/**
+ * Uniform roll in [0, 1) → a hero layout id.
+ *
+ * `allowBanner` is the photo veto, not a preference: a full-bleed hero is only
+ * as good as the picture behind it, and blowing up a blurry shot or one with a
+ * price list burned into it is worse than any other layout. A site with NO hero
+ * photo may still roll banner — with no backdrop it renders as a centred
+ * text-only opener, which is a genuinely different composition, not a broken one.
+ */
+export function heroVariantForSeed(roll: number, allowBanner: boolean): string {
+  const pool = allowBanner ? HERO_VARIANTS : HERO_VARIANTS.filter((v) => v !== "banner");
+  const t = Number.isFinite(roll) ? Math.min(Math.max(roll, 0), 1 - 1e-9) : 0;
+  return pool[Math.floor(t * pool.length)];
+}
+
+/** Is this hero photo strong enough to carry a full-bleed banner? */
+function bannerWorthy(meta: PhotoMeta | undefined): boolean {
+  if (meta?.burnedText === true) return false;
+  return photoScore(meta) >= USABLE_SITE_QUALITY;
 }
 
 // ---------------------------------------------------------------------------
@@ -376,8 +439,14 @@ function sectionForType(template: SiteTemplate, type: string): string | undefine
  *  - keep the model's `section` when it's valid (exists AND matches the type);
  *  - else fall back to `sectionForType` (reassign to the template's home for it);
  *  - undefined when the type has no home at all → the caller drops the block.
+ *
+ * Typed on the two fields it reads, so it works on a GENERATION block too (the
+ * hero's layout has to resolve before its props are converted).
  */
-function resolvedSection(template: SiteTemplate | undefined, b: BlockInstance): string | undefined {
+function resolvedSection(
+  template: SiteTemplate | undefined,
+  b: { type: BlockType; section?: string },
+): string | undefined {
   if (!template) return undefined;
   const s = b.section;
   if (s && template.sections[s]?.block === b.type) return s;
@@ -406,6 +475,7 @@ function assemble(
   media: SiteMedia | undefined,
   template: SiteTemplate | undefined,
   dossier: Dossier,
+  variantSeed: number,
 ): StoredBlock[] {
   const photos = media?.photos ?? [];
   const generatedHero = media?.generatedHero;
@@ -492,7 +562,16 @@ function assemble(
         : imageUrl
           ? `Атмосферне зображення — ${altBase}`
           : undefined;
-      return { type: "hero", props: { ...props, imageUrl, imageAlt }, section: b.section, variant: b.variant };
+      // Layout: the model's choice when the section actually defines it, else
+      // the seeded roll — vetoing `banner` when the photo that would fill the
+      // screen isn't good enough for it. groundAndPlace re-validates either way.
+      const variant =
+        resolvedVariant(template, resolvedSection(template, b), b.variant) ??
+        heroVariantForSeed(
+          variantSeed,
+          bannerWorthy(heroPhoto ? metaByUrl.get(heroPhoto) : undefined),
+        );
+      return { type: "hero", props: { ...props, imageUrl, imageAlt }, section: b.section, variant };
     }
     if (b.type === "gallery") {
       // Background image generation (owner decision): a gallery too thin to
@@ -531,8 +610,9 @@ function assemble(
   const perSection: Record<string, number> = {};
   const middle = converted
     .filter((b) => b.type !== "hero" && b.type !== "contacts" && b.type !== "lead_form")
-    // switchback has no trusted per-item image source → always dropped (§4.8).
-    .filter((b) => b.type !== "switchback")
+    // Belt for the types the prompt no longer offers (UNREACHABLE_TYPES): a
+    // switchback would carry model-invented per-row images (§4.8).
+    .filter((b) => !UNREACHABLE_TYPES.has(b.type))
     // gallery is kept when ≥2 real photos fill it — or when background
     // generation will (pendingImages shimmer placeholders). A fabricated or
     // single-photo gallery still reads as a bug on the live site (§4.8).
@@ -865,12 +945,18 @@ function groundAndPlace(
     };
   }
 
-  // map: the embed queries the CONFIRMED address, 1:1 (assemble() already
+  // map: the SHOWN address is the confirmed fact, 1:1 (assemble() already
   // dropped the block when the fact is absent — ?? only keeps the type happy).
+  // The embed's search string is built here and never taken from the model:
+  // «вул. Січових Стрільців, 12» alone lands in whichever town Google likes,
+  // so the confirmed city is appended for the QUERY only (plan §4.4). The
+  // requisite check still compares `address` — this field is not a requisite.
   if (b.type === "map") {
+    const address = facts.address ?? b.props.address;
+    const mapQuery = facts.city?.trim() ? `${address}, ${facts.city.trim()}` : undefined;
     return {
       ...b,
-      props: { ...b.props, address: facts.address ?? b.props.address },
+      props: { ...b.props, address, mapQuery },
       ...placement,
       variant,
     };

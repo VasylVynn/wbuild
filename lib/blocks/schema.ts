@@ -264,6 +264,14 @@ export const mapSchema = z.object({
     .string()
     .min(1)
     .describe("Адреса бізнесу — копіюється кодом 1:1 з фактів, не вигадуй"),
+  // The SHOWN address is a requisite copied 1:1; the embed's search string is
+  // not (plan §4.4). A bare street resolves to the wrong town, so code appends
+  // the confirmed city here instead of polluting `address`. Never model-written:
+  // assemble() always overwrites it, and the editor form hides it.
+  mapQuery: z
+    .string()
+    .optional()
+    .describe("Пошуковий рядок для вбудованої карти — заповнює КОД (адреса + місто), не заповнюй"),
 });
 
 // ---------------------------------------------------------------------------
