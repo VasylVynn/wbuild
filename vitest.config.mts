@@ -16,6 +16,12 @@ export default defineConfig({
     include: ["lib/**/*.test.ts", "app/**/*.test.ts"],
   },
   resolve: {
-    alias: { "@": import.meta.dirname },
+    alias: {
+      "@": import.meta.dirname,
+      // Next.js resolves this specifier itself (it poisons client bundles);
+      // it is not an installed package, so Vitest needs a stub to import any
+      // module carrying the `import "server-only"` guard.
+      "server-only": `${import.meta.dirname}/test/stubs/server-only.ts`,
+    },
   },
 });

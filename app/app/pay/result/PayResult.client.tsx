@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CircleCheck, CircleX, Hourglass, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui";
 import { pixelTrack } from "@/lib/analytics/pixel";
+import { phCapture } from "@/components/analytics/PostHogProvider";
 import { getOrderStatusAction } from "../actions";
 
 /**
@@ -31,6 +32,7 @@ export function PayResult({
 }) {
   const [view, setView] = useState<View>(orderReference ? "checking" : "missing");
   const purchaseTracked = useRef(false);
+  const resultTracked = useRef(false);
 
   useEffect(() => {
     if (!orderReference) return;
@@ -38,6 +40,17 @@ export function PayResult({
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let attempts = 0;
+
+    // The one place the wait ends. `status` is the whole point of the event —
+    // this screen exists to report which of the three endings the owner got —
+    // and the guard keeps a remount from inventing a second ending.
+    const settle = (status: "paid" | "failed" | "timeout") => {
+      if (!resultTracked.current) {
+        resultTracked.current = true;
+        phCapture("ui_purchase_result", { status });
+      }
+      setView(status);
+    };
 
     const poll = async () => {
       attempts += 1;
@@ -51,11 +64,11 @@ export function PayResult({
             // eventID = order_reference so a future Conversions API send dedupes.
             pixelTrack("Purchase", { value: amount, currency: "UAH" }, orderReference);
           }
-          setView("paid");
+          settle("paid");
           return;
         }
         if (res.status !== "pending") {
-          setView("failed");
+          settle("failed");
           return;
         }
       }
@@ -63,7 +76,7 @@ export function PayResult({
       // Still pending, or a transient lookup failure: the order row can also
       // lag a moment behind the redirect. Keep waiting.
       if (attempts >= MAX_ATTEMPTS) {
-        setView("timeout");
+        settle("timeout");
         return;
       }
       timer = setTimeout(poll, POLL_MS);

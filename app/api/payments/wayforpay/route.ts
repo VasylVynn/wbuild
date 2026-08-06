@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createLogger } from "@/lib/log";
 import { trackFunnel } from "@/lib/analytics/funnel";
+import { phServerCapture, phServerException } from "@/lib/analytics/posthog-server";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { sendTelegramMessage } from "@/lib/telegram/push";
 import {
@@ -84,6 +85,11 @@ export async function POST(req: NextRequest) {
     // Acknowledged anyway would lose the event, so let WayForPay retry: a 500
     // here is a real outage, not bad input.
     log.error("callback processing threw", { orderReference, error: e });
+    await phServerException(e, orderReference, {
+      scope: "wayforpay_webhook",
+      orderReference,
+      transactionStatus: payload.transactionStatus,
+    });
     return NextResponse.json({ error: "processing failed" }, { status: 500 });
   }
 
@@ -175,6 +181,12 @@ async function applyCallback(payload: ServicePayload): Promise<void> {
         }
       }
       log.error("paid order refunded — access revoked", { orderReference, tenantId });
+      // Analytics only: never throws, and awaited (not fire-and-forget) so the
+      // send completes before the lambda freezes on the response.
+      await phServerCapture("payment_refunded", tenantId ?? orderReference, {
+        orderReference,
+        amount: payload.amount,
+      });
       await notifyAdmin(orderReference, tenantId, payload, "refund");
       return;
     }

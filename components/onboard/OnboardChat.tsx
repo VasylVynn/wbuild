@@ -43,6 +43,7 @@ import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 import DomainStep from "@/components/onboard/DomainStep";
 import { usePaywallCheckout, PRICE_UAH } from "@/components/pay/usePaywallCheckout";
 import { pixelTrack } from "@/lib/analytics/pixel";
+import { phCapture } from "@/components/analytics/PostHogProvider";
 import { rootSiteUrl } from "@/lib/config";
 
 // ---------------------------------------------------------------------------
@@ -994,6 +995,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // the funnel counts one «publish_clicked» per owner, not two.
   const paywall = usePaywallCheckout({
     host: draft?.host ?? "",
+    surface: "onboard",
     onPaid: () => handlePublish({ paywallRetry: true }),
   });
 
@@ -1004,7 +1006,23 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     if (phase !== "preview" || viewContentSent.current) return;
     viewContentSent.current = true;
     pixelTrack("ViewContent");
+    phCapture("ui_preview_shown");
   }, [phase]);
+
+  // The remaining phase milestones, each counted once per session. Phases are
+  // re-enterable (payment → back to preview → payment again) and their screens
+  // re-render freely, so «shown» has to mean «first reached», not «drawn» —
+  // one owner deciding once must not read as two.
+  const phaseSent = useRef<Partial<Record<Phase, boolean>>>({});
+  useEffect(() => {
+    if (phase !== "payment" && phase !== "done") return;
+    if (phaseSent.current[phase]) return;
+    phaseSent.current[phase] = true;
+    phCapture(phase === "payment" ? "ui_paywall_shown" : "ui_publish_success", {
+      surface: "onboard",
+      ...(draft?.host ? { host: draft.host } : {}),
+    });
+  }, [phase, draft?.host]);
 
   const copyUrl = async () => {
     try {

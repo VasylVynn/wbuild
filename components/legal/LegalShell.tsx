@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/landing/Logo";
+import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 
 /**
  * Chrome + typography for the two static legal pages (/oferta, /privacy).
@@ -21,6 +22,8 @@ export function LegalShell({
 }) {
   return (
     <main className="min-h-screen bg-canvas text-ink">
+      {/* Platform pages — the WayForPay reviewer path is worth measuring too. */}
+      <PostHogProvider />
       <header className="border-b border-line">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Logo href="/" />

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
+import { PostHogIdentify } from "@/components/analytics/PostHogIdentify";
 
 /**
  * Guard for the management surfaces (§3.1). Route group (protected) leaves URLs
@@ -21,5 +22,12 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
   const user = await getUser();
   if (!user) redirect("/login");
 
-  return <>{children}</>;
+  return (
+    <>
+      {/* Session is resolved here anyway — hand the owner to PostHog so dashboard
+          events stop being anonymous. Provider lives in app/app/layout.tsx. */}
+      <PostHogIdentify userId={user.id} email={user.email ?? undefined} />
+      {children}
+    </>
+  );
 }

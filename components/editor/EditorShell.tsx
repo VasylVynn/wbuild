@@ -18,6 +18,7 @@ import { getTemplate, type SiteTemplate, type TemplateBrand } from "@/lib/templa
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/components/ui";
 import { usePaywallCheckout, PRICE_UAH } from "@/components/pay/usePaywallCheckout";
+import { phCapture } from "@/components/analytics/PostHogProvider";
 import EditableSection from "./EditableSection";
 import BlockSheet from "./BlockSheet";
 import BlockEditPanel from "./BlockEditPanel";
@@ -220,10 +221,21 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   // retry so the funnel counts one «publish_clicked» per owner, not two.
   const paywall = usePaywallCheckout({
     host,
+    surface: "editor",
     onPaid: async () => {
       if (await publish({ paywallRetry: true })) setPaywallOpen(false);
     },
   });
+
+  // «Saw the offer», once per editor session: the dialog is closed and reopened
+  // freely after a decline, and that is one owner deciding once, not two. The
+  // checkout events it leads to live in usePaywallCheckout, shared with the chat.
+  const paywallShown = useRef(false);
+  useEffect(() => {
+    if (!paywallOpen || paywallShown.current) return;
+    paywallShown.current = true;
+    phCapture("ui_paywall_shown", { surface: "editor", host });
+  }, [paywallOpen, host]);
 
   const closePaywall = () => {
     if (paywall.status === "awaiting" || paywall.status === "creating") return;

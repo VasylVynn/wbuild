@@ -4,6 +4,7 @@ import { useState } from "react";
 import { checkDomainAction, requestDomainAction } from "@/app/app/new/domain-actions";
 import type { DomainAvailability } from "@/lib/domains/rdap";
 import { Button, Card, Chip, Input } from "@/components/ui";
+import { phCapture } from "@/components/analytics/PostHogProvider";
 
 /**
  * «Оберіть домен» — the last step of the paid funnel (spec 2026-08-05 §4),
@@ -34,8 +35,12 @@ export default function DomainStep({ host }: { host: string }) {
     setChecked(null);
     try {
       const res = await checkDomainAction(value);
-      if (res.ok) setChecked({ domain: res.domain, available: res.available });
-      else setError(res.error);
+      if (res.ok) {
+        setChecked({ domain: res.domain, available: res.available });
+        // The verdict, never the name the owner typed — that is their business's
+        // identity, and «скільки людей побачили „зайнятий“» is the whole question.
+        phCapture("ui_domain_check", { available: res.available });
+      } else setError(res.error);
     } finally {
       setBusy(false);
     }
@@ -49,8 +54,15 @@ export default function DomainStep({ host }: { host: string }) {
     setError("");
     try {
       const res = await requestDomainAction(host, value);
-      if (res.ok) setOrdered(checked?.domain ?? value.trim());
-      else setError(res.error);
+      if (res.ok) {
+        setOrdered(checked?.domain ?? value.trim());
+        // `checked` is null when the owner ordered without checking first —
+        // which is itself the interesting half of this step.
+        phCapture("ui_domain_requested", {
+          host,
+          ...(checked ? { available: checked.available } : { available: "unchecked" }),
+        });
+      } else setError(res.error);
     } finally {
       setBusy(false);
     }
@@ -111,7 +123,14 @@ export default function DomainStep({ host }: { host: string }) {
         <Button size="md" disabled={busy || !value.trim()} onClick={() => void order()}>
           Замовити цей домен
         </Button>
-        <Button variant="quiet" size="md" onClick={() => setSkipped(true)}>
+        <Button
+          variant="quiet"
+          size="md"
+          onClick={() => {
+            phCapture("ui_domain_skipped", { host, checked: checked !== null });
+            setSkipped(true);
+          }}
+        >
           Поки залишити на піддомені
         </Button>
       </div>

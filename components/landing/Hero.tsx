@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { ArrowRight, Phone, Send, Sparkles, Star } from "lucide-react";
 import { TelegramCard } from "./TelegramCard";
+import { CtaLink } from "./CtaLink";
 
 /**
  * Hero — sells the FUNNEL, not the site: «Клієнти з інтернету — прямо у ваш
@@ -45,13 +46,14 @@ export function Hero({ newUrl }: { newUrl: string }) {
           </p>
 
           <div className="animate-rise mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
-            <a
+            <CtaLink
               href={newUrl}
+              placement="hero"
               className="group inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-brand px-7 font-ui text-[16px] font-bold text-white transition-colors hover:bg-brand-hover sm:w-auto"
             >
               Створити сайт
               <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
-            </a>
+            </CtaLink>
             <a
               href="#examples"
               className="inline-flex min-h-13 w-full items-center justify-center rounded-full border-[1.5px] border-line-strong bg-surface px-7 font-ui text-[16px] font-semibold text-ink transition-colors hover:bg-sunken sm:w-auto"

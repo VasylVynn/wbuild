@@ -8,6 +8,7 @@ import { Features } from "@/components/landing/Features";
 import { Faq } from "@/components/landing/Faq";
 import { SiteFooter } from "@/components/landing/SiteFooter";
 import { MetaPixel } from "@/lib/analytics/pixel";
+import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 
 /**
  * 3minsite marketing landing — served on the root/www platform hosts (§2.5).
@@ -30,6 +31,7 @@ export default function PlatformHome() {
     <main className="min-h-screen bg-canvas text-ink">
       {/* Ad traffic lands here — PageView is the top of the measured funnel (§5). */}
       <MetaPixel />
+      <PostHogProvider />
       <SiteHeader newUrl={NEW_URL} loginUrl={LOGIN_URL} />
       <Hero newUrl={NEW_URL} />
       <HowItWorks />

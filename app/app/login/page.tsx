@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Lock, Mail, MailCheck } from "lucide-react";
 import { signInAction, signInWithGoogleAction, signUpAction } from "./actions";
 import { Button, Field, Input } from "@/components/ui";
 import { AuthShell, GoogleIcon } from "@/components/auth/AuthShell";
+import { phCapture } from "@/components/analytics/PostHogProvider";
 
 /**
  * Auth page for the dashboard host (public path /login). One screen, two modes
@@ -46,6 +47,13 @@ function LoginForm() {
 
   const isSignup = mode === "signup";
 
+  // Every message that can land here is one of a fixed set of our own Ukrainian
+  // strings (uaError in ./actions maps Supabase's text onto them), so the copy
+  // itself is the useful dimension and carries nothing the owner typed.
+  useEffect(() => {
+    if (error) phCapture("ui_auth_error", { message: error, mode });
+  }, [error, mode]);
+
   const switchMode = (nextMode: Mode) => {
     setMode(nextMode);
     setError("");
@@ -57,6 +65,9 @@ function LoginForm() {
     if (loading) return;
     setError("");
     setLoading(true);
+    // Attempts, not outcomes: a successful action redirects (throws) and never
+    // comes back here, so counting after the await would only ever count failures.
+    phCapture(isSignup ? "ui_signup_submitted" : "ui_signin_submitted");
     try {
       const result = isSignup
         ? await signUpAction(email, password, next)
@@ -81,6 +92,7 @@ function LoginForm() {
     if (googleLoading) return;
     setError("");
     setGoogleLoading(true);
+    phCapture("ui_google_click");
     try {
       const result = await signInWithGoogleAction(next);
       if (result?.error) setError(result.error);

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Logo } from "./Logo";
+import { CtaLink } from "./CtaLink";
 
 /**
  * Marketing top bar: transparent over the hero, then a hairline + blurred
@@ -56,12 +57,13 @@ export function SiteHeader({ newUrl, loginUrl }: { newUrl: string; loginUrl: str
           >
             Увійти
           </a>
-          <a
+          <CtaLink
             href={newUrl}
+            placement="header"
             className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 font-ui text-[15px] font-semibold text-white transition-colors hover:bg-brand-hover"
           >
             Створити сайт
-          </a>
+          </CtaLink>
         </div>
 
         <button
@@ -96,12 +98,13 @@ export function SiteHeader({ newUrl, loginUrl }: { newUrl: string; loginUrl: str
             >
               Увійти
             </a>
-            <a
+            <CtaLink
               href={newUrl}
+              placement="header_mobile"
               className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand font-ui text-[16px] font-semibold text-white"
             >
               Створити сайт
-            </a>
+            </CtaLink>
           </div>
         </div>
       )}

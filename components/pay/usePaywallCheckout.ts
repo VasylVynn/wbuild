@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createCheckoutAction, getOrderStatusAction } from "@/app/app/pay/actions";
 import { pixelTrack } from "@/lib/analytics/pixel";
+import { phCapture } from "@/components/analytics/PostHogProvider";
 
 /**
  * The ₴999 paywall, client half (spec 2026-08-05 §3): the ONE checkout +
@@ -15,6 +16,13 @@ import { pixelTrack } from "@/lib/analytics/pixel";
  *
  * Nothing here can grant paid state: it only reads `orders.status`, which only
  * the verified WayForPay callback writes.
+ *
+ * It also owns the two client-side checkout events (`ui_checkout_click`,
+ * `ui_payment_confirmed`) for BOTH surfaces: the chat and the editor share this
+ * hook, so emitting from here is the only way one owner paying once counts once.
+ * `surface` is what tells the two apart. Conversion counting still belongs to the
+ * server's `checkout_created` / `payment_success` — these are the UI's view of
+ * the same moments, and they can legitimately go missing (tab closed mid-poll).
  */
 
 /** Offer price in UAH. Mirrors PRICE_UAH's default and the landing copy — the
@@ -43,9 +51,13 @@ const TIMEOUT_MESSAGE =
 
 export function usePaywallCheckout({
   host,
+  surface,
   onPaid,
 }: {
   host: string;
+  /** Which paywall the owner is looking at — the only thing separating the two
+   *  call sites in analytics. */
+  surface: "onboard" | "editor";
   /** Runs right after the order turns `paid` (publish the draft). Re-runnable:
    *  `retryPublish` calls it again when that publish failed. */
   onPaid: () => void | Promise<void>;
@@ -60,6 +72,10 @@ export function usePaywallCheckout({
   // the poll loop.
   const onPaidRef = useRef(onPaid);
   onPaidRef.current = onPaid;
+  // Same reason as onPaidRef: the poll loop is memoized with no deps, so its
+  // event context is read through a ref rather than re-arming the loop.
+  const eventCtxRef = useRef({ surface, host });
+  eventCtxRef.current = { surface, host };
 
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -96,6 +112,9 @@ export function usePaywallCheckout({
       if (res?.ok) {
         if (res.status === "paid") {
           setStatus("paid");
+          // Before onPaid: the owner has paid whether or not the publish that
+          // follows it succeeds, and this loop reaches `paid` exactly once.
+          phCapture("ui_payment_confirmed", eventCtxRef.current);
           // A publish that throws must not take the poll loop's callback down
           // with it: the order is paid, and `paid` is the state that offers the
           // owner a retry instead of a second checkout.
@@ -133,7 +152,9 @@ export function usePaywallCheckout({
     setError("");
     setStatus("creating");
 
+    // Past the guard above, so a second tap on a busy paywall stays uncounted.
     pixelTrack("InitiateCheckout", { value: PRICE_UAH, currency: "UAH" });
+    phCapture("ui_checkout_click", { surface, host });
 
     // Opened BEFORE the await: after an async hop the click no longer counts as
     // a user gesture and the popup blocker eats the tab.
@@ -165,7 +186,7 @@ export function usePaywallCheckout({
 
     setStatus("awaiting");
     poll(res.orderReference, 0);
-  }, [host, status, poll]);
+  }, [host, surface, status, poll]);
 
   /**
    * Run the publish again after a paid order whose publish failed (a DB blip, a

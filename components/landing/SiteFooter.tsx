@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { Logo } from "./Logo";
 import { Reveal } from "./Reveal";
+import { CtaLink } from "./CtaLink";
 
 /**
  * Closing CTA card + the page's only footer. Nav here is anchors, the two legal
@@ -23,13 +24,14 @@ export function SiteFooter({ newUrl, loginUrl }: { newUrl: string; loginUrl: str
           <p className="mx-auto mt-4 max-w-md text-[16px] text-white/70">
             Кілька хвилин — і у вас буде сайт, який приймає заявки просто в Telegram.
           </p>
-          <a
+          <CtaLink
             href={newUrl}
+            placement="footer"
             className="group mt-8 inline-flex min-h-13 items-center justify-center gap-2 rounded-full bg-honey px-8 font-ui text-[16px] font-bold text-honey-text transition-all hover:brightness-95"
           >
             Створити сайт
             <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
-          </a>
+          </CtaLink>
           <p className="mt-4 text-[14px] text-white/60">
             Спробувати — безкоштовно. 999 грн одноразово за публікацію і власний домен на рік.
           </p>
