@@ -34,8 +34,11 @@ config, not code); mass brand rename to 3minsite (migration pending, per CLAUDE.
   flexibility; distinct from visitor-facing `site_events` which keeps its CHECK),
   `tenant_id uuid null`, `conversation_id uuid null`, `meta jsonb`, `created_at`.
   Index on `(kind, created_at)`.
-- **Backfill (grandfathering)**: existing tenants with `status='published'` get
-  `paid_until = now() + interval '10 years'` — partner's live sites never hit the paywall.
+- **Backfill (grandfathering)**: ~~existing tenants with `status='published'` get
+  `paid_until = now() + interval '10 years'`~~ — REMOVED and reverted 2026-08-06: with
+  publishing free, `paid_until` means «may order a custom domain», and the grandfather
+  would have handed old tenants free domains. Migration 0009 now nulls those values
+  unless the tenant has a genuinely paid order.
 - `tenants.status` enum unchanged — payment state lives in `paid_until`, orthogonal to
   lifecycle status.
 

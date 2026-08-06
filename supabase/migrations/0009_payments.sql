@@ -53,9 +53,18 @@ create table if not exists funnel_events (
 create index if not exists funnel_events_kind_time_idx on funnel_events(kind, created_at desc);
 alter table funnel_events enable row level security;
 
--- Grandfather sites that went live before the paywall existed — they must
--- never hit it (partner's tenants keep republishing freely).
-update tenants set paid_until = now() + interval '10 years'
-  where status = 'published' and paid_until is null;
+-- 2026-08-06 semantics change: paid_until now means «may order a custom
+-- domain» (publishing is FREE — the publish gate is gone). The original
+-- grandfather backfill here (+10 years for already-published tenants) was
+-- written for the publish gate; under the new meaning it would hand every
+-- old tenant a free ₴999 domain. It is removed — and REVERTED where it
+-- already ran: the 10-year horizon is the marker (no real payment grants
+-- more than a year), and a tenant with an actually paid order keeps its
+-- entitlement.
+update tenants t set paid_until = null
+  where t.paid_until > now() + interval '5 years'
+    and not exists (
+      select 1 from orders o where o.tenant_id = t.id and o.status = 'paid'
+    );
 
 notify pgrst, 'reload schema';
