@@ -66,13 +66,27 @@ function readCredentials(): WayForPayCredentials | null {
   const merchantDomain = process.env.WAYFORPAY_MERCHANT_DOMAIN?.trim();
   if (!merchantAccount || !merchantSecret || !merchantDomain) return null;
   // WayForPay's public TEST merchant has a PUBLISHED secret — in production it
-  // would let anyone self-sign an Approved callback and publish for free.
+  // would let anyone self-sign an Approved callback and get a domain for free.
   // Refusing here turns that misconfiguration into "payments unavailable"
   // (checkout errors loudly) instead of an open cash register.
   if (
     process.env.NODE_ENV === "production" &&
     merchantAccount.toLowerCase().startsWith("test_merch")
   ) {
+    // Escape hatch for ONE production smoke test before the real merchant is
+    // approved. It re-opens the hole described above, so it screams on every
+    // read rather than logging once — a forgotten flag has to be impossible to
+    // miss in the logs.
+    if (process.env.WAYFORPAY_ALLOW_TEST === "1") {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          module: "wayforpay",
+          msg: "WAYFORPAY_ALLOW_TEST=1 — TEST merchant ACTIVE in production; anyone can self-sign a paid callback. Remove this env var immediately after the smoke test.",
+        }),
+      );
+      return { merchantAccount, merchantSecret, merchantDomain };
+    }
     console.error(
       JSON.stringify({
         level: "error",

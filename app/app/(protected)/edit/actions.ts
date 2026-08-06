@@ -12,9 +12,8 @@ import type { SiteMedia } from "@/lib/media/media";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import { type PageSeo } from "@/lib/tenant/types";
 import type { PageContent } from "@/lib/site/page-content";
-import { publishDraft, PAYMENT_REQUIRED } from "@/lib/site/publish";
+import { publishDraft } from "@/lib/site/publish";
 import { trackFunnel } from "@/lib/analytics/funnel";
-import { priceUah } from "@/lib/payments/wayforpay";
 import { runStyleAudit } from "@/lib/design/style-audit";
 import { buildSectionDigest } from "@/lib/site/inspect";
 import type { StyleAuditReport } from "@/lib/site/page-content";
@@ -387,17 +386,15 @@ export async function regenerateSite(
 
 /**
  * «Опублікувати»: draft → published + cache purge (§5.5/§9.1). The promotion
- * itself lives in publishDraft() — this action only adds the ownership gate,
- * the rate limit and the paywall hand-off. Duplicating the promotion here once
- * cost the live site its deferred-image self-correction, so there is exactly
- * one implementation.
+ * itself lives in publishDraft() — this action only adds the ownership gate and
+ * the rate limit. Duplicating the promotion here once cost the live site its
+ * deferred-image self-correction, so there is exactly one implementation.
+ *
+ * Free since 2026-08-06 — the ₴999 buys the custom domain, not the publish.
  */
 export async function publishSite(
   host: string,
-  /** `paywallRetry` — the automatic republish after a confirmed payment. It is
-   *  the same click continuing, so it must not be counted a second time. */
-  opts?: { paywallRetry?: boolean },
-): Promise<{ ok: boolean; error?: string; paymentRequired?: true; price?: number }> {
+): Promise<{ ok: boolean; error?: string }> {
   const gate = await requireMember({ host }); // §3.1
   if (!gate.ok) return { ok: false, error: gate.error };
 
@@ -413,24 +410,14 @@ export async function publishSite(
     return { ok: false, error: "Сервіс тимчасово недоступний. Спробуйте пізніше." };
   }
 
-  if (!opts?.paywallRetry) {
-    const { data: t } = await getServiceClient()
-      .from("tenants")
-      .select("id")
-      .eq("host", host)
-      .maybeSingle();
-    await trackFunnel("publish_clicked", { tenantId: (t?.id as string) ?? undefined, meta: { host, source: "editor" } });
-  }
+  const { data: t } = await getServiceClient()
+    .from("tenants")
+    .select("id")
+    .eq("host", host)
+    .maybeSingle();
+  await trackFunnel("publish_clicked", { tenantId: (t?.id as string) ?? undefined, meta: { host, source: "editor" } });
 
   const res = await publishDraft(host);
-  if (!res.ok && res.error === PAYMENT_REQUIRED) {
-    return {
-      ok: false,
-      error: "Щоб опублікувати сайт, потрібна оплата.",
-      paymentRequired: true,
-      price: priceUah(),
-    };
-  }
   return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 

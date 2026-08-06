@@ -33,7 +33,7 @@ export function SiteFooter({ newUrl, loginUrl }: { newUrl: string; loginUrl: str
             <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
           </CtaLink>
           <p className="mt-4 text-[14px] text-white/60">
-            Спробувати — безкоштовно. 999 грн одноразово за публікацію і власний домен на рік.
+            Сайт і публікація — безкоштовно. 999 грн на рік — лише за власний домен.
           </p>
         </div>
       </Reveal>

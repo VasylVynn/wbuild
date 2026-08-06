@@ -35,8 +35,7 @@ const GENERATED_GALLERY_COUNT = 4;
  *
  * The custom domain is read separately and best-effort on purpose: it ships with
  * migration 0009, and publishing must keep working on a DB that hasn't applied
- * it (the bypassPaywall path below). A read failure here is a missing column,
- * never a reason to fail a publish.
+ * it. A read failure here is a missing column, never a reason to fail a publish.
  */
 async function revalidateLiveHosts(
   sb: ReturnType<typeof getServiceClient>,
@@ -388,75 +387,29 @@ async function patchGeneratedImages(opts: {
 }
 
 /**
- * Machine-readable refusal from the paywall gate. Callers translate it into
- * their own UI (the payment panel) — it is never shown to an owner as-is.
- */
-export const PAYMENT_REQUIRED = "payment_required";
-
-/**
  * Promote the draft to the live site: draft_content → published_content,
  * status "published", purge the tenant
  * cache (§5.5/§9.1). The ONLY path that publishes — human- (or admin-)
  * triggered, never called by an agent loop (invariant 6).
  *
- * Also the single paywall choke point (spec 2026-08-05 §3): both entries
- * (finalizeAction in onboarding, publishSite in the editor) come through here,
- * so there is exactly one place where «сайт стає живим» is gated on payment.
- * Unlike the rate limits, this fails CLOSED — a broken read means no publish.
+ * FREE (owner decision 2026-08-06, superseding spec 2026-08-05 §3): going live
+ * on our subdomain costs nothing, so there is no gate here at all. The ₴999 now
+ * buys the CUSTOM DOMAIN — that gate lives in requestDomainAction
+ * (app/app/new/domain-actions.ts), the one step the money is actually for.
  */
 export async function publishDraft(
   host: string,
-  opts: { bypassPaywall?: boolean } = {},
 ): Promise<{ ok: boolean; url: string; error?: string }> {
   const url = publicSiteUrl(host);
-  // Admin test-generation and the /api/dev helpers publish fixtures that were
-  // never sold, so the explicit opts flag always wins. PAYWALL_DISABLED is a
-  // LOCAL escape hatch only: in production one stray env var must never switch
-  // billing off silently, so it is ignored there and logged loudly instead.
-  const envDisabled = process.env.PAYWALL_DISABLED === "1";
-  const inProduction = process.env.NODE_ENV === "production";
-  if (envDisabled && inProduction) {
-    log.error("PAYWALL_DISABLED set in production — ignored", { host });
-  }
-  const bypassPaywall = opts.bypassPaywall === true || (envDisabled && !inProduction);
   try {
     const sb = getServiceClient();
-    // paid_until only when it matters: with the paywall bypassed a DB whose
-    // migration 0009 is still unapplied must keep working (admin fixtures, dev).
-    const { data: tenantRow, error: tErr } = await sb
+    const { data: tenant, error: tErr } = await sb
       .from("tenants")
-      .select(bypassPaywall ? "id" : "id, paid_until")
+      .select("id")
       .eq("host", host)
       .maybeSingle();
-    const tenant = tenantRow as { id: string; paid_until?: string | null } | null;
     if (tErr || !tenant) {
-      // Distinguish «column paid_until missing» (migration not applied) from a
-      // genuine tenant-read failure: the first must fail CLOSED as unpaid, not
-      // surface as a generic error the owner can do nothing about.
-      if (tErr && !bypassPaywall) {
-        const { data: probe } = await sb
-          .from("tenants")
-          .select("id")
-          .eq("host", host)
-          .maybeSingle();
-        if (probe) {
-          log.error("paywall column unreadable — treating tenant as unpaid", {
-            host,
-            error: tErr.message,
-            hint: "apply supabase/migrations/0009_payments.sql",
-          });
-          return { ok: false, url, error: PAYMENT_REQUIRED };
-        }
-      }
       throw new Error(`tenant read failed: ${tErr?.message ?? "not found"}`);
-    }
-
-    if (!bypassPaywall) {
-      const paidUntil = tenant.paid_until ? Date.parse(tenant.paid_until) : NaN;
-      if (!Number.isFinite(paidUntil) || paidUntil <= Date.now()) {
-        log.info("publish blocked — not paid", { host, paidUntil: tenant.paid_until ?? null });
-        return { ok: false, url, error: PAYMENT_REQUIRED };
-      }
     }
 
     const { data: page, error: pReadErr } = await sb

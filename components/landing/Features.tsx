@@ -3,7 +3,8 @@ import { Reveal } from "./Reveal";
 
 /**
  * What the owner actually gets. This slot carries the product's real claims —
- * one price, no plan ladder: ₴999 once buys publication and a domain for a year.
+ * one price, no plan ladder: the site and its publication are free, ₴999 buys
+ * the owner's own domain for a year (owner decision 2026-08-06).
  */
 const features = [
   {
@@ -46,8 +47,8 @@ export function Features() {
           Що ви отримуєте
         </h2>
         <p className="mt-3 text-[16px] text-ink-muted">
-          999 грн одноразово: готовий сайт і власний домен на рік. Створити сайт і подивитись, що
-          вийшло, можна безкоштовно.
+          Створити сайт і опублікувати його — безкоштовно. 999 грн на рік коштує лише власний
+          домен: реєстрація та обслуговування.
         </p>
       </Reveal>
 

@@ -6,23 +6,24 @@ import { pixelTrack } from "@/lib/analytics/pixel";
 import { phCapture } from "@/components/analytics/PostHogProvider";
 
 /**
- * The ₴999 paywall, client half (spec 2026-08-05 §3): the ONE checkout +
- * polling implementation, shared by the onboarding chat and the editor.
+ * The ₴999 paywall, client half: the ONE checkout + polling implementation.
+ * Since 2026-08-06 it gates the CUSTOM DOMAIN, not publishing — the surface that
+ * uses it today is the domain card on the onboarding success screen.
  *
  * Flow: open a payment tab → create the order → post the signed WayForPay form
  * into that tab → poll our own order row until the signed callback flips it.
- * Payment happens in a separate tab so the chat/editor behind it survives —
- * which is also why we poll instead of waiting for a return navigation.
+ * Payment happens in a separate tab so the page behind it survives — which is
+ * also why we poll instead of waiting for a return navigation.
  *
  * Nothing here can grant paid state: it only reads `orders.status`, which only
  * the verified WayForPay callback writes.
  *
  * It also owns the two client-side checkout events (`ui_checkout_click`,
- * `ui_payment_confirmed`) for BOTH surfaces: the chat and the editor share this
- * hook, so emitting from here is the only way one owner paying once counts once.
- * `surface` is what tells the two apart. Conversion counting still belongs to the
- * server's `checkout_created` / `payment_success` — these are the UI's view of
- * the same moments, and they can legitimately go missing (tab closed mid-poll).
+ * `ui_payment_confirmed`) for every surface, so one owner paying once counts
+ * once no matter where the panel lives; `surface` is what tells them apart.
+ * Conversion counting still belongs to the server's `checkout_created` /
+ * `payment_success` — these are the UI's view of the same moments, and they can
+ * legitimately go missing (tab closed mid-poll).
  */
 
 /** Offer price in UAH. Mirrors PRICE_UAH's default and the landing copy — the
@@ -55,11 +56,11 @@ export function usePaywallCheckout({
   onPaid,
 }: {
   host: string;
-  /** Which paywall the owner is looking at — the only thing separating the two
-   *  call sites in analytics. */
-  surface: "onboard" | "editor";
-  /** Runs right after the order turns `paid` (publish the draft). Re-runnable:
-   *  `retryPublish` calls it again when that publish failed. */
+  /** Which paywall the owner is looking at — the only thing separating the call
+   *  sites in analytics. */
+  surface: "domain" | "onboard" | "editor";
+  /** Runs right after the order turns `paid` (re-submit the domain request).
+   *  Re-runnable: `retry` calls it again when that follow-up failed. */
   onPaid: () => void | Promise<void>;
 }) {
   const [status, setStatus] = useState<PaywallStatus>("idle");
@@ -112,10 +113,10 @@ export function usePaywallCheckout({
       if (res?.ok) {
         if (res.status === "paid") {
           setStatus("paid");
-          // Before onPaid: the owner has paid whether or not the publish that
+          // Before onPaid: the owner has paid whether or not the step that
           // follows it succeeds, and this loop reaches `paid` exactly once.
           phCapture("ui_payment_confirmed", eventCtxRef.current);
-          // A publish that throws must not take the poll loop's callback down
+          // A follow-up that throws must not take the poll loop's callback down
           // with it: the order is paid, and `paid` is the state that offers the
           // owner a retry instead of a second checkout.
           try {
@@ -145,8 +146,8 @@ export function usePaywallCheckout({
   /** Call straight from the click handler — it opens the tab synchronously. */
   const start = useCallback(async () => {
     // `paid` is a hard stop, not just a busy state: this site is already bought.
-    // If the publish that follows payment failed, the way out is retryPublish()
-    // — opening a second checkout would charge the owner twice for one site.
+    // If the step that follows payment failed, the way out is retry() — opening
+    // a second checkout would charge the owner twice for one site.
     if (status === "paid" || status === "creating" || status === "awaiting") return;
     stoppedRef.current = false;
     setError("");
@@ -189,11 +190,11 @@ export function usePaywallCheckout({
   }, [host, surface, status, poll]);
 
   /**
-   * Run the publish again after a paid order whose publish failed (a DB blip, a
-   * rate limit). The payment stands — only the publish is retried, so this never
+   * Run onPaid again after a paid order whose follow-up failed (a DB blip, a
+   * rate limit). The payment stands — only that step is retried, so this never
    * touches the checkout.
    */
-  const retryPublish = useCallback(async () => {
+  const retry = useCallback(async () => {
     if (retrying) return;
     setRetrying(true);
     try {
@@ -214,5 +215,5 @@ export function usePaywallCheckout({
     setStatus("idle");
   }, [status]);
 
-  return { status, error, start, reset, retryPublish, retrying };
+  return { status, error, start, reset, retry, retrying };
 }

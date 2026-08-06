@@ -9,8 +9,9 @@ import { CtaLink } from "./CtaLink";
  * primary CTA; right column shows the two ends of it at once — a finished phone
  * site, and the Telegram ping the owner gets when someone fills its form.
  *
- * Price copy must stay honest about WHERE the paywall sits (spec 2026-08-05):
- * building and previewing is free, ₴999 buys publication + a domain for a year.
+ * Price copy must stay honest about WHERE the paywall sits (owner decision
+ * 2026-08-06): building AND publishing on our subdomain are free, ₴999 buys the
+ * owner's own domain plus a year of running it.
  */
 export function Hero({ newUrl }: { newUrl: string }) {
   return (
@@ -25,7 +26,7 @@ export function Hero({ newUrl }: { newUrl: string }) {
         <div className="text-center lg:text-left">
           <span className="animate-rise inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-[12px] font-semibold text-ink-muted shadow-card">
             <Sparkles size={14} className="text-honey-text" />
-            Сайт + власний домен на рік — 999 грн
+            Сайт безкоштовно · Власний домен — 999 грн/рік
           </span>
 
           <h1 className="animate-rise mt-5 text-balance font-brand text-[34px] font-semibold leading-[1.08] tracking-tight sm:text-[44px] lg:text-[54px]">
@@ -41,8 +42,9 @@ export function Hero({ newUrl }: { newUrl: string }) {
 
           <p className="animate-rise mx-auto mt-5 max-w-md text-pretty text-[17px] leading-relaxed text-ink-muted sm:text-[19px] lg:mx-0">
             Розкажіть про свою справу — помічник збере сайт, а заявки від клієнтів прилетять прямо у
-            ваш месенджер. Готовий сайт разом із власним доменом на рік —{" "}
-            <span className="font-semibold text-ink">999 грн одноразово</span>.
+            ваш месенджер. Сайт і публікація —{" "}
+            <span className="font-semibold text-ink">безкоштовно</span>. Власний домен —{" "}
+            <span className="font-semibold text-ink">999 грн на рік</span>.
           </p>
 
           <div className="animate-rise mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
@@ -63,7 +65,7 @@ export function Hero({ newUrl }: { newUrl: string }) {
           </div>
 
           <div className="animate-rise mt-6 flex flex-wrap items-center justify-center gap-4 text-[13px] text-ink-muted lg:justify-start">
-            {["Спробувати безкоштовно", "Оплата лише за публікацію", "Без коду"].map((claim) => (
+            {["Публікація безкоштовна", "Власний домен — 999 грн/рік", "Без коду"].map((claim) => (
               <span key={claim} className="flex items-center gap-1.5">
                 <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-honey" />
                 {claim}

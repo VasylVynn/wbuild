@@ -71,6 +71,15 @@ config, not code); mass brand rename to 3minsite (migration pending, per CLAUDE.
 
 ## 3. Paywall gate
 
+> **SUPERSEDED 2026-08-06 (owner decision).** Publishing is now FREE: the gate,
+> `opts.bypassPaywall` and `PAYWALL_DISABLED` are deleted from `publishDraft`, and
+> `finalizeAction` / `publishSite` no longer return `paymentRequired`. The ₴999 gates the
+> CUSTOM DOMAIN instead — `requestDomainAction` (`app/app/new/domain-actions.ts`) reads
+> `tenants.paid_until` and fails CLOSED, and the payment panel lives inside `DomainStep`
+> on the onboarding success screen. §4's domain flow is unchanged apart from being paid,
+> and §2 (WayForPay) and §5 (analytics) still hold. Everything below in THIS section is
+> historical.
+
 - Inside **`publishDraft`** (`lib/site/publish.ts`) — single choke point covering BOTH
   entries (`finalizeAction`, `publishSite`): if not (`paid_until > now()`) → return
   `{ok:false, error:'payment_required'}`.
