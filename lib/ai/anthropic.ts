@@ -32,10 +32,11 @@ export function getAnthropic(): Anthropic {
     throw new Error("ANTHROPIC_API_KEY not set in .env.local");
   }
   // SDK defaults are 10min timeout × 2 retries — one stuck call would eat the
-  // whole serverless budget (maxDuration 300 on /new) and surface as a bare
-  // 504 instead of our own error state (live incident 2026-08-06). 120s per
-  // attempt × 1 retry keeps the worst case within the function budget while
-  // leaving room for the biggest generation call.
+  // whole serverless budget and surface as a bare 504 instead of our own error
+  // state (live incident 2026-08-06). NOTE this bounds a single ATTEMPT
+  // (120s × up to 2 attempts per call) — a multi-call chain is bounded by the
+  // caller's own deadline (generateDraft threads AbortSignal.timeout across
+  // its chain), not by this client setting.
   cached = new Anthropic({ timeout: 120_000, maxRetries: 1 });
   return cached;
 }

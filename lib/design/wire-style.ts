@@ -80,7 +80,7 @@ function hueLine(hue: number): string {
 
 export async function generateWireStyle(
   brief: string,
-  opts: { hue?: number } = {},
+  opts: { hue?: number; signal?: AbortSignal } = {},
 ): Promise<WireStyleResult> {
   if (!isAnthropicConfigured()) throw new Error("ANTHROPIC_API_KEY not set");
   const { css, tsx } = await wireframeSource();
@@ -112,7 +112,7 @@ ${tsx}
 Напиши CSS, який зробить із цього каркаса сайт для описаного бізнесу.`,
       },
     ],
-  });
+  }, { signal: opts.signal });
 
   const text = res.content
     .map((b) => (b.type === "text" ? b.text : ""))

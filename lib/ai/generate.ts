@@ -268,6 +268,9 @@ export async function generateSite(
   // deterministic id→URL mapping in assemble(). Optional so callers that don't
   // thread media keep working (no photos → no hero/gallery imagery).
   media?: SiteMedia,
+  // Caller's overall deadline (generateDraft threads one across its whole
+  // model chain so the serverless budget can't be outlived).
+  signal?: AbortSignal,
 ): Promise<GeneratedSite> {
   const client = getAnthropic();
   const vertical = getVertical(verticalId);
@@ -318,7 +321,7 @@ ${formatDossierForPrompt(dossier)}
     tools: [buildSiteTool],
     tool_choice: { type: "auto" },
     messages: [{ role: "user", content: stripLoneSurrogates(userPrompt) }],
-  });
+  }, { signal });
 
   const toolUse = res.content.find((b) => b.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {

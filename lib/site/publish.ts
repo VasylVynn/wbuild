@@ -122,11 +122,16 @@ export async function generateDraft(opts: {
     }
 
     const dossier = opts.dossier ?? buildDossier({ facts, media: media ?? null });
+    // ONE deadline across the whole synchronous model chain (composition +
+    // stylesheet). Per-call SDK timeouts only bound a single hung attempt —
+    // two calls × retries could still outlive the 300s serverless budget and
+    // die as a bare 504. 240s leaves headroom for DB writes and the response.
+    const modelDeadline = AbortSignal.timeout(240_000);
     // The model composes against the wireframe: it picks WHICH sections this
     // business needs, in WHAT order, and writes the copy. No template choice,
     // no seeded variant juggling, no section shuffle — the composition is the
     // model's, end to end.
-    const site = await generateSite(dossier, vertical.id, media);
+    const site = await generateSite(dossier, vertical.id, media, modelDeadline);
 
     // The model then writes this tenant's stylesheet for the composition it
     // just produced. Fail-open: if styling dies the draft still ships — grey,
@@ -147,7 +152,7 @@ export async function generateDraft(opts: {
     // measured in the spike, two grooming salons both landed in warm cream.
     const hue = Math.floor(mulberry32(designSeed(`${host}:hue`, designNonce))() * 360);
     try {
-      wireCss = (await generateWireStyle(brief, { hue })).css;
+      wireCss = (await generateWireStyle(brief, { hue, signal: modelDeadline })).css;
     } catch (e) {
       log.error("styling failed", { host, error: e });
     }
