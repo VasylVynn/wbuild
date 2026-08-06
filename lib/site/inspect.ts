@@ -215,6 +215,9 @@ export async function inspectDraft(
   // full-facts callers narrow into this type unchanged.
   facts: Partial<BusinessFacts>,
   dossier?: Dossier,
+  // generateDraft's chain-wide deadline (see publish.ts) — an aborted pass
+  // falls into the fail-open catch below, keeping the deterministic checks.
+  signal?: AbortSignal,
 ): Promise<{ violations: InspectViolation[] }> {
   const entries = sectionEntries(blocks);
   const deterministic = requisiteViolations(entries, facts);
@@ -258,7 +261,7 @@ ${sectionDigest(entries)}
 Виклич report_violations.`),
         },
       ],
-    });
+    }, { signal });
 
     const toolUse = res.content.find((b) => b.type === "tool_use");
     const parsed = toolUse?.type === "tool_use" ? violationsSchema.safeParse(toolUse.input) : undefined;
@@ -344,6 +347,7 @@ async function rebuildSectionProps(
   instruction: string,
   facts: BusinessFacts,
   dossier?: Dossier,
+  signal?: AbortSignal,
 ): Promise<StoredBlock["props"] | null> {
   try {
     const client = getAnthropic();
@@ -386,7 +390,7 @@ ${JSON.stringify(block.props, null, 1)}
 Виклич rebuild_section.`),
         },
       ],
-    });
+    }, { signal });
 
     const toolUse = res.content.find((b) => b.type === "tool_use");
     if (!toolUse || toolUse.type !== "tool_use") return null;
@@ -417,6 +421,10 @@ export async function runDraftQualityLoop(opts: {
    *  (legacy callers), the text loop runs unchanged. */
   styleBrief?: string;
   styleHue?: number;
+  /** generateDraft's chain-wide deadline — every model call in the loop
+   *  (inspection, rebuilds, style audit + regen) shares it, so the loop can
+   *  never outlive the caller's serverless budget. Fail-open throughout. */
+  signal?: AbortSignal;
 }): Promise<void> {
   const { host, facts, dossier } = opts;
   try {
@@ -446,6 +454,7 @@ export async function runDraftQualityLoop(opts: {
             sectionDigest: sectionDigest(sectionEntries(blocks)),
             brief: opts.styleBrief,
             hue: opts.styleHue,
+            signal: opts.signal,
           }).catch((e) => {
             console.warn(`[style-audit] failed (fail-open): ${e instanceof Error ? e.message : e}`);
             return null;
@@ -458,7 +467,7 @@ export async function runDraftQualityLoop(opts: {
     let dirty = false;
 
     for (let round = 0; round < 2; round++) {
-      const report = await inspectDraft(blocks, facts, dossier);
+      const report = await inspectDraft(blocks, facts, dossier, opts.signal);
       if (!report.violations.length) break;
       console.warn(
         `[inspect] ${host} round ${round + 1}: ${report.violations
@@ -497,7 +506,7 @@ export async function runDraftQualityLoop(opts: {
         }
         fixedOnce.add(v.sectionId);
 
-        const newProps = await rebuildSectionProps(block, v.instruction, facts, dossier);
+        const newProps = await rebuildSectionProps(block, v.instruction, facts, dossier, opts.signal);
         if (newProps) {
           blocks[entry.index] = { ...block, props: newProps } as StoredBlock;
           dirty = true;

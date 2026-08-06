@@ -35,6 +35,7 @@ const verdictTool = {
 async function auditStyleWithModel(
   css: string,
   sectionDigest: string,
+  signal?: AbortSignal,
 ): Promise<{ verdict: "pass" | "fail"; note?: string }> {
   const client = getAnthropic();
   const res = await client.messages.create({
@@ -65,7 +66,7 @@ ${css.slice(0, 80000)}
 Виклич report_style_verdict.`),
       },
     ],
-  });
+  }, { signal });
   const toolUse = res.content.find((b) => b.type === "tool_use");
   const parsed = toolUse?.type === "tool_use" ? verdictSchema.safeParse(toolUse.input) : undefined;
   if (!parsed?.success) return { verdict: "pass" }; // unparseable → fail-open
@@ -77,6 +78,8 @@ export async function runStyleAudit(opts: {
   sectionDigest: string;
   brief: string;
   hue: number;
+  /** Caller's chain-wide deadline — covers both verdicts AND the regen call. */
+  signal?: AbortSignal;
 }): Promise<{ css: string | undefined; report: StyleAuditReport }> {
   const report: StyleAuditReport = {
     lintViolations: [],
@@ -97,16 +100,16 @@ export async function runStyleAudit(opts: {
 
   // Phase 2: one bounded verdict; fail → one regen, re-lint, re-judge.
   try {
-    const first = await auditStyleWithModel(css, opts.sectionDigest);
+    const first = await auditStyleWithModel(css, opts.sectionDigest, opts.signal);
     report.verdict = first.verdict;
     report.correctiveNote = first.note;
     if (first.verdict === "fail") {
       report.regenerated = true;
       const correctedBrief = `${opts.brief}\nПопередня версія стилю мала ваду — обов'язково уникни її: ${first.note ?? "нечитабельний, конфліктний стиль"}.`;
-      const regen = await generateWireStyle(correctedBrief, { hue: opts.hue });
+      const regen = await generateWireStyle(correctedBrief, { hue: opts.hue, signal: opts.signal });
       const relint = lintWireCss(regen.css);
       const recontrast = fixContrast(relint.cleanCss);
-      const second = await auditStyleWithModel(recontrast.css, opts.sectionDigest);
+      const second = await auditStyleWithModel(recontrast.css, opts.sectionDigest, opts.signal);
       const regenDetIssues = relint.violations.length;
       const origDetIssues = report.lintViolations.length;
       if (second.verdict === "pass" || regenDetIssues < origDetIssues) {

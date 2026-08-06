@@ -238,6 +238,7 @@ export async function generateDraft(opts: {
       dossier,
       styleBrief: brief,
       styleHue: hue,
+      signal: modelDeadline,
     });
 
     // Background image batch — runs post-response, AFTER the quality loop's
