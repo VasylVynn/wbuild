@@ -80,7 +80,30 @@ describe("client construction", () => {
       host: "https://eu.i.posthog.com",
       flushAt: 1,
       flushInterval: 0,
+      requestTimeout: 3000,
     });
+  });
+
+  it("a hung ingest cannot stall the caller past the deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      // Never resolves — simulates PostHog ingest hanging.
+      sdk.captureImmediate.mockImplementationOnce(() => new Promise(() => {}));
+      const { phServerCapture } = await load();
+
+      let settled = false;
+      const call = phServerCapture("publish_clicked", "tenant-1").then(() => {
+        settled = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(1400);
+      expect(settled).toBe(false); // still inside the deadline
+      await vi.advanceTimersByTimeAsync(200);
+      await call;
+      expect(settled).toBe(true); // released by the deadline, not the ingest
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("honours an explicit host", async () => {

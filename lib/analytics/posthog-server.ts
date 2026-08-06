@@ -32,6 +32,16 @@ import { createLogger } from "@/lib/log";
 
 const log = createLogger("posthog");
 
+/**
+ * Hard ceiling on how long a caller may wait for a capture. These captures are
+ * awaited inside user-facing server actions (trackFunnel) and the payment
+ * webhook — a slow PostHog ingest must degrade to a lost analytics event
+ * (logged), never to a stalled funnel step. The request itself is NOT
+ * aborted at the deadline: on a warm instance it usually still completes in
+ * the background; on a freeze it may be lost — acceptable for analytics.
+ */
+const CAPTURE_TIMEOUT_MS = 1500;
+
 let client: PostHog | null = null;
 
 /** Lazy singleton. No key (local dev, preview) → null → every export no-ops. */
@@ -43,8 +53,26 @@ function getClient(): PostHog | null {
     host: process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com",
     flushAt: 1,
     flushInterval: 0,
+    // SDK-level cap on a single ingest request — the outer race below is the
+    // caller-facing guarantee; this keeps the background attempt bounded too.
+    requestTimeout: 3000,
   });
   return client;
+}
+
+/** Resolve when `work` settles OR the deadline passes — whichever comes first. */
+async function withDeadline(work: Promise<unknown>, label: string): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), CAPTURE_TIMEOUT_MS);
+  });
+  const outcome = await Promise.race([work.then(() => "done" as const), deadline]);
+  if (timer) clearTimeout(timer);
+  if (outcome === "timeout") {
+    log.warn("capture exceeded deadline — continuing without it", { label });
+    // Keep the straggler from surfacing an unhandled rejection later.
+    void work.catch(() => {});
+  }
 }
 
 /**
@@ -60,11 +88,14 @@ export async function phServerCapture(
   try {
     const ph = getClient();
     if (!ph) return;
-    await ph.captureImmediate({
-      distinctId: distinctId || "anonymous",
+    await withDeadline(
+      ph.captureImmediate({
+        distinctId: distinctId || "anonymous",
+        event,
+        properties: props,
+      }),
       event,
-      properties: props,
-    });
+    );
   } catch (e) {
     log.warn("server capture failed", { event, error: e });
   }
@@ -83,7 +114,10 @@ export async function phServerException(
   try {
     const ph = getClient();
     if (!ph) return;
-    await ph.captureExceptionImmediate(error, distinctId || "anonymous", props);
+    await withDeadline(
+      ph.captureExceptionImmediate(error, distinctId || "anonymous", props),
+      "$exception",
+    );
   } catch (e) {
     log.warn("server exception capture failed", { error: e });
   }
