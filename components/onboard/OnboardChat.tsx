@@ -300,7 +300,10 @@ const GEN_STEP_SECONDS = [0, 20, 45, 75, 110, 145];
 // Rotates under the heading every 40s so a long wait still reads as
 // ongoing work, not a stall.
 const GEN_MESSAGES = [
-  "Це може зайняти до 3 хвилин — нікуди не йдіть, ми вже працюємо.",
+  // «до 5 хвилин» = the actual server budget (maxDuration 300 on /new) — a
+  // promise shorter than the timeout reads as a hang exactly when generation
+  // is slowest and the user is most nervous.
+  "Зазвичай це до 3 хвилин, максимум 5 — нікуди не йдіть, ми вже працюємо.",
   "Пишемо тексти й підбираємо кольори під ваш бізнес.",
   "Ще трохи — готуємо фото та збираємо сторінку.",
   "Майже готово — фінальні перевірки перед показом.",
