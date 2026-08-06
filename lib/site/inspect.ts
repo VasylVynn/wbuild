@@ -467,6 +467,10 @@ export async function runDraftQualityLoop(opts: {
     let dirty = false;
 
     for (let round = 0; round < 2; round++) {
+      // Deadline already hit → stop polishing, keep the draft as generated.
+      // The loop is quality improvement, not validation — running out of time
+      // must never cost the owner content.
+      if (opts.signal?.aborted) break;
       const report = await inspectDraft(blocks, facts, dossier, opts.signal);
       if (!report.violations.length) break;
       console.warn(
@@ -510,6 +514,11 @@ export async function runDraftQualityLoop(opts: {
         if (newProps) {
           blocks[entry.index] = { ...block, props: newProps } as StoredBlock;
           dirty = true;
+        } else if (opts.signal?.aborted) {
+          // Deadline, not a bad section: the rebuild was cut short, so the
+          // flagged-but-valid content stays. Dropping here would turn a slow
+          // generation into deleted sections.
+          break;
         } else if (!PROTECTED_TYPES.has(block.type)) {
           // Unfixable now (model/schema failure) → deterministic drop beats
           // shipping a section we know is wrong.
