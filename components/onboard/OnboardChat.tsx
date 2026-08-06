@@ -124,6 +124,22 @@ function reviewsWord(n: number): string {
   return n < 5 ? "відгуки" : "відгуків";
 }
 
+/**
+ * Human copy for a THROWN server-action call (network layer, not our
+ * {ok:false} contract). The dominant real-world cause is deployment skew: a
+ * tab opened before a deploy holds stale action IDs, the POST 404s
+ * (x-nextjs-action-not-found) and the raw message is unhelpful English. The
+ * conversation itself survives a refresh (conv id in localStorage), so
+ * «оновіть сторінку» genuinely continues where they were.
+ */
+function actionErrorMessage(err: unknown): string {
+  const m = err instanceof Error ? err.message : "";
+  if (/server action|unexpected response|failed to fetch|load failed/i.test(m)) {
+    return "Ми щойно оновили застосунок. Оновіть сторінку (Ctrl+R або ⌘R) — розмова збережеться, і продовжимо з того ж місця.";
+  }
+  return m || "Невідома помилка";
+}
+
 // Client-side id for pending attachments. NOT crypto.randomUUID — that's
 // undefined outside secure contexts (http://app.lvh.me dev host).
 let nextAttachId = 0;
@@ -890,6 +906,12 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         setPhase("gate");
         return;
       }
+    } catch (err) {
+      // Without this catch a failed action (e.g. deployment skew 404) escaped
+      // and the CTA just looked dead — no state change, no message.
+      setErrorMsg(actionErrorMessage(err));
+      setPhase("error");
+      return;
     } finally {
       setLoading(false);
     }
@@ -953,7 +975,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         setPhase("error");
       }
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Невідома помилка");
+      setErrorMsg(actionErrorMessage(err));
       setPhase("error");
     } finally {
       setLoading(false);
@@ -1035,6 +1057,13 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   };
 
   const rootBase = "bg-canvas text-ink";
+
+  // While the big «Створити сайт» CTA is on screen, hide any quick-reply chip
+  // with the same wording — the model likes to suggest it, and two identical
+  // buttons read as a bug.
+  const visibleQuickReplies = confirmed
+    ? quickReplies.filter((q) => q.trim().toLowerCase() !== "створити сайт")
+    : quickReplies;
 
   // ---------------------------------------------------------------------------
   // Render — chat phase (design B: merged progress chips + quick-reply chips)
@@ -1196,7 +1225,10 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         </div>
 
         {/* Footer: confirmed CTA + quick replies + input. The big CTA appears
-            only AFTER the user explicitly confirmed the chat summary (A6). */}
+            only AFTER the user explicitly confirmed the chat summary (A6).
+            The model sometimes suggests «Створити сайт» as a quick reply too —
+            next to the real CTA that chip is a confusing duplicate, so it is
+            filtered out while the CTA is visible. */}
         <footer className="border-t border-line bg-surface/70 backdrop-blur">
           <div className="mx-auto w-full max-w-2xl px-4 pb-5 pt-3.5">
           {confirmed && (
@@ -1210,14 +1242,14 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
             </button>
           )}
 
-          {quickReplies.length > 0 && !loading && (
+          {visibleQuickReplies.length > 0 && !loading && (
             <div className="mb-3">
               <p className="mb-2 flex items-center gap-1.5 text-[12px] font-bold text-ink-muted">
                 <Sparkles size={14} className="text-honey" />
                 Підказки — оберіть або напишіть своє
               </p>
               <div className="flex flex-wrap gap-2">
-                {quickReplies.map((q) => (
+                {visibleQuickReplies.map((q) => (
                   <button
                     key={q}
                     onClick={() => send(q)}
