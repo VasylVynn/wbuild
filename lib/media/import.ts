@@ -1,6 +1,8 @@
 import "server-only";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { isStorageUrl } from "@/lib/media/media";
+// Safe static import: palette.ts lazy-loads sharp itself and fails open (null).
+import { extractPalette } from "@/lib/media/palette";
 
 /**
  * External-image import (wave E — Instagram). Downloads a photo hosted on a
@@ -69,17 +71,15 @@ function sniffImage(buf: Buffer): string | null {
  * Classical quality pass, identical in spirit to the upload route's: sharp is a
  * NATIVE module that can fail to load, so it rides lazily and fail-open — any
  * load/processing error means "proceed with the original bytes" (returns null).
- * Warnings are intentionally discarded here; this path only cares about the
- * corrected buffer. They are not lost: analyzePhoto re-runs analyzeImage on the
- * bytes we actually stored (i.e. post-correction — the honest reading) and
- * carries them into PhotoMeta.warnings, where the ranker penalizes blur and
- * darkness (lib/media/rank.ts).
+ * No analyzeImage here (v2 review: its result was computed and discarded) —
+ * warnings are not lost: analyzePhoto runs analyzeImage on the bytes we actually
+ * stored (i.e. post-correction — the honest reading) and carries them into
+ * PhotoMeta.warnings, where the ranker penalizes blur and darkness (rank.ts).
  */
 async function qualityPass(buf: Buffer): Promise<Buffer | null> {
   try {
-    const { analyzeImage, correctImage } = await import("./process");
-    const [, corrected] = await Promise.all([analyzeImage(buf), correctImage(buf)]);
-    return corrected;
+    const { correctImage } = await import("./process");
+    return await correctImage(buf);
   } catch (e) {
     console.warn("[media/import] quality layer unavailable:", e instanceof Error ? e.message : e);
     return null;
@@ -97,17 +97,23 @@ async function ensureBucket() {
   bucketReady = true;
 }
 
+/** What a successful import hands back: the storage URL plus the deterministic
+ *  palette of the bytes we stored (pipeline v2 §3-S0; absent when sharp is
+ *  unavailable — palette is an enhancement, never a gate). */
+export type ImportedExternalImage = { url: string; palette?: string[] };
+
 /**
  * Import `url` into our Storage bucket, scoped to the tenant resolved from
  * `conversationId` (onboarding, before a host exists) or `host` (editor). Returns
- * the public storage URL, or `null` on any failure.
+ * `{url, palette?}` (public storage URL + §3-S0 palette), or `null` on any failure.
  */
 export async function importExternalImage(
   url: string,
   scope: { conversationId?: string; host?: string; tenantId?: string },
-): Promise<string | null> {
-  // Idempotent: an already-imported (our-bucket) URL passes straight through.
-  if (isStorageUrl(url)) return url;
+): Promise<ImportedExternalImage | null> {
+  // Idempotent: an already-imported (our-bucket) URL passes straight through
+  // (no palette — we never had the bytes; analyzePhoto's backfill covers it).
+  if (isStorageUrl(url)) return { url };
 
   try {
     let parsed: URL;
@@ -176,6 +182,9 @@ export async function importExternalImage(
     if (!sniffed) return fail("bytes are not a known raster image");
 
     const corrected = await qualityPass(buf);
+    // Palette from the bytes we are about to store — SEQUENTIAL after the
+    // correction so the hexes describe the served pixels (pipeline v2 §3-S0).
+    const palette = await extractPalette(corrected ?? buf);
 
     await ensureBucket();
     // No `-orig` copy: §4.8 "never destroy originals" is about OWNER uploads —
@@ -189,7 +198,10 @@ export async function importExternalImage(
     });
     if (up.error) return fail("upload failed");
 
-    return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+    return {
+      url: sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl,
+      ...(palette?.length && { palette }),
+    };
   } catch (e) {
     console.warn("[media/import] import failed:", e instanceof Error ? e.message : e);
     return null;

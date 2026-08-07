@@ -14,7 +14,7 @@ import {
 } from "next/font/google";
 
 /**
- * next/font loaders for the curated pairs (lib/theme/font-pairs.ts). Imported
+ * next/font loaders for the curated pairs (lib/design/font-pairs.ts). Imported
  * ONLY by tenant-rendering layouts (public shell + editor frame) — attaching
  * TENANT_FONT_CLASSES registers every family's @font-face + CSS variable.
  *
@@ -44,6 +44,32 @@ const nunitoSans = Nunito_Sans({ subsets: ["latin", "cyrillic"], display: "swap"
 const playfair = Playfair_Display({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-playfair" });
 const jost = Jost({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-jost" });
 const onest = Onest({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-onest" });
+
+/**
+ * CSS custom properties the loaders above register — kept as LITERALS because
+ * next/font loader options must be statically analyzable, so nothing here can
+ * be derived from a shared constant. The whitelist (lib/design/font-pairs.ts)
+ * may only reference these plus the two root-layout globals; the vitest in
+ * lib/design/font-pairs.test.ts source-checks both mirrors, since this module
+ * cannot be imported outside the Next compiler.
+ */
+export const TENANT_FONT_VARIABLES = [
+  "--font-inter",
+  "--font-montserrat",
+  "--font-rubik",
+  "--font-lora",
+  "--font-source-sans",
+  "--font-literata",
+  "--font-cormorant",
+  "--font-nunito",
+  "--font-nunito-sans",
+  "--font-playfair",
+  "--font-jost",
+  "--font-onest",
+] as const;
+
+/** Registered globally by app/layout.tsx on <html> — see header note. */
+export const PLATFORM_FONT_VARIABLES = ["--font-manrope", "--font-unbounded"] as const;
 
 /** Attach on every tenant-rendering shell (public layout + editor frame). */
 export const TENANT_FONT_CLASSES = [

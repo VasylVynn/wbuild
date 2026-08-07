@@ -107,6 +107,10 @@ export type PhotoMeta = {
   heroCandidate?: boolean;
   /** Owner-facing warnings from the classical sharp pass (blur/dark/too small). */
   warnings?: string[];
+  /** Deterministic per-photo palette (pipeline v2 §3-S0): 4–6 lowercase hexes
+   *  quantized IN CODE from the corrected bytes (lib/media/palette.ts) — never
+   *  model-produced, never shown to a model. Feeds the S0 grounding aggregate. */
+  palette?: string[];
 };
 
 /**
@@ -257,8 +261,20 @@ const photoMetaSchema = z
     burnedText: z.boolean().optional(),
     heroCandidate: z.boolean().optional(),
     warnings: z.array(z.string().max(300)).max(4).optional(),
+    // `.catch(undefined)`: a malformed palette drops the FIELD, never the whole
+    // meta entry — the palette is an enhancement, the photo's meta is not.
+    palette: z
+      .array(z.string().regex(/^#[0-9a-f]{6}$/i))
+      .max(8)
+      .optional()
+      .catch(undefined),
   })
-  .passthrough();
+  .passthrough()
+  // The inferred passthrough-object type is capped to PhotoMeta explicitly:
+  // letting it flow into mediaSchema's inference pushed an unrelated, already
+  // borderline Supabase-generics check (seed.ts NonceClient) over TS2589.
+  // Runtime behavior is unchanged; extra keys still pass through.
+  .transform((m) => m as PhotoMeta);
 
 /** Strict media schema: ≤MAX_PHOTOS photos, every URL under our Storage bucket. */
 export const mediaSchema = z.object({
@@ -372,6 +388,9 @@ export function siteScopedPhotoMeta(media: SiteMedia | undefined): PhotoMeta[] {
       ...(m.burnedText !== undefined && { burnedText: m.burnedText }),
       ...(m.heroCandidate !== undefined && { heroCandidate: m.heroCandidate }),
       ...(m.warnings?.length && { warnings: m.warnings }),
+      // Deterministic color grounding (§3-S0) — regeneration needs it like the
+      // other casting signals; a few hexes, not dossier bulk.
+      ...(m.palette?.length && { palette: m.palette }),
       // Gallery titles fall back to the real caption (03 §2.4) — excerpted here
       // because the renderer only ever shows the first 60 chars anyway.
       ...(m.sourceCaption && { sourceCaption: m.sourceCaption.slice(0, 200) }),

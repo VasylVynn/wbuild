@@ -51,6 +51,8 @@ export type IgDeepProgress = {
 type ImageSource = { url: string; caption?: string; isAvatar: boolean };
 type ImportedImage = {
   storageUrl: string;
+  /** §3-S0 palette of the stored (corrected) bytes, from the import step. */
+  palette?: string[];
   caption?: string;
   isAvatar: boolean;
   analysis: Awaited<ReturnType<typeof analyzePhoto>>;
@@ -183,10 +185,16 @@ export async function scrapeInstagramDeep(args: {
   args.onProgress?.({ phase: "importing", done, total });
   const imported = await mapPool(sources, IMPORT_CONCURRENCY, async (s): Promise<ImportedImage | null> => {
     try {
-      const storageUrl = await importExternalImage(s.url, importScope);
-      if (!storageUrl) return null;
-      const analysis = await analyzePhoto(storageUrl);
-      return { storageUrl, caption: s.caption, isAvatar: s.isAvatar, analysis };
+      const imported = await importExternalImage(s.url, importScope);
+      if (!imported) return null;
+      const analysis = await analyzePhoto(imported.url);
+      return {
+        storageUrl: imported.url,
+        ...(imported.palette && { palette: imported.palette }),
+        caption: s.caption,
+        isAvatar: s.isAvatar,
+        analysis,
+      };
     } catch {
       return null;
     } finally {
@@ -200,10 +208,14 @@ export async function scrapeInstagramDeep(args: {
   const photoMeta: PhotoMeta[] = [];
   for (const r of imported) {
     if (!r) continue;
+    // Import-time palette (corrected buffer, §3-S0 canonical) wins; the
+    // analyzePhoto backfill (same stored bytes, refetched) covers passthroughs.
+    const palette = r.palette ?? r.analysis?.palette;
     const meta: PhotoMeta = {
       url: r.storageUrl,
       id: photoIdFor(r.storageUrl),
       // role is left undefined here — set_media_role assigns it later (04 §1).
+      ...(palette?.length && { palette }),
       ...(r.caption && { sourceCaption: stripLoneSurrogates(safeSlice(r.caption, 2000)) }),
       ...(r.analysis && {
         kind: r.analysis.kind,

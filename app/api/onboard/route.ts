@@ -264,6 +264,10 @@ export async function POST(req: Request): Promise<Response> {
         url,
         id: photoIdFor(url),
         kind: result.kind,
+        // §3-S0 deterministic palette, piggybacked on the analysis byte fetch
+        // (chat-upload path). Spread only when present so an import-time
+        // palette already on the meta survives a paletteless re-analysis.
+        ...(result.palette?.length && { palette: result.palette }),
         ...(result.alt && { alt: result.alt }),
         ocrText: result.ocrText,
         textHeavy: result.textHeavy,

@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { getServiceClient } from "@/lib/supabase/server";
 import { revalidateTenant } from "@/lib/cache";
 import { publicSiteUrl } from "@/lib/config";
-import { generateSite } from "@/lib/ai/generate";
+import { generateSite, heroVariantForSeed } from "@/lib/ai/generate";
 import { generateSiteImages, isImageGenConfigured } from "@/lib/media/generate-image";
 import { getVertical } from "@/lib/verticals/registry";
 import type { BusinessFacts } from "@/lib/verticals/schema";
@@ -11,8 +11,9 @@ import { siteScopedPhotoMeta, type SiteMedia } from "@/lib/media/media";
 import { MIN_USABLE_PHOTOS, usablePhotoCount } from "@/lib/media/rank";
 import { buildDossier, type Dossier } from "@/lib/dossier";
 import { runDraftQualityLoop } from "@/lib/site/inspect";
-import { designSeed, mulberry32 } from "@/lib/design/seed";
+import { advanceDesignNonce, nonceForBrandWrite, rollAxis } from "@/lib/design/seed";
 import { hueForVertical } from "@/lib/design/hue";
+import { fontPairForSeed, hueBucketOf, readDesignTuple, shouldReroll, type DesignTuple } from "@/lib/design/axes";
 import { buildStyleBrief } from "@/lib/design/style-brief";
 import { generateWireStyle } from "@/lib/design/wire-style";
 import type { StoredBlock } from "@/lib/blocks/schema";
@@ -76,9 +77,8 @@ export async function generateDraft(opts: {
   try {
     const vertical = getVertical(verticalId);
 
-    // Generation nonce — the one thing code still rolls. It seeds the hue
-    // anchor handed to stylesheet generation, so a repeat generation for the
-    // same host starts from a different colour world.
+    // Pre-read: previous brand (tuple guard + spread fallback) and the page's
+    // stored stylesheet (fail-open seed below).
     const sbPre = getServiceClient();
     const { data: prevRow, error: prevErr } = await sbPre
       .from("tenants")
@@ -86,10 +86,14 @@ export async function generateDraft(opts: {
       .eq("host", host)
       .maybeSingle();
     // A transient read failure must not masquerade as «new tenant» and reset
-    // the nonce history (codex review) — fail loudly, the caller retries.
+    // the tuple/brand history (codex review) — fail loudly, the caller retries.
     if (prevErr) throw new Error(`tenant pre-read failed: ${prevErr.message}`);
-    const prevNonce = (prevRow?.brand as { designNonce?: number } | null)?.designNonce;
-    const designNonce = typeof prevNonce === "number" ? prevNonce + 1 : 0;
+    const prevBrand = (prevRow?.brand ?? {}) as Record<string, unknown>;
+    // Generation nonce — advanced ATOMICALLY via RPC before any model call
+    // (spec v2 §4): the old read+1 spanned the ~2min model chain, so two
+    // parallel generations of one host shared every seed. Falls back to
+    // read+1 when the RPC is missing; the brand write below persists it then.
+    const designNonce = await advanceDesignNonce(sbPre, host);
     // This upsert REPLACES draft_content, so a styling failure would wipe the
     // stylesheet a previous run stored for this host. Seed the fallback with it:
     // an old sheet against a new composition degrades gracefully (every section
@@ -110,6 +114,32 @@ export async function generateDraft(opts: {
       if (prevPageErr) throw new Error(`page pre-read failed: ${prevPageErr.message}`);
       prevWireCss = (prevPage?.draft_content as { wireCss?: string } | null)?.wireCss;
     }
+
+    // Seeded axes (spec v2 §4). V1 consumes the hue (wire-style) and the
+    // hero-variant default; the font proposal only rides the tuple until the
+    // S1 brief (V2) starts reading it. Tuple guard: when the seeded proposals
+    // repeat the previous generation on font AND hero variant AND hue bucket,
+    // take ONE extra roll («-reroll» purposes) and keep whatever comes — no
+    // loop, A→B→A stays legal. `heroVariant` compares the SEEDED proposal
+    // (banner veto ignored — stable across photo changes), never the model's
+    // final choice: pre-S1 proposals are cheap, a second model call is not.
+    const prevTuple = readDesignTuple(prevBrand.lastDesignTuple);
+    const seededProposal = (suffix: "" | "-reroll") => {
+      const hue = hueForVertical(rollAxis(host, designNonce, `hue${suffix}`), vertical.id);
+      const variantRoll = rollAxis(host, designNonce, `variant${suffix}`);
+      return {
+        hue,
+        altHue: hueForVertical(rollAxis(host, designNonce, `hue-alt${suffix}`), vertical.id),
+        variantRoll,
+        tuple: {
+          font: fontPairForSeed(rollAxis(host, designNonce, `font${suffix}`), vertical.id).id,
+          heroVariant: heroVariantForSeed(variantRoll, true),
+          hueBucket: hueBucketOf(hue),
+        } satisfies DesignTuple,
+      };
+    };
+    let seeded = seededProposal("");
+    if (shouldReroll(prevTuple, seeded.tuple)) seeded = seededProposal("-reroll");
 
     // Background image generation (owner decision: «сайт має бути гарний і без
     // фото»): with zero owner photos the site ships IMMEDIATELY — hero text-only,
@@ -149,13 +179,7 @@ export async function generateDraft(opts: {
     // model's, end to end.
     // Fifth arg seeds the hero-variant default (wave B): same nonce contract
     // as the hue, so «згенерувати ще раз» can change the composition too.
-    const site = await generateSite(
-      dossier,
-      vertical.id,
-      media,
-      modelDeadline,
-      mulberry32(designSeed(`${host}:variant`, designNonce))(),
-    );
+    const site = await generateSite(dossier, vertical.id, media, modelDeadline, seeded.variantRoll);
 
     // The model then writes this tenant's stylesheet for the composition it
     // just produced. Fail-open: if styling dies the draft still ships — grey,
@@ -171,11 +195,8 @@ export async function generateDraft(opts: {
     // colour worlds, but a bakery can no longer draw acid green. «Згенерувати
     // ще раз» moves to another roll. altHue = an independent second roll for
     // the style-audit's one regen, so a rejected colour world isn't retried.
-    const hue = hueForVertical(mulberry32(designSeed(`${host}:hue`, designNonce))(), vertical.id);
-    const altHue = hueForVertical(
-      mulberry32(designSeed(`${host}:hue-alt`, designNonce))(),
-      vertical.id,
-    );
+    const hue = seeded.hue;
+    const altHue = seeded.altHue;
     try {
       wireCss = (await generateWireStyle(brief, { hue, signal: modelDeadline })).css;
     } catch (e) {
@@ -184,6 +205,38 @@ export async function generateDraft(opts: {
 
     const sb = getServiceClient();
     const brandPhotoMeta = siteScopedPhotoMeta(media);
+
+    // brand is written as a SPREAD, never rebuilt field-by-field (spec v2 §4,
+    // spread-what-you-read extended to brand): generation owns its fields;
+    // anything set while the ~2min model chain ran — the logo action writes
+    // brand directly — must survive. Re-read at write time (the pre-read is
+    // minutes stale by now); a transient failure falls back to the pre-read
+    // copy — stale-but-real beats aborting a finished generation.
+    let baseBrand = prevBrand;
+    {
+      const { data: freshRow, error: freshErr } = await sb
+        .from("tenants")
+        .select("brand")
+        .eq("host", host)
+        .maybeSingle();
+      if (freshErr) {
+        log.warn("brand re-read failed, spreading the pre-read copy", { host, error: freshErr.message });
+      } else if (freshRow?.brand) {
+        baseBrand = freshRow.brand as Record<string, unknown>;
+      }
+    }
+
+    // The spread must NOT carry generation-owned media: photos/photoMeta/
+    // generatedHero have no concurrent writer (the only other brand writer is
+    // logo-actions, which touches logoUrl alone), so a stale copy surviving the
+    // spread would resurrect photos the owner removed — the next «Згенерувати
+    // ще раз» reads brand.photos as the authoritative set and re-casts them
+    // onto the site (review must-fix). Strip them from the base; the gated
+    // writes below re-add whatever THIS generation actually has.
+    const carriedBrand: Record<string, unknown> = { ...baseBrand };
+    delete carriedBrand.photos;
+    delete carriedBrand.photoMeta;
+    delete carriedBrand.generatedHero;
 
     // DRAFT-scope upsert: nothing here reaches the live site. The design rides
     // draft_content and is promoted only by publishDraft(); status drops to
@@ -196,13 +249,22 @@ export async function generateDraft(opts: {
           canonical_hostname: host,
           status: "draft",
           brand: {
+            ...carriedBrand,
             businessName: facts.businessName,
-            // The seed counter for the hue anchor — a generation COUNTER, not
+            // The seed counter for the design axes — a generation COUNTER, not
             // a design, so the unversioned `brand` is its right home. The
             // design itself (templateId + wireCss) rides draft_content, because
             // a draft-only regeneration must never change the live site
-            // (invariant 6).
-            designNonce,
+            // (invariant 6). Clamped against the freshly-read base: the RPC
+            // already persisted OUR bump, and a parallel generation may have
+            // bumped further since — writing the captured value back verbatim
+            // could move the counter backwards and replay its seeds
+            // (review must-fix; see nonceForBrandWrite).
+            designNonce: nonceForBrandWrite(designNonce, baseBrand.designNonce),
+            // The seeded proposals THIS generation started from — the next
+            // run's tuple guard reads it (spec v2 §4). Rides the spread like
+            // every other generation-owned field.
+            lastDesignTuple: seeded.tuple,
             ...(media?.logoUrl && { logoUrl: media.logoUrl }),
             ...(media?.photos?.length && { photos: media.photos }),
             // The vision verdicts travel WITH the photos: `brand` is the only

@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
+// Safe static import: palette.ts lazy-loads sharp itself and fails open (null).
+import { extractLogoPalette, extractPalette } from "@/lib/media/palette";
 
 /**
  * Photo upload (§4.8 MVP): the CLIENT pre-processes (canvas re-encode strips
@@ -25,14 +27,17 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 async function qualityPass(
   buf: Buffer,
-): Promise<{ warnings: string[]; corrected: Buffer | null }> {
+): Promise<{ warnings: string[]; corrected: Buffer | null; palette: string[] | null }> {
   try {
     const { analyzeImage, correctImage } = await import("@/lib/media/process");
     const [{ warnings }, corrected] = await Promise.all([analyzeImage(buf), correctImage(buf)]);
-    return { warnings, corrected };
+    // Palette extraction runs SEQUENTIALLY after correction, on the corrected
+    // bytes — the pixels the site will actually serve (pipeline v2 §3-S0).
+    const palette = await extractPalette(corrected ?? buf);
+    return { warnings, corrected, palette };
   } catch (e) {
     console.warn("[upload] quality layer unavailable:", e instanceof Error ? e.message : e);
-    return { warnings: [], corrected: null };
+    return { warnings: [], corrected: null, palette: null };
   }
 }
 
@@ -106,8 +111,13 @@ export async function POST(req: NextRequest) {
   const id = crypto.randomUUID();
   const buf = Buffer.from(await file.arrayBuffer());
 
-  const { warnings, corrected } =
-    kind === "logo" ? { warnings: [] as string[], corrected: null } : await qualityPass(buf);
+  // Logos still skip the photo quality pass (no correction, no photo warnings)
+  // but DO get a palette — the alpha-aware variant, which ignores transparent
+  // background and keeps grayscale marks honest (pipeline v2 §3-S0 logo branch).
+  const { warnings, corrected, palette } =
+    kind === "logo"
+      ? { warnings: [] as string[], corrected: null, palette: await extractLogoPalette(buf) }
+      : await qualityPass(buf);
 
   // With a correction: corrected WebP is what the site serves, the untouched
   // original keeps its own extension alongside (§4.8, never destroyed).
@@ -132,5 +142,12 @@ export async function POST(req: NextRequest) {
   }
 
   const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(mainPath);
-  return NextResponse.json({ ok: true, url: pub.publicUrl, warnings });
+  // `palette` is additive: existing clients read {url, warnings} and ignore it;
+  // the chat/editor upload flows may thread it into PhotoMeta (§3-S0).
+  return NextResponse.json({
+    ok: true,
+    url: pub.publicUrl,
+    warnings,
+    ...(palette?.length && { palette }),
+  });
 }

@@ -6,7 +6,7 @@ import { parseBlockProps, type StoredBlock } from "@/lib/blocks/schema";
 import { blockPlacementSchema } from "@/lib/blocks/schema";
 import { getBlockFields } from "@/lib/blocks/fields";
 import { getVertical } from "@/lib/verticals/registry";
-import { generateSite } from "@/lib/ai/generate";
+import { generateSite, heroVariantForSeed } from "@/lib/ai/generate";
 import { buildDossier } from "@/lib/dossier";
 import { sanitizeMedia, type PhotoMeta, type SiteMedia } from "@/lib/media/media";
 import type { BusinessFacts } from "@/lib/verticals/schema";
@@ -293,14 +293,42 @@ export async function regenerateSite(
     });
     // The nonce advances so the re-styling starts from a different hue AND a
     // different seeded hero variant than the previous run — «згенерувати ще
-    // раз» must look different, not just read differently.
-    const designNonce = typeof brand.designNonce === "number" ? brand.designNonce + 1 : 0;
+    // раз» must look different, not just read differently. Advanced ATOMICALLY
+    // via RPC (spec v2 §4, lib/design/seed.ts); on the read+1 fallback the
+    // brand write below is what persists it, exactly as before.
+    const designNonce = await advanceDesignNonce(sb, host);
+
+    // Tuple guard — same contract as generateDraft (lib/site/publish.ts): this
+    // IS the repeat-generation button the anti-repeat spec (v2 §4) targets, so
+    // it must read the previous run's seeded proposals and take ONE extra
+    // «-reroll» roll when font AND hero variant AND hue bucket all repeat.
+    // Same purpose strings and the same seeded-proposal comparison (banner veto
+    // ignored), so publish- and editor-regenerations share one tuple history.
+    const vertical = getVertical(t.vertical);
+    const prevTuple = readDesignTuple((t.brand as Record<string, unknown> | null)?.lastDesignTuple);
+    const seededProposal = (suffix: "" | "-reroll") => {
+      const hue = hueForVertical(rollAxis(host, designNonce, `hue${suffix}`), vertical.id);
+      const variantRoll = rollAxis(host, designNonce, `variant${suffix}`);
+      return {
+        hue,
+        altHue: hueForVertical(rollAxis(host, designNonce, `hue-alt${suffix}`), vertical.id),
+        variantRoll,
+        tuple: {
+          font: fontPairForSeed(rollAxis(host, designNonce, `font${suffix}`), vertical.id).id,
+          heroVariant: heroVariantForSeed(variantRoll, true),
+          hueBucket: hueBucketOf(hue),
+        } satisfies DesignTuple,
+      };
+    };
+    let seeded = seededProposal("");
+    if (shouldReroll(prevTuple, seeded.tuple)) seeded = seededProposal("-reroll");
+
     const site = await generateSite(
       buildDossier({ facts: t.facts, media }),
       t.vertical,
       media,
       undefined,
-      mulberry32(designSeed(`${host}:variant`, designNonce))(),
+      seeded.variantRoll,
     );
     const oldBlocks = oldDraft?.blocks ?? [];
     const oldPocket = oldDraft?.pocket ?? [];
@@ -317,19 +345,16 @@ export async function regenerateSite(
     // new composition degrades gracefully — every section styles through the
     // same `wire-*` class contract — so it is a genuinely better fallback than
     // nothing.
-    const vertical = getVertical(t.vertical);
     const brief = buildStyleBrief({
       facts: t.facts,
       vertical,
       sectionTypes: site.blocks.map((b) => b.type),
     });
     // Same seeding contract as generation: hue confined to the vertical's
-    // ranges, an independent second roll for the audit's one regen.
-    const hue = hueForVertical(mulberry32(designSeed(`${host}:hue`, designNonce))(), vertical.id);
-    const altHue = hueForVertical(
-      mulberry32(designSeed(`${host}:hue-alt`, designNonce))(),
-      vertical.id,
-    );
+    // ranges, an independent second roll for the audit's one regen. Both come
+    // from the tuple-guarded proposal above.
+    const hue = seeded.hue;
+    const altHue = seeded.altHue;
     try {
       wireCss = (await generateWireStyle(brief, { hue })).css;
     } catch (e) {
@@ -386,9 +411,40 @@ export async function regenerateSite(
     // The advanced nonce is persisted so the NEXT regeneration rolls a further
     // hue. It is a counter, not a design: nothing the live site renders reads
     // it, so writing it to the unversioned `brand` is not a publish.
+    //
+    // Spread a FRESH re-read, never the pre-chain snapshot (same fix as
+    // lib/site/publish.ts): `t.brand` is minutes stale by now, and spreading it
+    // would clobber anything written during the model chain — including a
+    // lastDesignTuple a concurrent generateDraft stored. The nonce is clamped
+    // for the same reason: the RPC already persisted our bump, and writing the
+    // captured value back verbatim could move the counter backwards and replay
+    // a parallel generation's seeds (review must-fix; see nonceForBrandWrite).
+    // A failed re-read falls back to the snapshot — stale-but-real beats
+    // aborting a finished regeneration.
+    let baseBrand = (t.brand ?? {}) as Record<string, unknown>;
+    {
+      const { data: freshT, error: freshErr } = await sb
+        .from("tenants")
+        .select("brand")
+        .eq("id", t.id)
+        .maybeSingle();
+      if (freshErr) {
+        console.warn(`[regenerate] brand re-read failed for ${host}, spreading the snapshot: ${freshErr.message}`);
+      } else if (freshT?.brand) {
+        baseBrand = freshT.brand as Record<string, unknown>;
+      }
+    }
     await sb
       .from("tenants")
-      .update({ brand: { ...(t.brand as Record<string, unknown>), designNonce } })
+      .update({
+        brand: {
+          ...baseBrand,
+          designNonce: nonceForBrandWrite(designNonce, baseBrand.designNonce),
+          // The seeded proposals THIS regeneration started from — the next
+          // run's tuple guard (here or in generateDraft) compares against it.
+          lastDesignTuple: seeded.tuple,
+        },
+      })
       .eq("id", t.id);
 
     return { ok: true, blocks: site.blocks };
@@ -440,7 +496,8 @@ import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limi
 import { headers } from "next/headers";
 import { sendTelegramMessage } from "@/lib/telegram/push";
 import { isAnthropicConfigured } from "@/lib/ai/anthropic";
-import { designSeed, mulberry32 } from "@/lib/design/seed";
+import { advanceDesignNonce, nonceForBrandWrite, rollAxis } from "@/lib/design/seed";
+import { fontPairForSeed, hueBucketOf, readDesignTuple, shouldReroll, type DesignTuple } from "@/lib/design/axes";
 import { hueForVertical } from "@/lib/design/hue";
 import { buildStyleBrief } from "@/lib/design/style-brief";
 import { generateWireStyle } from "@/lib/design/wire-style";

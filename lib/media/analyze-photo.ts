@@ -3,6 +3,7 @@ import { stripLoneSurrogates, safeSlice } from "@/lib/ai/sanitize";
 import { getAnthropic, isAnthropicConfigured, VISION_MODEL } from "@/lib/ai/anthropic";
 import { isStorageUrl, PHOTO_KINDS, type PhotoKind, type ExtractedInfo } from "./media";
 import { DEFAULT_SITE_QUALITY } from "./rank";
+import { extractPalette } from "./palette";
 
 /**
  * Photo intelligence (wave G, extended by refactor §1.4): one vision pass per
@@ -63,6 +64,11 @@ export type PhotoAnalysis = {
   heroCandidate: boolean;
   /** Technical warnings from the classical sharp layer (may be empty). */
   warnings: string[];
+  /** Deterministic §3-S0 palette of the STORED bytes (already corrected — this
+   *  pass refetches what the bucket serves), piggybacking on that fetch for the
+   *  backfill path. CODE-derived, never a vision answer: the model is asked no
+   *  color questions, keeping the color axis deterministic. */
+  palette?: string[];
 };
 
 async function fetchImageBytes(
@@ -271,6 +277,9 @@ export async function analyzePhoto(url: string): Promise<PhotoAnalysis | null> {
   if (!img) return null;
 
   const warningsP = technicalWarnings(img.buf);
+  // Deterministic palette rides the same byte fetch, in parallel with the
+  // vision call. Fail-open null; the model never sees or produces hexes.
+  const paletteP = extractPalette(img.buf);
 
   try {
     const client = getAnthropic();
@@ -309,7 +318,9 @@ export async function analyzePhoto(url: string): Promise<PhotoAnalysis | null> {
 
     const textHeavy = input.textHeavy === true;
     const isReview = kind === "review";
+    const palette = await paletteP;
     return {
+      ...(palette?.length && { palette }),
       kind: kind as PhotoKind,
       suitable: input.suitable,
       reason: clean(input.reason, 200) ?? "",

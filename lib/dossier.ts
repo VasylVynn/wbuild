@@ -44,6 +44,10 @@ export type MediaInventoryItem = {
   siteQuality?: number;
   burnedText?: boolean;
   heroCandidate?: boolean;
+  /** §3-S0 deterministic per-photo palette. Carried as DATA for the code-side
+   *  grounding stage only — formatDossierForPrompt never prints these hexes
+   *  (models never see them; the color axis stays deterministic). */
+  palette?: string[];
 };
 
 export type Dossier = {
@@ -218,6 +222,7 @@ export function buildDossier(input: {
     ...(m.siteQuality !== undefined && { siteQuality: m.siteQuality }),
     ...(m.burnedText !== undefined && { burnedText: m.burnedText }),
     ...(m.heroCandidate !== undefined && { heroCandidate: m.heroCandidate }),
+    ...(m.palette?.length && { palette: m.palette }),
   }));
 
   const transcriptDigest = buildTranscriptDigest(transcript);
@@ -316,6 +321,8 @@ export function formatDossierForPrompt(dossier: Dossier): string {
       const site = m.useOnSite === false ? "ні" : "так";
       // Quality tags ride inside the same bracket — the model picks the hero and
       // the gallery, so it needs the vetting numbers, not just the class.
+      // Deliberately ABSENT: m.palette. Hexes are grounding data for code
+      // (§3-S0 determinism) — a model that saw them would start theming by them.
       const tags = [
         m.kind ?? "?",
         `наСайт:${site}`,

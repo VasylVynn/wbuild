@@ -113,9 +113,18 @@ function pruneMeta(media: SiteMedia): PhotoMeta[] | undefined {
 }
 
 // One processed batch item: upload/analysis outcome for a single sent file.
+// `uploadPalette` is the upload route's deterministic palette of the stored
+// bytes (§3-S0) — the fallback when the vision analysis (which carries its own
+// `palette`) is unavailable, so owner uploads still ground the S0 color axis.
 type BatchItem =
   | { failed: true }
-  | { failed: false; url: string; analysis: AnalyzePhotoResult; warnings: string[] };
+  | {
+      failed: false;
+      url: string;
+      analysis: AnalyzePhotoResult;
+      warnings: string[];
+      uploadPalette?: string[];
+    };
 
 // Ukrainian plural for «відгук» (2–4 відгуки, 5+ відгуків; a batch caps at 8).
 function reviewsWord(n: number): string {
@@ -177,7 +186,7 @@ function routeBatch(
       failed += 1;
       continue;
     }
-    const { url, analysis: result, warnings } = item;
+    const { url, analysis: result, warnings, uploadPalette } = item;
 
     // Fail-open (G5): no verdict → plain gallery photo, no meta.
     if (!result.ok) {
@@ -197,10 +206,21 @@ function routeBatch(
     }
 
     if (a.kind === "logo") {
+      // Palette threads into the meta (§3-S0): without it every owner-upload
+      // site fails the aggregate's `palette?.length` gate and S0 grounding
+      // degrades to the vertical hue window. The logo matters most — it rides
+      // LOGO_WEIGHT and bypasses the quality gates. Analysis palette first,
+      // upload-route palette as the fallback.
+      const palette = a.palette?.length ? a.palette : uploadPalette;
       m = {
         ...m,
         logoUrl: url,
-        photoMeta: upsertMeta(m.photoMeta, { url, kind: "logo", ...(a.alt && { alt: a.alt }) }),
+        photoMeta: upsertMeta(m.photoMeta, {
+          url,
+          kind: "logo",
+          ...(a.alt && { alt: a.alt }),
+          ...(palette?.length && { palette }),
+        }),
       };
       logoSet += 1;
       continue;
@@ -217,10 +237,16 @@ function routeBatch(
     // work / interior / menu / person → gallery photo with class + honest alt.
     if (m.photos.length >= MAX_PHOTOS) overflow += 1;
     else {
+      const palette = a.palette?.length ? a.palette : uploadPalette;
       m = {
         ...m,
         photos: [...m.photos, url],
-        photoMeta: upsertMeta(m.photoMeta, { url, kind: a.kind, ...(a.alt && { alt: a.alt }) }),
+        photoMeta: upsertMeta(m.photoMeta, {
+          url,
+          kind: a.kind,
+          ...(a.alt && { alt: a.alt }),
+          ...(palette?.length && { palette }),
+        }),
       };
       added += 1;
       if (!firstWarning && warnings.length) firstWarning = warnings[0];
@@ -705,11 +731,17 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               fd.append("conversationId", convIdRef.current as string);
               const res = await fetch("/api/upload", { method: "POST", body: fd });
               const json = (await res.json().catch(() => null)) as
-                | { ok?: boolean; url?: string; warnings?: string[] }
+                | { ok?: boolean; url?: string; warnings?: string[]; palette?: string[] }
                 | null;
               if (!res.ok || !json?.url) return { failed: true };
               const analysis = await analyzePhotoAction(json.url);
-              return { failed: false, url: json.url, analysis, warnings: json.warnings ?? [] };
+              return {
+                failed: false,
+                url: json.url,
+                analysis,
+                warnings: json.warnings ?? [],
+                ...(json.palette?.length && { uploadPalette: json.palette }),
+              };
             } catch {
               return { failed: true };
             } finally {
