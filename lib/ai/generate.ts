@@ -746,7 +746,11 @@ export function enforceSectionPlan<T extends { type: BlockType; section?: string
   // plan-exempt — so a schema-valid plan like [hero, gallery] would strip
   // every content section and ship a page of bookends. When enforcement would
   // remove ALL non-exempt model blocks, the plan — not the composition — is
-  // the phantom: keep the model's composition for this run.
+  // the phantom: keep the model's composition for this run. Known degradation:
+  // those out-of-plan sections were also cut from the slimmed S2а stylist
+  // prompt (wire-style plannedBlockTypes), so they render on wire.css alone
+  // until the S4 corrective regen — which reads the reconciled shippedPlan —
+  // restyles them.
   const hadContent = blocks.some((b) => !PLAN_EXEMPT_TYPES.has(b.type));
   const keptContent = filtered.some((b) => !PLAN_EXEMPT_TYPES.has(b.type));
   if (hadContent && !keptContent) {

@@ -3,18 +3,29 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getAnthropic, isAnthropicConfigured, GEN_MODEL } from "@/lib/ai/anthropic";
 import { FONT_FAMILIES, getFontPair } from "@/lib/design/font-pairs";
-import type { DesignSpec } from "@/lib/site/design-spec";
+import { extractSectionSource } from "@/lib/design/wire-source";
+import { salonwireSections } from "@/components/templates/salonwire";
+import { createLogger } from "@/lib/log";
+import type { DesignSpec, SectionPlanEntry } from "@/lib/site/design-spec";
 
 /**
  * Wireframe styling — where a site's design actually comes from.
  *
  * The model is handed the wireframe's own source (the class contract) and one
- * business brief, and returns a stylesheet. It is told exactly one prohibition:
- * do not touch layout. Everything else — colour, type weight, shadow, radius,
- * spacing, alignment, pseudo-elements — is its call. No palette, no preset, no
- * curated list. That freedom is what makes two sites in one niche look
- * genuinely different instead of recolouring the same template.
+ * business brief, and returns a stylesheet. Layout is off-limits (wire.css owns
+ * it), fonts and motion are code-owned facts stated by the brief (pipeline v2
+ * §1/§3-S3) — everything else on the SURFACE (colour, type weight, shadow,
+ * radius, spacing, pseudo-elements) is its call. A v2 designSpec anchors the
+ * palette roles; without one the colour world is fully the model's. That
+ * freedom is what makes two sites in one niche look genuinely different
+ * instead of recolouring the same template.
+ *
+ * Prompt size (spec §6 note, V5): wire.css always goes in FULL — it is the
+ * layout contract. sections.tsx is slimmed to the sectionPlan's sections (plus
+ * the always-injected ones) when a designSpec exists; see wire-source.ts.
  */
+
+const log = createLogger("wire-style");
 
 /** The wireframe every site is composed against — the only one there is. */
 export const WIRE_TEMPLATE_ID = "salonwire";
@@ -125,6 +136,27 @@ export function designSpecStyleLines(spec: DesignSpec): string {
   return lines.join("\n");
 }
 
+/**
+ * Block types whose sections.tsx source the stylist needs: the sectionPlan's
+ * sections mapped through the wireframe registry, plus the ones a plan never
+ * carries but the page can always render — hero (protected, LCP) and the
+ * force-injected lead_form/contacts/gallery (invariant 8). The seed set MUST
+ * mirror `PLAN_EXEMPT_TYPES` in `lib/ai/generate.ts` (not imported — that
+ * would be a circular dependency): gallery in particular is injected outside
+ * any plan whenever ≥2 photos exist or a generated-atmosphere batch is
+ * pending, so dropping its source would ship it unstyled (`.wire-gallery` is
+ * not in wire.css). Nav/footer chrome lives in SalonWireWrapper (never sent)
+ * — its classes come from wire.css, unchanged. Exported for vitest.
+ */
+export function plannedBlockTypes(plan: readonly SectionPlanEntry[]): Set<string> {
+  const types = new Set<string>(["hero", "lead_form", "contacts", "gallery"]);
+  for (const entry of plan) {
+    const block = salonwireSections[entry.section]?.block;
+    if (block) types.add(block);
+  }
+  return types;
+}
+
 export async function generateWireStyle(
   brief: string,
   // v2 path passes `designSpec` (palette roles supersede the bare hue anchor —
@@ -135,6 +167,12 @@ export async function generateWireStyle(
   if (!isAnthropicConfigured()) throw new Error("ANTHROPIC_API_KEY not set");
   const { css, tsx } = await wireframeSource();
   const client = getAnthropic();
+  // Slim the markup context to the planned sections (V5): only possible with a
+  // designSpec — the v1 fallback can't know the composition, so it keeps the
+  // whole file, exactly the pre-V5 behavior.
+  const { source: tsxForPrompt, extracted } = opts.designSpec
+    ? extractSectionSource(tsx, plannedBlockTypes(opts.designSpec.sectionPlan))
+    : { source: tsx, extracted: false };
   const anchor = opts.designSpec
     ? designSpecStyleLines(opts.designSpec)
     : typeof opts.hue === "number"
@@ -160,7 +198,7 @@ ${css}
 
 КАРКАС — розмітка секцій (звідси бери реальні назви класів):
 \`\`\`tsx
-${tsx}
+${tsxForPrompt}
 \`\`\`
 
 Напиши CSS, який зробить із цього каркаса сайт для описаного бізнесу.`,
@@ -181,6 +219,17 @@ ${tsx}
 
   // Models occasionally wrap output in a fence despite the instruction.
   const unfenced = text.replace(/^```(?:css)?\s*/i, "").replace(/\s*```$/i, "");
+
+  // Prompt-size telemetry (V5): budget tuning is data-driven — every call logs
+  // what the slimming actually saved and what the API actually counted.
+  log.info("style prompt size", {
+    extracted,
+    tsxFullChars: tsx.length,
+    tsxSentChars: tsxForPrompt.length,
+    cssChars: css.length,
+    inputTokens: res.usage.input_tokens,
+    outputTokens: res.usage.output_tokens,
+  });
 
   return {
     css: unfenced,

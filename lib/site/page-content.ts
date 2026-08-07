@@ -17,9 +17,28 @@ export interface StyleAuditReport {
   /** Final fail after the regen budget, OR a code-proven unresolved contrast
    *  pair (see contrastFixes) — surfaces in the admin QA column. */
   flagged: boolean;
+  /** S4 brief-adherence judgement (pipeline v2 §3-S4): does the shipped sheet
+   *  respect the designSpec's palette roles / typography character / motion
+   *  level? Present only when the generation carried a designSpec. Advisory —
+   *  never flips `verdict`/`flagged` — and by prompt contract tolerant of
+   *  legitimate deterministic repairs (fixContrast may move colors). */
+  adherence?: { palette: boolean; typography: boolean; motion: boolean; note?: string };
+  /** True when the audited sheet was NOT produced by this generation — the
+   *  S2а style leg failed and the PREVIOUS tenant sheet was carried over
+   *  (pipeline-compile fallback). Adherence is suppressed then: judging a
+   *  sheet the stylist never wrote against the NEW brief would report a brief
+   *  violation that never happened. Cleared when the audit's corrective regen
+   *  replaced the sheet with one generated against this run's spec. The admin
+   *  chip reads «попереднє оформлення» off this flag. */
+  carriedOver?: boolean;
   /** Honest log of every code-side repair validateDesignSpec applied to the S1
    *  brief (pipeline v2 §3) — rides the audit so the admin surface sees it. */
   briefRepairs?: string[];
+  /** S3 compile notes (lint-before-persist strips + the 60k size clamp, spec
+   *  §9.3) — carried into the report because the audit re-lints an already
+   *  clean sheet and would otherwise show an empty log while compile stripped
+   *  plenty. A size truncation MUST appear here, never pass silently. */
+  compileNotes?: string[];
   checkedAt: string;
 }
 

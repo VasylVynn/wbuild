@@ -23,9 +23,12 @@ npm run dev          # next dev --turbopack, port 3000
 npx tsc --noEmit     # typecheck (no "type-check" script — call tsc directly)
 npm run build        # next build --turbopack
 npm run lint         # eslint
+npm test             # vitest run (~290 tests, node-only — NO jsdom)
 ```
 
-No test suite yet (only `lint`). `dev`/`build` use **Turbopack**.
+**Vitest is node-only by design** (`vitest.config.mts`): pure modules, contracts, seeded
+determinism. CSS/markup are NOT covered by it — UI claims need a live browser (see
+Verification). `dev`/`build` use **Turbopack**.
 
 **Local hosts** (root domain via `NEXT_PUBLIC_ROOT_DOMAIN=lvh.me:3000`; `*.lvh.me` → 127.0.0.1):
 - `lvh.me:3000` — marketing root
@@ -44,13 +47,23 @@ A tenant is a **DB row, never a deploy**. Data-driven render: content is data
 - `app/app/**` — dashboard/editor namespace. Route groups: `(protected)` = auth-gated,
   `(shell)` = dashboard chrome (leads, sites, admin). `edit/[host]/` is the editor;
   `edit/[host]/frame` is the live-preview iframe.
-- `app/api/onboard` and `app/api/editor-chat` are **SSE** (`text/event-stream`) agent streams.
-  `/api/leads` (lead funnel), `/api/upload` (photos → Storage), `/api/telegram/webhook`,
-  `/api/events` (analytics beacon). `/api/dev/*` are local-only helpers.
+- `app/api/onboard`, `app/api/editor-chat` and `app/api/generate` are **SSE**
+  (`text/event-stream`) streams. `/api/leads` (lead funnel), `/api/upload` (photos → Storage),
+  `/api/telegram/webhook`, `/api/events` (analytics beacon). `/api/dev/*` are local-only helpers.
+- **Generation is the staged pipeline v2** (`lib/site/pipeline.ts`, ONE module for onboard AND
+  editor regen; spec `docs/superpowers/specs/2026-08-07-generation-pipeline-v2-design.md`):
+  S0 deterministic photo-palette grounding → S1 design brief (`designSpec`: positioning,
+  palette anchors, font pair, sectionPlan, motion level) → S2а stylesheet ∥ S2б blocks
+  (parallel, `allSettled`) → S3 deterministic compile (lint-before-persist + reconcile + ONE
+  draft write = the preview point) → S4 QA after the preview on its own budget. Transport:
+  authed `POST /api/generate` (SSE stage events + `generation_progress` store). Every stage
+  but S2б is fail-open; S1 fail → v1 path (no `designSpec`, renderer defaults).
 - **Content states:** `pages.draft_content` vs `pages.published_content` — both carry the
-  blocks AND the design (`templateId` + `wireCss`), so a draft regeneration can never change
-  the live site. Public render reads **published only**; editor reads/writes **draft only**.
-  There is no tenant-level theme: migration `0008` dropped `draft_theme`/`published_theme`.
+  blocks AND the design (`templateId` + `wireCss` + `designSpec`), so a draft regeneration can
+  never change the live site. Public render reads **published only**; editor reads/writes
+  **draft only**. Draft-only keys (`pocket`, `styleAudit`, `designRationale`, `contentRev`)
+  are stripped by `publishedFromDraft` (`lib/site/page-content.ts`) — new fields need exactly
+  one decision there. No tenant-level theme: migration `0008` dropped the theme columns.
 - **Edge cache:** per-tenant tags (`tenant:{host}`, `page:{host}:{slug}`) via `lib/cache.ts`.
   Draft-only saves must NOT purge. `revalidateTenant` is legitimately called by
   anything that changes the LIVE site: Publish, unversioned `brand` changes (logo), admin
@@ -88,6 +101,18 @@ A tenant is a **DB row, never a deploy**. Data-driven render: content is data
 8. **`lead_form` is force-injected by code** before `contacts` in every generated site — not a
    model choice. `/api/leads` resolves tenant from the `Host` header (never the body); the lead
    is always persisted, Telegram push is best-effort.
+9. **`contentRev` CAS for every async draft writer** (pipeline v2 §9): QA blocks/style, S4
+   patches and the image-job draft patch all CAS on `draft_content.contentRev`
+   (`lib/site/draft-cas.ts`, coalesce-0 for pre-v2 rows) + `genToken` identity. Never write a
+   draft from an async job with a naked update. Published-copy patches stay on genToken CAS.
+10. **Lint before persist:** a model stylesheet NEVER reaches `draft_content` raw —
+    `compileWireCss` (lint + contrast repair + the 60k size clamp, `lib/design/css-size.ts`)
+    runs in S3 before the first write. One size contract end-to-end: compile, audit prompt and
+    render-side `sanitizeCss` all use `CSS_SIZE_LIMIT`; truncation is reported in
+    `styleAudit.compileNotes`, never silent.
+11. **One owner per tenant:** generation claims ownership atomically through the M1 claim gate
+    (`lib/onboard/claim-gate.ts` + unique index in migration `0012`); a host claimed by another
+    user is refused honestly, never co-owned. The gate fails CLOSED.
 
 ## Ownership zones — a PARALLEL agent may be editing these
 
@@ -118,8 +143,11 @@ and coordinate rather than collide. (These often show uncommitted changes at ses
 ## Practical notes
 
 - **Supabase migrations are applied MANUALLY** in the Supabase SQL editor — there's no
-  `DATABASE_URL` locally and no migrate script. Files: `supabase/migrations/0001…0006`. Assume
-  `0006_editor_chats` may still be unapplied; verify before relying on `editor_chats`.
+  `DATABASE_URL` locally and no migrate script. Files: `supabase/migrations/0001…0012`. Assume
+  the pipeline-v2 trio `0010`/`0011` (contentRev backfill, `generation_progress`, nonce RPC)
+  and `0012` (one-owner unique index) may still be UNAPPLIED in a given environment — verify
+  before relying on them; the code tolerates their absence fail-open except the claim gate,
+  which fails closed by design.
 - **Auth degrades open by design:** with no Supabase env, tenant-ownership gates treat everyone as
   a member (`lib/supabase/auth.ts` pattern §3.1). **Exception — `/admin` is fail-CLOSED**: gated by
   `ADMIN_EMAILS` env allowlist (`lib/admin.ts`), never a DB flag; no env → no admin.

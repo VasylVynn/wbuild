@@ -339,27 +339,14 @@ function routeBatch(
   };
 }
 
-// Generation-screen pacing (design D fix, wave TPL3; V2 spec §7): the primary
-// transport is now the /api/generate SSE stream, whose REAL stage events pin
-// the step list via STAGE_TO_STEP below. The plain client clock (`genElapsed`,
-// ticked in an effect below) survives as the fallback pacing — for the
-// non-stream generateDraftAction path and for the seconds before the first
-// stage event arrives. Paced to keep visibly advancing across the real
-// ~3-minute server budget without ever looking frozen or claiming 100%.
-const GEN_STEPS = [
-  "Тексти про ваш бізнес",
-  "Послуги та ціни",
-  "Оформлення і кольори",
-  "Готуємо фото",
-  "Збираємо блоки сайту",
-  "Форма замовлення",
-];
-// Seconds elapsed before the step at the same index becomes "active"; the
-// last step just stays active for however much longer generation takes —
-// there is no signal to mark it "done" early.
-const GEN_STEP_SECONDS = [0, 20, 45, 75, 110, 145];
-// Rotates under the heading every 40s so a long wait still reads as
-// ongoing work, not a stall.
+// Generation progress cards (V4, spec §7 / plan C6): driven by the REAL stage
+// stream from /api/generate. Each card resolves with what actually happened —
+// photo-palette count (s0), the chosen font pair / accent / motion (s1), the
+// two parallel S2 legs (texts ∥ styling) each settling on its own, and the
+// section count at compile (s3). The paced clock below survives as a FLOOR:
+// on the fallback transport (generateDraftAction has no stage signal) and in
+// the seconds before the first event, cards still advance — but a clock-driven
+// resolve never claims DATA (no counts, no font names), only the base label.
 const GEN_MESSAGES = [
   // «до 5 хвилин» = the actual server budget (maxDuration 300 on /new) — a
   // promise shorter than the timeout reads as a hang exactly when generation
@@ -370,36 +357,238 @@ const GEN_MESSAGES = [
   "Майже готово — фінальні перевірки перед показом.",
 ];
 
-// Real pipeline stages (V2 spec §3/§7) → GEN_STEPS indices. s2_generate covers
-// both the texts and the stylesheet legs, so it maps to the middle of the list;
-// s3_compile lands one short of the end (assembly), s4_qa is the last visible
-// step — the preview transition happens at s3_done anyway. Full stage CARDS
-// (replacing this mapping) are wave V4.
-const STAGE_TO_STEP: Record<string, number> = {
-  s0_grounding: 0,
-  s1_brief: 1,
-  s2_generate: 2,
-  s3_compile: 4,
-  s4_qa: 5,
-};
+// Clock-floor activation seconds per card row (s0 / s1 / s2 legs / s3), tuned
+// to the measured live timings (S1 ~30s, S2 ~110s, TFAO ~145s). The clock can
+// only raise a row to active/checked when the stream is silent; the max-of-two
+// rule (clock vs real) is the W1/V2 anti-freeze behavior, kept as-is. The
+// 35s→140s gap is the S2 band — genCards interpolates the BAR width inside it
+// (sub-tick pacing), so the sparse ticks never read as a freeze.
+const GEN_CARD_CLOCK = [0, 8, 35, 140];
 
-// Shared pacing math for BOTH generation renders (full-screen phase and the
-// inline chat card, W0): step list index, rotating sub-message, bar width.
-// `stageStep` is the REAL stage index from the SSE stream — when present it
-// acts as a FLOOR under the paced clock (max, not replace): s2_generate alone
-// legitimately runs up to 120s, and pinning the list to its index froze the
-// bar at 45% for two minutes — the exact «looking frozen» state the paced
-// clock exists to prevent. The clock keeps the list advancing through a long
-// stage; a real stage that arrives ahead of the clock still jumps it forward.
-function genProgress(
+type GenCardStatus = "pending" | "active" | "done" | "error";
+type GenQaStatus = "running" | "done" | "skipped" | "error";
+
+/** Raw per-stage data accumulated from {t:"stage"} SSE events. Empty on the
+ *  fallback transport — then the paced clock alone drives the cards. */
+interface GenStageData {
+  s0?: { status: string; photosUsed?: number; photosTotal?: number };
+  s1?: {
+    status: string;
+    briefed?: boolean;
+    fontPairLabel?: string;
+    accent?: string;
+    motionLevel?: number;
+  };
+  s2?: {
+    status: string;
+    content?: "done" | "error";
+    style?: "done" | "error";
+    styleFallback?: "previous" | "default";
+  };
+  s3?: { status: string; sections?: number };
+}
+
+/** Fold one stage event into the accumulated card data (pure, testable). */
+function mergeStageEvent(
+  prev: GenStageData,
+  name: string,
+  status: string,
+  detail: Record<string, unknown>,
+): GenStageData {
+  const next: GenStageData = { ...prev };
+  if (name === "s0_grounding") {
+    next.s0 = {
+      status,
+      // photosUsed is the honest PHOTO basis of the palette; the event's
+      // paletteCandidates counts aggregated colours and is ignored here.
+      ...(typeof detail.photosUsed === "number" && { photosUsed: detail.photosUsed }),
+      ...(typeof detail.photosTotal === "number" && { photosTotal: detail.photosTotal }),
+    };
+  } else if (name === "s1_brief") {
+    next.s1 = {
+      status,
+      ...(typeof detail.briefed === "boolean" && { briefed: detail.briefed }),
+      ...(typeof detail.fontPairLabel === "string" && { fontPairLabel: detail.fontPairLabel }),
+      ...(typeof detail.accent === "string" && { accent: detail.accent }),
+      ...(typeof detail.motionLevel === "number" && { motionLevel: detail.motionLevel }),
+    };
+  } else if (name === "s2_generate") {
+    const s2 = { ...(prev.s2 ?? { status: "start" }) };
+    const leg = detail.leg;
+    if (leg === "content" || leg === "style") {
+      // Mid-stage leg settle: {leg, status} — the stage itself is still on.
+      const legStatus = detail.status === "error" ? ("error" as const) : ("done" as const);
+      if (leg === "content") s2.content = legStatus;
+      else s2.style = legStatus;
+      if (detail.fallback === "previous" || detail.fallback === "default") {
+        s2.styleFallback = detail.fallback;
+      }
+    } else {
+      s2.status = status;
+      if (status === "done") {
+        // The stage summary backfills a leg whose own event was lost.
+        s2.content = s2.content ?? "done";
+        s2.style = s2.style ?? (detail.styled === false ? "error" : "done");
+        if (
+          s2.styleFallback === undefined &&
+          (detail.styleFallback === "previous" || detail.styleFallback === "default")
+        ) {
+          s2.styleFallback = detail.styleFallback;
+        }
+      }
+    }
+    next.s2 = s2;
+  } else if (name === "s3_compile") {
+    next.s3 = {
+      status,
+      ...(typeof detail.sections === "number" && { sections: detail.sections }),
+    };
+  }
+  return next;
+}
+
+/** «7 секцій» declension for the s3 card. */
+function sectionsWord(n: number): string {
+  const d10 = n % 10;
+  const d100 = n % 100;
+  if (d10 === 1 && d100 !== 11) return "секція";
+  if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return "секції";
+  return "секцій";
+}
+
+// Human colour name for the S1 accent hex — the card says «золотистий
+// акцент», never «#c8a24b». Unparseable / missing hex → the honest generic.
+function accentLabel(hex: string | undefined): string {
+  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return "тепла палітра";
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  if (d < 0.08) return "нейтральний акцент";
+  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  const name =
+    h < 15 ? "червоний" :
+    h < 45 ? "теракотовий" :
+    h < 70 ? "золотистий" :
+    h < 160 ? "зелений" :
+    h < 200 ? "бірюзовий" :
+    h < 255 ? "синій" :
+    h < 290 ? "фіолетовий" :
+    h < 335 ? "рожевий" : "червоний";
+  return `${name} акцент`;
+}
+
+interface GenCard {
+  key: string;
+  status: GenCardStatus;
+  label: string;
+  /** True for the two parallel S2 legs — rendered slightly indented. */
+  leg?: boolean;
+}
+
+// Shared card-model math for BOTH generation renders (full-screen phase and
+// the inline chat card): row list, rotating sub-message, bar width. Real data
+// resolves each card's text honestly; the clock only moves row STATES.
+function genCards(
   elapsed: number,
-  stageStep: number | null = null,
-): { stepIndex: number; msgIndex: number; barPct: number } {
-  const clockIndex = GEN_STEP_SECONDS.reduce((acc, at, i) => (elapsed >= at ? i : acc), 0);
-  const stepIndex = stageStep === null ? clockIndex : Math.max(stageStep, clockIndex);
+  st: GenStageData,
+): { cards: GenCard[]; msgIndex: number; barPct: number } {
+  // Real progression index: last reached stage (+1 once it's done); 4 = the
+  // preview point (s3 done). Null before the first event / on the fallback.
+  let real: number | null = null;
+  ([st.s0, st.s1, st.s2, st.s3] as const).forEach((slot, i) => {
+    if (slot) real = slot.status === "done" ? i + 1 : i;
+  });
+  const clock = GEN_CARD_CLOCK.reduce((acc, at, i) => (elapsed >= at ? i : acc), 0);
+  const eff = real === null ? clock : Math.max(real, clock);
+
+  const stageState = (i: number, slot?: { status: string }): GenCardStatus =>
+    slot?.status === "error" ? "error" : eff > i ? "done" : eff === i ? "active" : "pending";
+
+  // s0 — photos → palette. Data line only from a REAL done event. Zero is two
+  // different truths: no photos at all vs photos that yielded no palette
+  // (filtered out, S0 abort, fail-open catch) — never blame «нема фото» at an
+  // owner who just uploaded eight.
+  const s0State = stageState(0, st.s0);
+  const s0Label =
+    st.s0?.status === "done" && typeof st.s0.photosUsed === "number"
+      ? st.s0.photosUsed > 0
+        ? `Взяв палітру з ${st.s0.photosUsed} фото`
+        : (st.s0.photosTotal ?? 0) > 0
+          ? "З фото палітру не взяв — беру кольори ніші"
+          : "Фото нема — беру кольори ніші"
+      : "Дивлюсь ваші фото";
+
+  // s1 — design brief. Honest fallback line when the brief didn't happen.
+  const s1State = stageState(1, st.s1);
+  let s1Label = "Придумую дизайн";
+  if (st.s1?.status === "done") {
+    if (st.s1.briefed) {
+      const picks = [
+        st.s1.fontPairLabel,
+        accentLabel(st.s1.accent),
+        typeof st.s1.motionLevel === "number" ? `рух ${st.s1.motionLevel}/3` : null,
+      ].filter(Boolean);
+      s1Label = `Обрав: ${picks.join(", ")}`;
+    } else {
+      s1Label = "Дизайн за замовчуванням";
+    }
+  }
+
+  // s2 — two parallel legs, each resolving on its own signal; with no signal
+  // they follow the clock like any row (checked without claiming specifics).
+  const legState = (leg?: "done" | "error"): GenCardStatus =>
+    leg === "error" ? "error" : leg === "done" ? "done" : eff > 2 ? "done" : eff === 2 ? "active" : "pending";
+  const contentState = legState(st.s2?.content);
+  const styleState = legState(st.s2?.style);
+  const contentLabel =
+    contentState === "error"
+      ? "Тексти не вдалися"
+      : st.s2?.content === "done"
+        ? "Тексти готові"
+        : "Пишу тексти";
+  const styleLabel =
+    styleState === "error"
+      ? st.s2?.styleFallback === "previous"
+        ? "Оформлення не вдалося — лишив попереднє"
+        : "Оформлення не вдалося — взяв стандартне"
+      : st.s2?.style === "done"
+        ? "Оформлення готове"
+        : "Малюю оформлення";
+
+  // s3 — compile; the real done event carries the section count.
+  const s3State = stageState(3, st.s3);
+  const s3Label =
+    st.s3?.status === "done" && typeof st.s3.sections === "number"
+      ? `Зібрав сторінку — ${st.s3.sections} ${sectionsWord(st.s3.sections)}`
+      : "Збираю сторінку";
+
   const msgIndex = Math.min(GEN_MESSAGES.length - 1, Math.floor(elapsed / 40));
-  const barPct = 15 + (stepIndex / (GEN_STEPS.length - 1)) * 75; // 15% → 90%, never 100%
-  return { stepIndex, msgIndex, barPct };
+  // Continuous bar (review must-fix): a step-only width froze at 52.5% for the
+  // whole 35s→140s S2 band — the bulk of the wait. The width now interpolates
+  // with `elapsed` INSIDE the current clock band, capped just below the next
+  // step, so the bar keeps creeping on both transports. The max-of-clock-vs-
+  // real rule (eff) and the 90% ceiling are unchanged.
+  const bandStart = GEN_CARD_CLOCK[Math.min(eff, GEN_CARD_CLOCK.length - 1)];
+  const bandEnd = eff + 1 < GEN_CARD_CLOCK.length ? GEN_CARD_CLOCK[eff + 1] : undefined;
+  const bandFrac =
+    bandEnd === undefined || bandEnd <= bandStart
+      ? 0
+      : Math.min(0.95, Math.max(0, (elapsed - bandStart) / (bandEnd - bandStart)));
+  const barPct = 15 + ((Math.min(eff, 4) + bandFrac) / 4) * 75; // 15% → 90%, never 100%
+  return {
+    cards: [
+      { key: "s0", status: s0State, label: s0Label },
+      { key: "s1", status: s1State, label: s1Label },
+      { key: "s2c", status: contentState, label: contentLabel, leg: true },
+      { key: "s2s", status: styleState, label: styleLabel, leg: true },
+      { key: "s3", status: s3State, label: s3Label },
+    ],
+    msgIndex,
+    barPct,
+  };
 }
 
 // Design animations (design/D). Kept in-file so this component owns everything;
@@ -490,10 +679,16 @@ export function OnboardChat({
   // signal runs INLINE — phase stays "chat" and a compact progress card sits
   // in the message column instead of the full-screen takeover.
   const [inlineGen, setInlineGen] = useState(false);
-  // Real stage index from the /api/generate SSE stream (V2 spec §7) — when
-  // non-null it pins the GEN_STEPS list instead of the paced clock. Null on
-  // the fallback (non-stream) path and before the first stage event.
-  const [genStageStep, setGenStageStep] = useState<number | null>(null);
+  // Real stage data from the /api/generate SSE stream (V4, spec §7) — the
+  // progress cards resolve from THIS; empty on the fallback (non-stream) path
+  // and before the first stage event, where the paced clock drives the cards.
+  const [genStages, setGenStages] = useState<GenStageData>({});
+  // S4 QA tail (V4): runs AFTER the preview is shown — surfaced as a subtle
+  // inline note in the chat column, never a blocking screen.
+  const [genQa, setGenQa] = useState<GenQaStatus | null>(null);
+  // Monotone run id: the detached QA tail of an OLD stream keeps draining
+  // after settle and must never write into a NEWER generation's note.
+  const genRunRef = useRef(0);
   // Set when the stream delivers {t:"generate"} (or final carries
   // generate:true). An EFFECT consumes it: by then React has flushed the
   // facts/media applyResult just set, so runGenerate reads fresh state — a
@@ -1258,6 +1453,8 @@ export function OnboardChat({
   // double the model spend and the daily budget).
   const streamGenerate = (
     factsNow: Partial<BusinessFacts>,
+    // This run's genRunRef value — the s4 note guard (see below).
+    runId: number,
     // Out-param: flips to true on the FIRST stage event — i.e. the moment the
     // server pipeline verifiably started. The caller's fallback decision hangs
     // on it: after model spend began, a blind action re-run would double-charge
@@ -1310,6 +1507,7 @@ export function OnboardChat({
               t?: string;
               name?: string;
               status?: string;
+              detail?: Record<string, unknown>;
               message?: string;
               authRequired?: boolean;
               host?: string;
@@ -1323,12 +1521,29 @@ export function OnboardChat({
             }
             if (obj.t === "stage" && typeof obj.name === "string") {
               if (flags) flags.sawStage = true;
-              // Real signal replaces the paced clock (kept as fallback). After
-              // settle (preview shown) the tail is s4-only — stop writing so a
-              // draining old stream can never bump a NEW generation's card.
-              const step = STAGE_TO_STEP[obj.name];
-              if (!settled && step !== undefined && (obj.status === "start" || obj.status === "done")) {
-                setGenStageStep((prev) => (prev === null || step > prev ? step : prev));
+              const name = obj.name;
+              const status = obj.status ?? "";
+              const detail = obj.detail && typeof obj.detail === "object" ? obj.detail : {};
+              if (name === "s4_qa") {
+                // The QA tail arrives AFTER settle (the preview is already
+                // up) — it feeds the inline chat note only, guarded so a
+                // draining old stream never writes into a newer run's note.
+                if (genRunRef.current === runId) {
+                  setGenQa(
+                    status === "start"
+                      ? "running"
+                      : status === "done"
+                        ? "done"
+                        : status === "skipped"
+                          ? "skipped"
+                          : "error",
+                  );
+                }
+              } else if (!settled) {
+                // Real signals resolve the cards (the paced clock stays the
+                // floor). After settle the tail is s4-only — stop writing so a
+                // draining old stream can never bump a NEW generation's cards.
+                setGenStages((prev) => mergeStageEvent(prev, name, status, detail));
               }
             } else if (obj.t === "s3_done" && obj.host && obj.previewUrl && obj.editUrl) {
               // Preview-ready (TFAO): hand the draft to the caller NOW; the
@@ -1349,7 +1564,16 @@ export function OnboardChat({
           }
         }
         if (!settled) throw new Error("generate stream ended without a result");
-      })().catch(reject); // no-op if already resolved (settled promise)
+      })()
+        .catch(reject) // no-op if already resolved (settled promise)
+        .finally(() => {
+          // Transport gone (closed OR died mid-s4): a note still «running»
+          // can never resolve from this stream — flip it to the honest
+          // interrupted state instead of spinning forever.
+          if (genRunRef.current === runId) {
+            setGenQa((prev) => (prev === "running" ? "error" : prev));
+          }
+        });
     });
 
   const runGenerate = async (opts?: { inline?: boolean }) => {
@@ -1383,7 +1607,10 @@ export function OnboardChat({
     };
 
     setLoading(true);
-    setGenStageStep(null);
+    genRunRef.current += 1;
+    const runId = genRunRef.current;
+    setGenStages({});
+    setGenQa(null);
     if (opts?.inline) setInlineGen(true);
     else setPhase("generating");
 
@@ -1393,9 +1620,9 @@ export function OnboardChat({
       try {
         // Primary: the SSE transport — real stage events, preview at s3_done
         // (the QA tail keeps running server-side after we transition).
-        result = await streamGenerate(fullFacts, streamFlags);
+        result = await streamGenerate(fullFacts, runId, streamFlags);
       } catch {
-        setGenStageStep(null);
+        setGenStages({});
         if (streamFlags.sawStage) {
           // The stream died AFTER the pipeline verifiably started (a proxy cut
           // mid-S2, a network blip): the server keeps generating and persists
@@ -1436,7 +1663,9 @@ export function OnboardChat({
     } finally {
       setLoading(false);
       setInlineGen(false);
-      setGenStageStep(null);
+      // Cards reset for the next run; genQa deliberately survives — the QA
+      // tail note keeps updating (run-id-guarded) after the preview is up.
+      setGenStages({});
     }
   };
 
@@ -1700,13 +1929,13 @@ export function OnboardChat({
               typing && <AgentTyping />
             )}
 
-            {/* Inline generation card (W0, C2/C6-мінімум): the agent called
+            {/* Inline generation card (V4, spec §7 / plan C6): the agent called
                 start_generation, so the work happens right here in the chat —
-                the same paced steps as the full-screen phase, as a card.
-                Full Lovable-style cards land in wave V4. */}
+                real stage cards resolving from the SSE stream, with the paced
+                clock as the floor. */}
             {inlineGen &&
               (() => {
-                const gp = genProgress(genElapsed, genStageStep);
+                const gp = genCards(genElapsed, genStages);
                 return (
                   <div className="flex items-start gap-2.5">
                     <AgentAvatar busy />
@@ -1728,12 +1957,9 @@ export function OnboardChat({
                         </div>
                       </div>
                       <div className="mt-3 flex flex-col gap-2">
-                        {GEN_STEPS.map((label, i) => (
-                          <GenStep
-                            key={label}
-                            state={i < gp.stepIndex ? "done" : i === gp.stepIndex ? "active" : "pending"}
-                          >
-                            {label}
+                        {gp.cards.map((c) => (
+                          <GenStep key={c.key} state={c.status} leg={c.leg}>
+                            {c.label}
                           </GenStep>
                         ))}
                       </div>
@@ -1741,6 +1967,15 @@ export function OnboardChat({
                   </div>
                 );
               })()}
+
+            {/* S4 QA tail note (V4): the check runs AFTER the preview is shown
+                — a subtle inline line, never a blocking screen. The PRIMARY
+                render is on the preview screen (the golden path lands there
+                before any s4 event); this copy covers the owner who navigates
+                back to the chat while (or after) the tail runs. */}
+            {genQa !== null && !inlineGen && (
+              <GenQaNote qa={genQa} className="ml-[42px] self-start" />
+            )}
 
           </div>
         </div>
@@ -1946,6 +2181,10 @@ export function OnboardChat({
         </header>
 
         <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-5">
+          {/* S4 QA tail (V4 must-fix): the owner lands HERE before any s4
+              event arrives — the note must live on this screen, not only in
+              the chat they already left. */}
+          {genQa !== null && <GenQaNote qa={genQa} />}
           <div className="flex flex-1 flex-col overflow-hidden rounded-[24px] border border-line bg-surface p-2 shadow-card">
             {/* Browser chrome around the live draft — the frame only; the iframe
                 renders the real tenant site and is never styled from here. */}
@@ -2115,11 +2354,11 @@ export function OnboardChat({
   // ---------------------------------------------------------------------------
 
   if (phase === "generating") {
-    // Real SSE stage index when the stream is delivering (V2 spec §7); the
+    // Real SSE stage data when the stream is delivering (V4, spec §7); the
     // plain elapsed-seconds clock (effect above) paces the fallback path and
     // the gap before the first stage event — steady progress, never finishing
     // early, never freezing.
-    const { stepIndex, msgIndex, barPct } = genProgress(genElapsed, genStageStep);
+    const { cards, msgIndex, barPct } = genCards(genElapsed, genStages);
 
     return inEmbeddedOverlay(
       <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-8 ${rootBase}`}>
@@ -2152,9 +2391,9 @@ export function OnboardChat({
           </div>
 
           <div className="mt-7 flex w-full flex-col gap-2.5">
-            {GEN_STEPS.map((label, i) => (
-              <GenStep key={label} state={i < stepIndex ? "done" : i === stepIndex ? "active" : "pending"}>
-                {label}
+            {cards.map((c) => (
+              <GenStep key={c.key} state={c.status} leg={c.leg}>
+                {c.label}
               </GenStep>
             ))}
           </div>
@@ -2406,15 +2645,55 @@ function AgentTyping() {
   );
 }
 
-function GenStep({ state, children }: { state: "done" | "active" | "pending"; children: ReactNode }) {
+/** S4 QA tail note (V4): the honest running/done/skipped/interrupted line.
+ *  Shown on the PREVIEW screen — where the owner actually is while the tail
+ *  runs (settle() flips the phase before any s4 event) — and again in the chat
+ *  if they navigate back. */
+function GenQaNote({ qa, className = "" }: { qa: GenQaStatus; className?: string }) {
   return (
     <div
-      className={`flex items-center gap-2.5 text-[16px] ${
+      className={`flex items-center gap-2 text-[13px] font-bold text-ink-faint ${className}`}
+      role="status"
+    >
+      {qa === "running" && (
+        <span
+          className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-honey border-t-transparent"
+          aria-hidden
+        />
+      )}
+      <span>
+        {qa === "running"
+          ? "Перевіряю тексти й контраст…"
+          : qa === "done"
+            ? "Готово, все перевірив"
+            : qa === "skipped"
+              ? "Перевірку пропущено"
+              : "Перевірку не завершено"}
+      </span>
+    </div>
+  );
+}
+
+function GenStep({
+  state,
+  leg = false,
+  children,
+}: {
+  state: "done" | "active" | "pending" | "error";
+  /** Parallel S2 sub-line («Пишу тексти» ∥ «Малюю оформлення») — indented. */
+  leg?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2.5 text-[16px] ${leg ? "pl-[26px]" : ""} ${
         state === "done"
           ? "font-bold text-ok"
           : state === "active"
             ? "font-bold text-ink"
-            : "font-semibold text-ink-faint"
+            : state === "error"
+              ? "font-bold text-danger"
+              : "font-semibold text-ink-faint"
       }`}
     >
       {state === "done" ? (
@@ -2423,6 +2702,13 @@ function GenStep({ state, children }: { state: "done" | "active" | "pending"; ch
         </span>
       ) : state === "active" ? (
         <span className="inline-block h-4 w-4 animate-spin rounded-full border-[2.5px] border-honey border-t-transparent" aria-hidden />
+      ) : state === "error" ? (
+        <span
+          className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-danger-soft text-[11px] text-danger"
+          aria-hidden
+        >
+          !
+        </span>
       ) : (
         <span className="inline-block h-4 w-4 rounded-full border-2 border-line-strong" aria-hidden />
       )}

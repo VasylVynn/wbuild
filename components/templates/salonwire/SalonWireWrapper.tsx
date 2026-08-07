@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
 import { wireDesignAttrs } from "@/lib/design/wire-attrs";
+import { CSS_SIZE_LIMIT } from "@/lib/design/css-size";
 import { wireChromeVariants } from "./chrome-variants";
 import {
   instagramHref,
@@ -43,7 +44,10 @@ const BLOCKED = [
  * substitute for a real sanitiser if this ever ships.
  */
 function sanitizeCss(css: string): string {
-  let out = css.slice(0, 60_000);
+  // The ONE size contract (lib/design/css-size.ts, spec §9.3): compile and the
+  // audit clamp to the same number WITH a report note — this slice is only the
+  // belt for legacy rows written before the contract.
+  let out = css.slice(0, CSS_SIZE_LIMIT);
   for (const re of BLOCKED) out = out.replace(re, "/*blocked*/");
   return out;
 }

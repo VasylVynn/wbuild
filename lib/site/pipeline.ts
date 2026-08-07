@@ -14,7 +14,7 @@ import {
   type SiteMedia,
 } from "@/lib/media/media";
 import { MIN_USABLE_PHOTOS, usablePhotoCount } from "@/lib/media/rank";
-import { aggregatePalette, extractPalette } from "@/lib/media/palette";
+import { aggregatePalette, eligiblePaletteMetas, extractPalette } from "@/lib/media/palette";
 import { buildDossier, type Dossier } from "@/lib/dossier";
 import { runDraftQualityLoop } from "@/lib/site/inspect";
 import { advanceDesignNonce, nonceForBrandWrite, rollAxis } from "@/lib/design/seed";
@@ -29,6 +29,7 @@ import {
   type DesignTuple,
   type MotionLevel,
 } from "@/lib/design/axes";
+import { FONT_FAMILIES, getFontPair } from "@/lib/design/font-pairs";
 import { buildStyleBrief } from "@/lib/design/style-brief";
 import { generateWireStyle, WIRE_TEMPLATE_ID } from "@/lib/design/wire-style";
 import { getTemplate } from "@/lib/templates/registry";
@@ -120,12 +121,13 @@ const S0_BUDGET_MS = 5_000;
 const S1_BUDGET_MS = 60_000;
 /** Content leg (composition) — measured 44–79s pre-v2, unchanged inputs. */
 const S2B_BUDGET_MS = 120_000;
-/** Style leg: the V3 wireframe grew the prompt (wire.css + sections.tsx are
- *  inlined verbatim, +560 lines), and a measured regen aborted at 120s with
- *  the sheet mid-write — the fallback then ships the PREVIOUS sheet, so the
- *  palette silently stops varying. 150s keeps TFAO ≤ ~195s worst inside the
- *  240s chain. Longer-term fix (V5): send only the sectionPlan-selected
- *  variants' source instead of the whole files. */
+/** Style leg: the V3 wireframe grew the prompt (wire.css + sections.tsx),
+ *  and a measured regen aborted at 120s with the sheet mid-write — the
+ *  fallback then ships the PREVIOUS sheet, so the palette silently stops
+ *  varying. 150s keeps TFAO ≤ ~195s worst inside the 240s chain. V5 slimmed
+ *  the prompt (sections.tsx cut to the sectionPlan's sections when a
+ *  designSpec exists — lib/design/wire-source.ts, per-call size logged by
+ *  wire-style); the budget stays until the new timings are measured live. */
 const S2A_BUDGET_MS = 150_000;
 /** S4 runs on its OWN clock — after the preview, never chain time — but is
  *  additionally clamped to what remains of the request wall clock below. */
@@ -144,6 +146,14 @@ const S4_REGEN_MIN_REMAINING_MS = 60_000;
 /** Generated gallery size for photo-less sites (hero comes on top of these). */
 const GENERATED_GALLERY_COUNT = 4;
 
+/** Human-readable font-pair name for the V4 progress cards («Playfair Display
+ *  + Inter») — the chat shows the real S1 pick, never the raw pair id. */
+function fontPairLabel(pairId: string): string {
+  const pair = getFontPair(pairId);
+  if (!pair) return pairId;
+  return `${FONT_FAMILIES[pair.heading].label} + ${FONT_FAMILIES[pair.body].label}`;
+}
+
 // ---------------------------------------------------------------------------
 // S0 — deterministic palette grounding (≤5s, fail-open).
 // ---------------------------------------------------------------------------
@@ -158,14 +168,14 @@ const GENERATED_GALLERY_COUNT = 4;
 async function groundPaletteCandidates(
   media: SiteMedia | undefined,
   signal: AbortSignal,
-): Promise<string[]> {
+): Promise<{ palette: string[]; photosUsed: number }> {
   try {
     const metas = media?.photoMeta ?? [];
     const stored = aggregatePalette(metas);
-    if (stored.length) return stored;
+    if (stored.length) return { palette: stored, photosUsed: eligiblePaletteMetas(metas).length };
 
     const urls = (media?.photos ?? []).slice(0, MAX_PHOTOS);
-    if (!urls.length) return [];
+    if (!urls.length) return { palette: [], photosUsed: 0 };
     const byUrl = new Map(metas.map((m) => [m.url, m]));
     const recomputed = await Promise.all(
       urls.map(async (url): Promise<PhotoMeta | null> => {
@@ -183,12 +193,16 @@ async function groundPaletteCandidates(
         }
       }),
     );
-    return aggregatePalette(recomputed.filter((m): m is PhotoMeta => m !== null));
+    const withPalette = recomputed.filter((m): m is PhotoMeta => m !== null);
+    return {
+      palette: aggregatePalette(withPalette),
+      photosUsed: eligiblePaletteMetas(withPalette).length,
+    };
   } catch (e) {
     log.warn("S0 palette grounding failed (fail-open)", {
       error: e instanceof Error ? e.message : String(e),
     });
-    return [];
+    return { palette: [], photosUsed: 0 };
   }
 }
 
@@ -316,11 +330,20 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
 
     // ── S0: deterministic grounding ─────────────────────────────────────────
     await emit({ stage: "s0_grounding", status: "start" });
-    const paletteCandidates = await groundPaletteCandidates(media, stageSignal(S0_BUDGET_MS));
+    const grounded = await groundPaletteCandidates(media, stageSignal(S0_BUDGET_MS));
+    const paletteCandidates = grounded.palette;
     await emit({
       stage: "s0_grounding",
       status: "done",
-      detail: { paletteCandidates: paletteCandidates.length },
+      // The chat card labels off `photosUsed` — `paletteCandidates` counts
+      // aggregated COLOURS, not photos (one photo yields ~5 hexes).
+      // `photosTotal` lets the card distinguish «no photos supplied» from
+      // «photos supplied but unusable / S0 timed out» (both aggregate to 0).
+      detail: {
+        paletteCandidates: paletteCandidates.length,
+        photosUsed: grounded.photosUsed,
+        photosTotal: media?.photos?.length ?? 0,
+      },
     });
 
     const prevTuple = readDesignTuple(prevBrand.lastDesignTuple);
@@ -368,7 +391,17 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
       stage: "s1_brief",
       status: "done",
       detail: brief
-        ? { briefed: true, repairs: brief.repairs, elapsedMs: Date.now() - s1At }
+        ? {
+            briefed: true,
+            repairs: brief.repairs,
+            elapsedMs: Date.now() - s1At,
+            // V4 progress cards: the human-readable design picks the chat
+            // shows — real S1 output, never a client-side invention.
+            fontPairLabel: fontPairLabel(brief.spec.typography.pairId),
+            accent: brief.spec.palette.accent,
+            motionLevel: brief.spec.motion.level,
+            sectionCount: brief.spec.sectionPlan.length,
+          }
         : { briefed: false, fallback: "v1", elapsedMs: Date.now() - s1At },
     });
     // Budget tuning is data-driven from here on — every stage logs elapsed.
@@ -385,6 +418,21 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
       vertical,
       ...(brief && { sectionTypes: planBlockTypes(brief.spec.sectionPlan, template) }),
     });
+    // Per-leg progress (V4 cards, spec §7): each leg reports its own settle as
+    // a mid-stage event — the stage status stays "start" (S2 itself is still
+    // running); `detail.leg` + `detail.status` carry the leg outcome.
+    // Fire-and-forget is safe: emit guards a throwing listener, and the SSE
+    // `send` runs synchronously inside onStage, so wire order is preserved.
+    const legSettled = (
+      leg: "content" | "style",
+      ok: boolean,
+      extra?: Record<string, unknown>,
+    ): void =>
+      void emit({
+        stage: "s2_generate",
+        status: "start",
+        detail: { leg, status: ok ? "done" : "error", elapsedMs: Date.now() - s2At, ...extra },
+      });
     // allSettled, NOT all: a styling failure must not kill a finished
     // composition (spec §3). Retries are disabled per-call inside both legs —
     // one attempt IS the 120s stage budget (spec §6).
@@ -401,13 +449,33 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         // (seeded.variantRoll above) — renaming a purpose string re-rolls the
         // axis for every existing tenant, so the old stream is kept as-is.
         (sectionId) => rollAxis(host, designNonce, `variant:${sectionId}`),
+      ).then(
+        (v) => {
+          legSettled("content", true);
+          return v;
+        },
+        (e) => {
+          legSettled("content", false);
+          throw e;
+        },
       ),
       generateWireStyle(styleBrief, {
         // hue is consumed only when the brief is null (designSpec supersedes it).
         hue: seeded.hue,
         designSpec: brief?.spec,
         signal: stageSignal(S2A_BUDGET_MS),
-      }),
+      }).then(
+        (v) => {
+          legSettled("style", true);
+          return v;
+        },
+        (e) => {
+          // What the compile fallback will ACTUALLY ship — the chat's
+          // degradation line must be honest per tenant history (spec §3-S2а).
+          legSettled("style", false, { fallback: prevWireCss ? "previous" : "default" });
+          throw e;
+        },
+      ),
     ]);
     if (siteRes.status === "rejected") {
       // S2б fail → honest error, NOTHING persisted (spec §3; §10 fail-open
@@ -429,7 +497,18 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
     await emit({
       stage: "s2_generate",
       status: "done",
-      detail: { styled: rawCss !== undefined, elapsedMs: Date.now() - s2At },
+      detail: {
+        styled: rawCss !== undefined,
+        elapsedMs: Date.now() - s2At,
+        // Leg summary (V4 cards): backfills a leg whose own mid-stage event
+        // was lost on the wire. Content is always "done" here — its rejection
+        // throws above and never reaches this emit.
+        content: "done",
+        style: rawCss !== undefined ? "done" : "error",
+        ...(rawCss === undefined && {
+          styleFallback: prevWireCss ? "previous" : "default",
+        }),
+      },
     });
     log.info("s2 elapsed", { host, ms: Date.now() - s2At, styled: rawCss !== undefined });
 
@@ -437,7 +516,10 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
     await emit({ stage: "s3_compile", status: "start" });
     const compiled = compileWireCss(rawCss, prevWireCss);
     if (compiled.lintNotes.length) {
-      log.info("wire css compiled", { host, notes: compiled.lintNotes.length });
+      // The notes THEMSELVES, not a count (invariant 10): when S4 is skipped
+      // on the deadline, styleAudit.compileNotes is never written and this log
+      // line is the ONLY trace of a strip or the 60k size truncation.
+      log.info("wire css compiled", { host, notes: compiled.lintNotes.slice(0, 40) });
     }
     const draftContent = buildDraftContent({
       mode,
@@ -557,7 +639,11 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
       }
     }
     // The preview point (TFAO): the transport shows the draft NOW.
-    await emit({ stage: "s3_compile", status: "done", detail: { preview: true } });
+    await emit({
+      stage: "s3_compile",
+      status: "done",
+      detail: { preview: true, sections: draftContent.blocks.length },
+    });
 
     // Deferred image batch — post-response, never a streamed stage (spec §7:
     // the chat learns about it by polling the draft row on genToken).
@@ -621,6 +707,15 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         maxFixesPerRound: 2,
         designSpec: draftContent.designSpec,
         briefRepairs: brief?.repairs,
+        // The audited sheet is a carry-over previous sheet exactly when the
+        // S2а leg produced nothing (review must-fix): the audit then skips the
+        // adherence judgement — the stylist never wrote that css against this
+        // brief — and marks the report for the admin chip.
+        styleCarryOver: rawCss === undefined,
+        // S3 compile notes ride the persisted audit report (spec §9.3): the
+        // audit re-lints an already clean sheet, so without these the admin
+        // would see an empty log while compile stripped/truncated plenty.
+        compileNotes: compiled.lintNotes.slice(0, 40),
         // Gate on the budget actually REMAINING when the audit's first verdict
         // lands (a model call itself), against what a regen needs — not a
         // head-start window that the verdict call alone always outlived.

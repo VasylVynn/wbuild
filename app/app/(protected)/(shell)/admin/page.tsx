@@ -66,6 +66,21 @@ interface ConversationRow {
   created_at: string;
 }
 
+/** The slice of StyleAuditReport the QA column reads (draft_content->styleAudit). */
+interface AdminQa {
+  flagged?: boolean;
+  adherence?: { palette?: boolean; typography?: boolean; motion?: boolean; note?: string };
+  /** The shipped sheet is a carried-over previous sheet (S2а failed) — the
+   *  adherence judgement was suppressed for it (see StyleAuditReport). */
+  carriedOver?: boolean;
+}
+
+/** True when an adherence judgement exists AND any axis broke from the brief. */
+function adherenceBroken(qa: AdminQa | null | undefined): boolean {
+  const a = qa?.adherence;
+  return Boolean(a && !(a.palette && a.typography && a.motion));
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("uk-UA", {
     day: "numeric",
@@ -134,9 +149,10 @@ async function loadAdminData() {
 
   const sites = (sitesRes.data ?? []) as TenantRow[];
 
-  // Style QA flag per tenant, from the home page's draft styleAudit (Task 5/6 write it).
-  const qaByTenant = new Map<string, { flagged?: boolean } | null>();
-  for (const row of (qaRes.data ?? []) as { tenant_id: string; styleAudit: { flagged?: boolean } | null }[]) {
+  // Style QA per tenant, from the home page's draft styleAudit: the gross-
+  // defect flag AND the brief-adherence judgement (pipeline v2 §3-S4).
+  const qaByTenant = new Map<string, AdminQa | null>();
+  for (const row of (qaRes.data ?? []) as { tenant_id: string; styleAudit: AdminQa | null }[]) {
     qaByTenant.set(row.tenant_id, row.styleAudit);
   }
 
@@ -310,11 +326,24 @@ export default async function AdminPage() {
                     <td className="px-3.5 py-2.5 text-ink">{leadCounts.get(s.id) ?? 0}</td>
                     <td className="px-3.5 py-2.5">{s.telegram_chat_id ? "✓" : "—"}</td>
                     <td className="px-3.5 py-2.5">
-                      {qaByTenant.get(s.id)?.flagged ? (
-                        <Chip tone="danger">стиль</Chip>
-                      ) : (
-                        <span className="text-ink-faint">—</span>
-                      )}
+                      {(() => {
+                        const qa = qaByTenant.get(s.id);
+                        const broke = adherenceBroken(qa);
+                        if (!qa?.flagged && !broke && !qa?.carriedOver) {
+                          return <span className="text-ink-faint">—</span>;
+                        }
+                        return (
+                          <span className="flex flex-wrap gap-1">
+                            {qa?.flagged && <Chip tone="danger">стиль</Chip>}
+                            {/* Advisory (§3-S4): the sheet passed but drifted
+                                off the S1 brief — worth a look, not an alarm. */}
+                            {broke && <Chip tone="warn">бриф</Chip>}
+                            {/* S2а failed → the previous sheet shipped; the
+                                brief judgement was suppressed for it. */}
+                            {qa?.carriedOver && <Chip tone="warn">попереднє оформлення</Chip>}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="hidden max-w-[180px] truncate px-3.5 py-2.5 text-ink-muted xl:table-cell">
                       {ownerByTenant.get(s.id) ?? "—"}

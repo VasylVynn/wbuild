@@ -1,5 +1,6 @@
 import { lintWireCss } from "@/lib/design/css-lint";
 import { fixContrast } from "@/lib/design/css-contrast";
+import { clampCss } from "@/lib/design/css-size";
 import type { SiteTemplate } from "@/lib/templates/registry";
 import type { ShippedSection } from "@/lib/ai/generate";
 import type { DesignBriefResult } from "@/lib/ai/design-brief";
@@ -19,11 +20,12 @@ export type PipelineMode = "onboard" | "editor";
 
 /**
  * Compile the raw model stylesheet for persistence: lint + deterministic
- * contrast repair run BEFORE the first draft write (spec §3-S3 — the old flow
- * persisted the raw sheet and relied on a fail-open QA loop to lint it, so an
- * early-return left `url()` holes live). No raw sheet → the previous tenant's
- * stored sheet (existing tenants only; a first generation degrades to the grey
- * wireframe, honestly).
+ * contrast repair + the 60k size clamp (spec §9.3 — ONE contract shared with
+ * sanitizeCss and the audit prompt; a cut is noted, never silent) run BEFORE
+ * the first draft write (spec §3-S3 — the old flow persisted the raw sheet and
+ * relied on a fail-open QA loop to lint it, so an early-return left `url()`
+ * holes live). No raw sheet → the previous tenant's stored sheet (existing
+ * tenants only; a first generation degrades to the grey wireframe, honestly).
  */
 export function compileWireCss(
   rawCss: string | undefined,
@@ -32,7 +34,11 @@ export function compileWireCss(
   if (!rawCss) return { ...(prevWireCss !== undefined && { wireCss: prevWireCss }), lintNotes: [] };
   const lint = lintWireCss(rawCss);
   const contrast = fixContrast(lint.cleanCss);
-  return { wireCss: contrast.css, lintNotes: [...lint.violations, ...contrast.fixes] };
+  const clamp = clampCss(contrast.css);
+  return {
+    wireCss: clamp.css,
+    lintNotes: [...lint.violations, ...contrast.fixes, ...(clamp.note ? [clamp.note] : [])],
+  };
 }
 
 /**

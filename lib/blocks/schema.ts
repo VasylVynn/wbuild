@@ -7,8 +7,8 @@ import { z } from "zod";
  * form (Puck-style: fields → UI), the AI tool description, and nav anchors.
  * Nothing may drift from this file.
  *
- * MVP vertical: florist. Preset `florist` = [hero, services, gallery,
- * testimonials, contacts]. `lead_form` is intentionally OUT of MVP (§15).
+ * `lead_form` is the funnel core (journal #33): force-injected by code into
+ * every generated site before `contacts`, never a model choice (invariant 8).
  * contacts is textual (phone/address/hours/email) PLUS one-tap messenger
  * buttons (call/Viber/Telegram) — see lib/blocks/contact-links.ts for the
  * href normalization and components/blocks/Contacts.tsx for the buttons.
@@ -423,26 +423,15 @@ export function parseBlockProps(
 }
 
 // ---------------------------------------------------------------------------
-// Fact paths for grounding (§4.4). Only these fields are `fact` (copied 1:1
-// from the questionnaire and post-validated by string compare). Everything
-// else is `creative` (AI may write it). "[]" marks a per-item array field.
+// factPaths — DELETED 2026-08-07 (pipeline v2 spec §9.5, connect-or-delete).
+// A declarative `fact`/`creative` path map (journal #20's «анотація полів»)
+// lived here with ZERO consumers since the day it was written. The grounding
+// it promised is real but lives as deterministic CODE, each check tied to its
+// actual fact SOURCE — which a bare path list could never express:
+//   - assemble() copies requisites 1:1 from `tenants.facts` (invariant 5);
+//   - lib/site/inspect.ts string-compares drift (requisiteViolations) and
+//     re-forces the values (forceRequisites);
+//   - the S1 fact-gate (lib/site/design-spec.ts) strips ungrounded claims.
+// Wiring the map in would have meant re-deriving those hand-tied mappings
+// from strings at runtime — complexity with no new safety. Deleted instead.
 // ---------------------------------------------------------------------------
-export const factPaths: Record<BlockType, string[]> = {
-  hero: [], // hero copy is all creative for MVP
-  richText: [], // creative prose
-  switchback: [], // creative storytelling + assets
-  services: ["items[].name", "items[].price"],
-  gallery: [], // images are assets, not text facts
-  stats: [], // creative — but the prompt forbids inventing numbers
-  testimonials: ["items[].quote", "items[].author", "items[].role"],
-  faq: [], // creative — kept grounded by prompt
-  cta: [], // creative marketing copy
-  lead_form: [], // labels only; submitted data goes to /api/leads, not props
-  contacts: ["phone", "address", "hours", "email", "viber", "telegram", "instagram"],
-  team: [], // real people — kept honest by the prompt, not string-compared
-  timeline: [], // real dates/steps — kept honest by the prompt
-  marquee: [], // short real keywords — kept honest by the prompt
-  publications: [], // real works — kept honest by the prompt
-  map: ["address"], // the embed queries by the confirmed address, 1:1
-  instagram_cta: ["handle"], // the Direct link targets the confirmed handle, 1:1
-};

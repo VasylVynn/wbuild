@@ -5,7 +5,8 @@ import { getAnthropic, GEN_MODEL } from "@/lib/ai/anthropic";
 import { stripLoneSurrogates } from "@/lib/ai/sanitize";
 import { lintWireCss } from "@/lib/design/css-lint";
 import { fixContrast } from "@/lib/design/css-contrast";
-import { generateWireStyle } from "@/lib/design/wire-style";
+import { clampCss, CSS_SIZE_LIMIT } from "@/lib/design/css-size";
+import { generateWireStyle, designSpecStyleLines } from "@/lib/design/wire-style";
 import type { DesignSpec } from "@/lib/site/design-spec";
 import type { StyleAuditReport } from "@/lib/site/page-content";
 
@@ -20,6 +21,10 @@ import type { StyleAuditReport } from "@/lib/site/page-content";
  * Still failing → the sheet with fewer deterministic violations
  * ships (tie → the original) and the report is flagged for the admin QA column.
  * Fail-open throughout: any error keeps the current css and never throws.
+ *
+ * v2 (spec §3-S4): when the generation carried a designSpec, the same verdict
+ * call ALSO judges brief adherence (palette roles / typography character /
+ * motion level) — advisory, recorded in the report, never a fail on its own.
  */
 
 const verdictSchema = z.object({
@@ -27,6 +32,15 @@ const verdictSchema = z.object({
   note: z
     .string()
     .describe("Якщо fail — одне коротке конкретне зауваження українською, ЩО саме зламано")
+    .optional(),
+  adherence: z
+    .object({
+      palette: z.boolean().describe("Кольоровий світ брифу впізнаваний у CSS"),
+      typography: z.boolean().describe("Характер заявленої шрифтової пари передано вагою/трекінгом"),
+      motion: z.boolean().describe("Обсяг transition/@keyframes правдоподібний для заявленого рівня"),
+      note: z.string().describe("Одне коротке пояснення українською, ЩО розійшлося").optional(),
+    })
+    .describe("Заповнюй ЛИШЕ коли в повідомленні є дизайн-бриф")
     .optional(),
 });
 
@@ -36,12 +50,32 @@ const verdictTool = {
   input_schema: z.toJSONSchema(verdictSchema),
 } as unknown as Anthropic.Tool;
 
+/** The adherence lens, appended to the SYSTEM prompt only when a designSpec
+ *  exists. Tolerance is explicit: deterministic repairs (fixContrast) may have
+ *  legitimately moved colors off the brief's exact hexes — adherence judges
+ *  whether the brief's WORLD is recognisable, not hex equality. */
+const ADHERENCE_SYSTEM = `
+
+Додатково: у повідомленні є ДИЗАЙН-БРИФ цього сайту. Оціни в adherence, чи CSS йому слідує:
+- palette: чи кольоровий світ брифу (ролі тла/поверхні/тексту/акценту) впізнаваний. Кодовий ремонт контрасту міг ЛЕГІТИМНО посунути відтінки від точних hex — не карай за зсув тону, лише за інший кольоровий світ.
+- typography: чи передано характер заявленої пари вагою, розміром, letter-spacing (font-family пише код — його відсутність не порушення).
+- motion: чи обсяг transition/hover/@keyframes правдоподібний для заявленого рівня (0 — статика, 3 — виразний рух).
+adherence — окрема діагностика: НЕ провалюй verdict через саму лише розбіжність із брифом.`;
+
 async function auditStyleWithModel(
   css: string,
   sectionDigest: string,
+  designSpec: DesignSpec | undefined,
   signal?: AbortSignal,
-): Promise<{ verdict: "pass" | "fail"; note?: string }> {
+): Promise<{
+  verdict: "pass" | "fail";
+  note?: string;
+  adherence?: StyleAuditReport["adherence"];
+}> {
   const client = getAnthropic();
+  const briefBlock = designSpec
+    ? `\nДИЗАЙН-БРИФ (якого мав слідувати цей CSS):${designSpecStyleLines(designSpec)}\n`
+    : "";
   const res = await client.messages.create({
     model: GEN_MODEL,
     max_tokens: 500,
@@ -53,7 +87,7 @@ async function auditStyleWithModel(
 - хаос: кілька несумісних дизайн-ідей упереміш, відсутність будь-якої ієрархії;
 - стиль, що явно суперечить типу бізнесу (похмурий морок для дитячої студії).
 Нормальний, хай і не геніальний, дизайн = pass. Сумніваєшся — pass.
-Виклич report_style_verdict; на fail додай note — одне конкретне зауваження українською (його передадуть дизайнеру як правку).`,
+Виклич report_style_verdict; на fail додай note — одне конкретне зауваження українською (його передадуть дизайнеру як правку).${designSpec ? ADHERENCE_SYSTEM : ""}`,
     tools: [verdictTool],
     tool_choice: { type: "tool", name: "report_style_verdict" },
     messages: [
@@ -61,10 +95,10 @@ async function auditStyleWithModel(
         role: "user",
         content: stripLoneSurrogates(`СЕКЦІЇ САЙТУ (видимий текст):
 ${sectionDigest}
-
+${briefBlock}
 СТИЛЬОВИЙ CSS:
 \`\`\`css
-${css.slice(0, 80000)}
+${css.slice(0, CSS_SIZE_LIMIT)}
 \`\`\`
 
 Виклич report_style_verdict.`),
@@ -74,7 +108,12 @@ ${css.slice(0, 80000)}
   const toolUse = res.content.find((b) => b.type === "tool_use");
   const parsed = toolUse?.type === "tool_use" ? verdictSchema.safeParse(toolUse.input) : undefined;
   if (!parsed?.success) return { verdict: "pass" }; // unparseable → fail-open
-  return { verdict: parsed.data.verdict, note: parsed.data.note };
+  return {
+    verdict: parsed.data.verdict,
+    note: parsed.data.note,
+    // Only meaningful against a brief — an uninvited judgement is dropped.
+    adherence: designSpec ? parsed.data.adherence : undefined,
+  };
 }
 
 export async function runStyleAudit(opts: {
@@ -90,11 +129,12 @@ export async function runStyleAudit(opts: {
    */
   altHue?: number;
   /**
-   * The S1 design brief this stylesheet answers to (pipeline v2 §3-S4): a
+   * The S1 design brief this stylesheet answers to (pipeline v2 §3-S4): the
+   * verdict call also judges brief ADHERENCE (recorded, advisory), and a
    * corrective regen re-asserts the palette-role ANCHORS (designSpec supersedes
    * the hue inside generateWireStyle) instead of rolling a bare altHue — and
    * keeps fonts/motion out of the CSS, since the renderer owns them now.
-   * Absent → exactly the v1 altHue retry.
+   * Absent → exactly the v1 altHue retry, no adherence.
    */
   designSpec?: DesignSpec;
   /**
@@ -102,6 +142,12 @@ export async function runStyleAudit(opts: {
    * starts while ≥120s of the caller's S4 budget remain). Absent → allowed.
    */
   canRegen?: () => boolean;
+  /** The audited css is a CARRY-OVER previous sheet (the S2а style leg failed
+   *  and pipeline-compile shipped `prevWireCss`), not this generation's output
+   *  — the adherence judgement is suppressed (it would grade a sheet the
+   *  stylist never wrote against the NEW brief) and the report is marked so
+   *  the admin chip stays honest. The gross-defect verdict still runs. */
+  carryOver?: boolean;
   /** Caller's deadline — covers both verdicts AND the regen call. */
   signal?: AbortSignal;
 }): Promise<{ css: string | undefined; report: StyleAuditReport }> {
@@ -114,19 +160,27 @@ export async function runStyleAudit(opts: {
     checkedAt: new Date().toISOString(),
   };
   if (!opts.css) return { css: opts.css, report }; // grey wireframe — nothing to audit
+  if (opts.carryOver) report.carriedOver = true;
 
-  // Phase 1: deterministic, always.
+  // Phase 1: deterministic, always. Size clamp (spec §9.3): the compile step
+  // already enforces the 60k contract on fresh sheets — this belt catches
+  // pre-contract rows so the audited css IS what sanitizeCss renders, and the
+  // cut is reported, never silent.
   const lint = lintWireCss(opts.css);
   const contrast = fixContrast(lint.cleanCss);
-  report.lintViolations = lint.violations;
+  const clamp = clampCss(contrast.css);
+  report.lintViolations = [...lint.violations, ...(clamp.note ? [clamp.note] : [])];
   report.contrastFixes = contrast.fixes;
-  let css = contrast.css;
+  let css = clamp.css;
 
   // Phase 2: one bounded verdict; fail → one regen, re-lint, re-judge.
   try {
-    const first = await auditStyleWithModel(css, opts.sectionDigest, opts.signal);
+    const first = await auditStyleWithModel(css, opts.sectionDigest, opts.designSpec, opts.signal);
     report.verdict = first.verdict;
     report.correctiveNote = first.note;
+    // Adherence only for a sheet THIS run's stylist wrote — a carry-over sheet
+    // answered a different brief and its "violation" would be a fabrication.
+    if (first.adherence && !opts.carryOver) report.adherence = first.adherence;
     if (first.verdict === "fail" && opts.canRegen && !opts.canRegen()) {
       // Budget spent (§6): the regen wouldn't fit — keep the failing verdict
       // honest, `flagged` below surfaces it in the admin QA column.
@@ -141,15 +195,29 @@ export async function runStyleAudit(opts: {
       });
       const relint = lintWireCss(regen.css);
       const recontrast = fixContrast(relint.cleanCss);
-      const second = await auditStyleWithModel(recontrast.css, opts.sectionDigest, opts.signal);
+      const reclamp = clampCss(recontrast.css);
+      const second = await auditStyleWithModel(
+        reclamp.css,
+        opts.sectionDigest,
+        opts.designSpec,
+        opts.signal,
+      );
       const regenDetIssues = relint.violations.length;
-      const origDetIssues = report.lintViolations.length;
+      // Like-for-like (review must-fix): raw lint counts on BOTH sides. The
+      // size-clamp note rides report.lintViolations for REPORTING only —
+      // counting it here inflated the original by one and accepted a regen
+      // that was not actually cleaner.
+      const origDetIssues = lint.violations.length;
       if (second.verdict === "pass" || regenDetIssues < origDetIssues) {
-        css = recontrast.css;
-        report.lintViolations = relint.violations;
+        css = reclamp.css;
+        report.lintViolations = [...relint.violations, ...(reclamp.note ? [reclamp.note] : [])];
         report.contrastFixes = recontrast.fixes;
         report.verdict = second.verdict;
         report.correctiveNote = second.note;
+        // The accepted regen WAS generated against this run's designSpec —
+        // its adherence is legitimate and the sheet is no longer a carry-over.
+        if (second.adherence) report.adherence = second.adherence;
+        if (opts.carryOver) report.carriedOver = false;
       }
     }
   } catch (e) {
@@ -158,7 +226,9 @@ export async function runStyleAudit(opts: {
   // Unconditional (plan-review must-fix): a crash mid-regen aborts the block
   // above — a failing verdict must still surface in the admin QA column. A
   // code-proven contrast failure (fixContrast couldn't converge a pair to
-  // 4.5:1) flags too, independent of what the model verdict said.
+  // 4.5:1) flags too, independent of what the model verdict said. Adherence is
+  // deliberately NOT a flag input (§3-S4: advisory) — the admin column shows
+  // it as its own chip.
   report.flagged =
     report.verdict === "fail" || report.contrastFixes.some((f) => f.startsWith("unresolved:"));
 

@@ -152,6 +152,23 @@ function isLogoMeta(m: PhotoMeta): boolean {
 }
 
 /**
+ * The metas `aggregatePalette` actually draws colors from — the §3-S0
+ * eligibility filter, exported on its own so the pipeline can report the
+ * honest PHOTO basis of the aggregated palette («взяв палітру з N фото»):
+ * `aggregatePalette().length` counts aggregated COLOURS, not photos, and one
+ * photo routinely yields 5 hexes.
+ */
+export function eligiblePaletteMetas(metas: PhotoMeta[]): PhotoMeta[] {
+  return metas.filter((m) => {
+    if (!m.palette?.length) return false;
+    if (/\/generated\//.test(m.url)) return false;
+    if (isLogoMeta(m)) return true;
+    if (!isEligiblePhoto(m)) return false;
+    return photoScore(m) >= PALETTE_MIN_PHOTO_SCORE;
+  });
+}
+
+/**
  * Fold per-photo palettes into ONE site-level candidate palette (≤6 hexes,
  * strongest first). Pure and deterministic — unit-testable without sharp.
  *
@@ -167,13 +184,7 @@ function isLogoMeta(m: PhotoMeta): boolean {
  * in hero-fitness order ("hero-candidates first"), then input order — stable.
  */
 export function aggregatePalette(metas: PhotoMeta[]): string[] {
-  const eligible = metas.filter((m) => {
-    if (!m.palette?.length) return false;
-    if (/\/generated\//.test(m.url)) return false;
-    if (isLogoMeta(m)) return true;
-    if (!isEligiblePhoto(m)) return false;
-    return photoScore(m) >= PALETTE_MIN_PHOTO_SCORE;
-  });
+  const eligible = eligiblePaletteMetas(metas);
 
   const ordered = eligible
     .map((m, i) => ({ m, i }))

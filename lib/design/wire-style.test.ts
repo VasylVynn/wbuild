@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { designSpecStyleLines } from "./wire-style";
-import type { DesignSpec } from "@/lib/site/design-spec";
+import { designSpecStyleLines, plannedBlockTypes } from "./wire-style";
+import { extractSectionSource } from "./wire-source";
+import type { DesignSpec, SectionPlanEntry } from "@/lib/site/design-spec";
 
 /**
  * The S2а brief tail rendered from a designSpec (pipeline v2 §3: «палітра —
@@ -59,5 +61,46 @@ describe("designSpecStyleLines", () => {
     });
     expect(lines).not.toContain("ТИПОГРАФІКА");
     expect(lines).toContain("#7a1f3d");
+  });
+});
+
+/**
+ * The V5 prompt-slimming seed set versus the force-injections (invariant 8 /
+ * PLAN_EXEMPT_TYPES in lib/ai/generate.ts): gallery is injected by CODE
+ * outside any S1 plan — with ≥2 photos, or as the pending generated-atmosphere
+ * gallery exactly when a photo-less plan would never name it. The slimmed
+ * prompt must therefore always carry the Gallery source, or the section ships
+ * with zero generated surface styling (`.wire-gallery` is not in wire.css).
+ */
+
+const realTsx = readFileSync(
+  new URL("../../components/templates/salonwire/sections.tsx", import.meta.url),
+  "utf8",
+);
+
+// A plausible S1 plan WITHOUT a gallery entry — the common photo-poor onboard
+// case whose pending gallery is force-injected later in assembly.
+const PLAN_NO_GALLERY = [
+  { section: "services" },
+  { section: "story" },
+  { section: "faq" },
+  { section: "cta" },
+] as SectionPlanEntry[];
+
+describe("plannedBlockTypes force-injection seeds", () => {
+  it("always keeps the code-injected types, gallery included", () => {
+    const types = plannedBlockTypes(PLAN_NO_GALLERY);
+    // Mirror of PLAN_EXEMPT_TYPES (lib/ai/generate.ts) — keep the two in sync.
+    for (const injected of ["hero", "lead_form", "contacts", "gallery"]) {
+      expect(types.has(injected)).toBe(true);
+    }
+  });
+
+  it("keeps the Gallery source in the slimmed prompt for a gallery-less plan", () => {
+    const out = extractSectionSource(realTsx, [...plannedBlockTypes(PLAN_NO_GALLERY)]);
+    expect(out.extracted).toBe(true);
+    expect(out.source).toContain('BlockProps["gallery"]');
+    // The class names the stylist must be able to target.
+    expect(out.source).toContain("wire-gallery");
   });
 });
