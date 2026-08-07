@@ -114,7 +114,15 @@ export interface PipelineResult {
 const CHAIN_BUDGET_MS = 240_000;
 const S0_BUDGET_MS = 5_000;
 const S1_BUDGET_MS = 40_000;
-const S2_BUDGET_MS = 120_000;
+/** Content leg (composition) — measured 44–79s pre-v2, unchanged inputs. */
+const S2B_BUDGET_MS = 120_000;
+/** Style leg: the V3 wireframe grew the prompt (wire.css + sections.tsx are
+ *  inlined verbatim, +560 lines), and a measured regen aborted at 120s with
+ *  the sheet mid-write — the fallback then ships the PREVIOUS sheet, so the
+ *  palette silently stops varying. 150s keeps TFAO ≤ ~195s worst inside the
+ *  240s chain. Longer-term fix (V5): send only the sectionPlan-selected
+ *  variants' source instead of the whole files. */
+const S2A_BUDGET_MS = 150_000;
 /** S4 runs on its OWN clock — after the preview, never chain time — but is
  *  additionally clamped to what remains of the request wall clock below. */
 const S4_BUDGET_MS = 150_000;
@@ -377,7 +385,7 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         dossier,
         vertical.id,
         media,
-        stageSignal(S2_BUDGET_MS),
+        stageSignal(S2B_BUDGET_MS),
         seeded.variantRoll,
         brief?.spec,
         // Per-section variant fallback (spec §4): one independent seeded
@@ -390,7 +398,7 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         // hue is consumed only when the brief is null (designSpec supersedes it).
         hue: seeded.hue,
         designSpec: brief?.spec,
-        signal: stageSignal(S2_BUDGET_MS),
+        signal: stageSignal(S2A_BUDGET_MS),
       }),
     ]);
     if (siteRes.status === "rejected") {
