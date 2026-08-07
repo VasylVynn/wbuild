@@ -11,8 +11,13 @@ import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
 import { sanitizeMedia, type SiteMedia } from "@/lib/media/media";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
 import { hasContactChannel } from "@/lib/onboard/contact-channel";
+import {
+  CLAIMED_BY_OTHER_ERROR,
+  CLAIM_CHECK_FAILED_ERROR,
+  hasForeignMember,
+} from "@/lib/onboard/claim-gate";
 import { trackFunnel } from "@/lib/analytics/funnel";
-import { saveDraftHost } from "@/app/app/new/persist-actions";
+import { saveDraftHost } from "@/lib/onboard/draft-host";
 import { createLogger } from "@/lib/log";
 
 const log = createLogger("generate-flow");
@@ -42,26 +47,90 @@ export type GenerateDraftResult =
 /** Context the claim gate (M1, spec §7) decides on. */
 export interface ClaimGateInput {
   host: string;
-  /** True when the host was reused from the conversation (an existing draft
-   *  tenant), false when it was freshly minted for this generation. */
-  existingHost: boolean;
   /** Signed-in user id; null when the auth layer is off (degrade-open §3.1). */
   userId: string | null;
 }
 export type ClaimGateResult = { ok: true } | { ok: false; error: string };
 
 /**
- * M1 HOOK-POINT (spec §7 — «V2 готує тільки hook-point; сам гейт імплементує
- * W2 вже в новому модулі»). The claim gate decides whether THIS signed-in user
- * may generate into `host` BEFORE any model spend. Today it reproduces the
- * pre-M1 membership behavior exactly: every request passes. W2 replaces this
- * body with the real cross-host claim gate; it lives in the SHARED flow so
+ * Atomically claim sole ownership of `tenantId` for `userId` — the DATABASE
+ * arbitrates (security review must-fix): the partial unique index
+ * `tenant_members_one_owner` (migration 0012, tenant_id where role='owner')
+ * makes a second owner insert fail with 23505, so first COMMITTED claim wins.
+ * The old app-side «insert → re-read → deterministic arbiter → loser deletes»
+ * dance was racy: each racer arbitrated on its own READ COMMITTED snapshot,
+ * which may not yet contain the other's uncommitted row — both could pass.
+ *
+ * On 23505 we re-read to tell OUR committed row (double-submit / composite-PK
+ * dup — the claim stands) from a foreign winner (refuse honestly). Any
+ * verification error fails CLOSED: this is an ownership gate, not a rate
+ * limit — guessing open would hand the site over.
+ */
+async function claimTenantOwnership(tenantId: string, userId: string): Promise<ClaimGateResult> {
+  const sb = getServiceClient();
+  const { data: before, error: readErr } = await sb
+    .from("tenant_members")
+    .select("user_id")
+    .eq("tenant_id", tenantId);
+  if (readErr || !before) return { ok: false, error: CLAIM_CHECK_FAILED_ERROR };
+
+  if (hasForeignMember(before.map((r) => r.user_id as string), userId)) {
+    return { ok: false, error: CLAIMED_BY_OTHER_ERROR };
+  }
+  if (before.some((r) => r.user_id === userId)) return { ok: true }; // own re-generate
+
+  const { error: insErr } = await sb
+    .from("tenant_members")
+    .insert({ tenant_id: tenantId, user_id: userId, role: "owner" });
+  if (insErr) {
+    if (insErr.code !== "23505") return { ok: false, error: CLAIM_CHECK_FAILED_ERROR };
+    // 23505 = a committed row already exists — either our own (double-submit,
+    // composite PK) or another user's owner row (the unique index fired). The
+    // winner's row is committed, so this re-read is deterministic.
+    const { data: after, error: afterErr } = await sb
+      .from("tenant_members")
+      .select("user_id")
+      .eq("tenant_id", tenantId);
+    if (afterErr || !after) return { ok: false, error: CLAIM_CHECK_FAILED_ERROR };
+    if (after.some((r) => r.user_id === userId)) return { ok: true };
+    log.warn("claim race lost", { tenantId, userId });
+    return { ok: false, error: CLAIMED_BY_OTHER_ERROR };
+  }
+  return { ok: true };
+}
+
+/**
+ * M1 claim gate (W2, plan §7-M1). Decides whether THIS signed-in user may
+ * generate into `host` BEFORE any model spend. It lives in the SHARED flow so
  * both transports (SSE route AND the fallback action) pass through it — a
  * route-only gate would be bypassable by calling the action directly.
+ *
+ * Runs for EVERY host, minted or reused (security review must-fix): the old
+ * `!existingHost` short-circuit assumed a freshly minted host can never point
+ * at an existing tenant, but uniqueSubdomain's exhaustion fallback could
+ * return a taken label — a genuinely fresh host simply finds no tenant row
+ * below and passes anyway, so the shortcut bought nothing and opened a hole.
+ *
+ *  - Auth off / DB off → pass (degrade-open posture is §3.1's, unchanged).
+ *  - Host's tenant claimed by another user → refuse honestly («Цей сайт уже
+ *    привʼязаний до іншого акаунта») — the `?conv=` link is a bearer token,
+ *    and its second holder must NOT become a co-owner.
+ *  - Otherwise claim eagerly and atomically (see claimTenantOwnership).
  */
 async function claimGateM1(input: ClaimGateInput): Promise<ClaimGateResult> {
-  void input; // W2 reads host/existingHost/userId here.
-  return { ok: true };
+  const { host, userId } = input;
+  if (!userId || !isSupabaseConfigured()) return { ok: true };
+
+  const sb = getServiceClient();
+  const { data: tenant, error: tenantErr } = await sb
+    .from("tenants")
+    .select("id")
+    .eq("host", host)
+    .maybeSingle();
+  if (tenantErr) return { ok: false, error: CLAIM_CHECK_FAILED_ERROR };
+  if (!tenant) return { ok: true }; // fresh host — the pipeline will mint the row
+
+  return claimTenantOwnership(tenant.id as string, userId);
 }
 
 export interface GenerateFlowInput {
@@ -142,23 +211,38 @@ export async function runGenerateFlow(input: GenerateFlowInput): Promise<Generat
 
     // Reuse the persisted draft host on re-generate (advances the design nonce =
     // «same data ⇒ different site», and avoids orphan draft tenants); else mint.
+    // The conversation's anchor tenant (startConversation's placeholder, later
+    // re-pointed at the real tenant) rides along — it is the claim subject.
     let existingHost: string | undefined;
+    let convTenantId: string | null = null;
     if (conversationId && isSupabaseConfigured()) {
       const sb = getServiceClient();
       const { data } = await sb
         .from("conversations")
-        .select("facts_state")
+        .select("tenant_id, facts_state")
         .eq("id", conversationId)
         .maybeSingle();
+      convTenantId = (data?.tenant_id as string | null) ?? null;
       existingHost = (data?.facts_state as { host?: string } | null)?.host;
     }
     host = existingHost ?? (await uniqueSubdomain(bizFacts.businessName));
 
+    // Claim the CONVERSATION, not just the host (security review must-fix):
+    // startConversation always creates an anchor tenant, so the `?conv=`
+    // bearer link is claimable from the very first authenticated generate —
+    // BEFORE a draft host exists. Without this, a second link-holder could
+    // generate the victim's dossier into their own tenant and re-bind the
+    // conversation, locking the victim out of their own chat.
+    if (ownerId && convTenantId && isSupabaseConfigured()) {
+      const convClaim = await claimTenantOwnership(convTenantId, ownerId);
+      if (!convClaim.ok) return { ok: false, error: convClaim.error };
+    }
+
     // M1 claim gate (spec §7): decided BEFORE any model spend, in the shared
     // module so BOTH transports pass it — the fallback action can't fork the
-    // policy. The stub reproduces today's behavior (allow); W2 lands the real
-    // gate in claimGateM1 above.
-    const gate = await claimGateM1({ host, existingHost: Boolean(existingHost), userId: ownerId });
+    // policy. Refusals surface verbatim to the client (honest copy lives in
+    // lib/onboard/claim-gate.ts).
+    const gate = await claimGateM1({ host, userId: ownerId });
     if (!gate.ok) return { ok: false, error: gate.error };
 
     const rawDossier = conversationId ? await buildDossierForConversation(conversationId) : null;

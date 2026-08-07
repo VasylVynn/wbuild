@@ -56,5 +56,15 @@ export async function uniqueSubdomain(businessName: string): Promise<string> {
     const { data } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
     if (!data) return host;
   }
-  return `${base}-${candidates.length}.${root}`;
+  // Exhaustion fallback (security review must-fix): the old `${base}-61`
+  // return was a label the loop had ALREADY probed and found TAKEN — handing
+  // a minted host that points at an existing tenant let the caller generate
+  // straight into someone else's site. Never return a host we haven't
+  // verified free: try random suffixes, else fail loudly.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const host = `${base}-${Math.random().toString(36).slice(2, 8)}.${root}`;
+    const { data } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
+    if (!data) return host;
+  }
+  throw new Error(`Не вдалося підібрати вільну адресу для «${businessName}» — спробуйте іншу назву.`);
 }

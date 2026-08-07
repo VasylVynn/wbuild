@@ -22,6 +22,9 @@ import Link from "next/link";
 import { useSmoothText } from "@/components/useSmoothText";
 import type { ChatMsg } from "@/lib/ai/onboard";
 import { hasContactChannel } from "@/lib/onboard/contact-channel";
+// Client-safe (dependency-free module): the honest claimed-by-other copy, used
+// to detect the refusal and offer «Почати нову розмову» instead of a retry.
+import { CLAIMED_BY_OTHER_ERROR } from "@/lib/onboard/claim-gate";
 import {
   onboardAction,
   generateDraftAction,
@@ -44,7 +47,8 @@ import type { BusinessFacts } from "@/lib/verticals/schema";
 import { MAX_PHOTOS, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
 import { processImage } from "@/lib/media/client-image";
 import { Button, Card, ConfirmDialog } from "@/components/ui";
-import { appUrl, shouldRestoreConversation } from "@/components/onboard/embed-helpers";
+import { appUrl, OAUTH_RESUME_KEY, shouldRestoreConversation } from "@/components/onboard/embed-helpers";
+import { GoogleIcon } from "@/components/auth/AuthShell";
 import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 import DomainStep from "@/components/onboard/DomainStep";
 import { pixelTrack } from "@/lib/analytics/pixel";
@@ -58,10 +62,12 @@ type Phase = "chat" | "gate" | "generating" | "preview" | "done" | "error";
 
 // Generate-first greetings (W0, plan §0): no questionnaire — the agent infers
 // what it can and asks at most 1–2 things itself. Genderless, ≤1 emoji (C4/C5).
+// The last sentence honestly announces the auth gate (M9) — registration must
+// never be a surprise at the end of the conversation.
 const GREETING: ChatMsg = {
   role: "assistant",
   content:
-    "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові. Розкажіть, що у вас за бізнес — для початку досить назви.",
+    "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові. Розкажіть, що у вас за бізнес — для початку досить назви. У кінці попрошу пошту, щоб сайт лишився вашим.",
 };
 
 // Instagram-first greeting (wave E) — shown only when the Apify scrape is
@@ -70,7 +76,7 @@ const GREETING: ChatMsg = {
 const IG_GREETING: ChatMsg = {
   role: "assistant",
   content:
-    "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові. Надішліть посилання на Instagram-сторінку — і я витягну все звідти. Або просто розкажіть, що у вас за бізнес.",
+    "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові. Надішліть посилання на Instagram-сторінку — і я витягну все звідти. Або просто розкажіть, що у вас за бізнес. У кінці попрошу пошту, щоб сайт лишився вашим.",
 };
 
 // The questionnaire progress chips are GONE (W0, plan §0.5) — the agent-status
@@ -156,6 +162,31 @@ function actionErrorMessage(err: unknown): string {
     return "З'єднання із сервером перервалося. Оновіть сторінку (Ctrl+R або ⌘R) — розмова збережеться — і спробуйте ще раз.";
   }
   return m || "Невідома помилка";
+}
+
+// M12: the recap shown when a handed-off conversation resumes WITHOUT the
+// same-tab OAuth flag (email-confirmation branch, password sign-in, a later
+// bearer-link visit). Honest and short (C5): what is saved + what to do next —
+// generation never auto-starts here (no silent token burn from an email link).
+function resumeRecap(
+  facts: Partial<BusinessFacts>,
+  photosCount: number,
+  confirmed: boolean,
+): string {
+  const name = facts.businessName?.trim();
+  const city = facts.city?.trim();
+  const parts = [
+    name && `«${name}»`,
+    city && city,
+    photosCount > 0 && `${photosCount} фото`,
+  ].filter(Boolean);
+  const saved = parts.length
+    ? `Усе збережено: ${parts.join(", ")}.`
+    : "Розмова збережена.";
+  const action = confirmed
+    ? "Тисніть «Створити сайт» нижче — і я зберу чернетку."
+    : "Продовжимо з того самого місця.";
+  return `З поверненням! ${saved} ${action}`;
 }
 
 // Client-side id for pending attachments. NOT crypto.randomUUID — that's
@@ -561,14 +592,53 @@ export function OnboardChat({
   // login-gate handoff, §3.2/M3) wins over localStorage — localStorage is
   // per-ORIGIN, so an id written on the marketing root never reaches
   // app./new by itself; the gate carries it across in the login `next` URL.
+  //
+  // M12 resume semantics for the URL handoff (in priority order):
+  //  1. The conversation already holds a DRAFT host → straight to the preview
+  //     (no regeneration — the draft exists, tokens were already spent).
+  //  2. `?resume=1` AND the same-tab OAuth flag (stamped by /login right
+  //     before the Google redirect, sessionStorage = same tab + same origin)
+  //     → generation auto-starts: this is the ONE «продовжуємо якраз
+  //     генерацію» path the user personally initiated seconds ago.
+  //  3. `?resume=1` without the flag (email-confirmation branch, password
+  //     sign-in, any later bearer-link visit) → recap of the collected facts +
+  //     the single «Створити сайт» CTA. A link from an email must never burn
+  //     3 minutes of tokens by itself.
   useEffect(() => {
-    const fromUrl = embedded
-      ? null
-      : new URLSearchParams(window.location.search).get("conv");
+    const params = embedded ? null : new URLSearchParams(window.location.search);
+    const fromUrl = params?.get("conv") ?? null;
+    const wantsResume = params?.get("resume") === "1";
     const stored = fromUrl ?? localStorage.getItem("vitryna_conv_id");
+    // Consume the OAuth flag exactly once, even when the load below bails —
+    // a stale flag must never auto-start some LATER unrelated visit.
+    let sameTabOAuth = false;
+    if (fromUrl) {
+      try {
+        sameTabOAuth = sessionStorage.getItem(OAUTH_RESUME_KEY) === fromUrl;
+        sessionStorage.removeItem(OAUTH_RESUME_KEY);
+      } catch {
+        /* storage blocked — degrade to the recap path */
+      }
+    }
     if (!stored) return;
 
     loadConversation(stored).then((data) => {
+      // W2 (review must-fix): the server refused the read — the conversation
+      // is CLAIMED. The bearer link must not open its preview (that was the
+      // regression M1 exists to close). Signed out → the gate (it may well be
+      // the owner mid-flow — carry the conv id so login resumes it); signed
+      // in as someone else → the same honest claim-gate copy.
+      if (data && "locked" in data) {
+        if (!fromUrl) return; // localStorage-only restore: silently start fresh
+        if (data.locked === "auth") {
+          convIdRef.current = stored;
+          setPhase("gate");
+        } else {
+          setErrorMsg(CLAIMED_BY_OTHER_ERROR);
+          setPhase("error");
+        }
+        return;
+      }
       // Restore hygiene (M6): real back-and-forth only (>1 means user spoke);
       // embedded additionally skips conversations that already minted a draft
       // (they belong to the app-host preview flow — see the helper).
@@ -577,7 +647,6 @@ export function OnboardChat({
       // Adopt the handed-off conversation on THIS origin so a later reload
       // (without the query string) still resumes it.
       if (fromUrl) localStorage.setItem("vitryna_conv_id", stored);
-      setMessages(data.messages);
       setFacts(data.facts as Partial<BusinessFacts>);
       setVerticalId(data.verticalId);
       setReady(data.ready);
@@ -587,6 +656,47 @@ export function OnboardChat({
       setMedia(data.media ?? { photos: [] });
       // The starter chip belongs to a FRESH conversation only (codex review).
       setQuickReplies([]);
+
+      // M12 §1: an existing draft → its preview, never a second generation.
+      // Ownership is enforced SERVER-side: loadConversation returns `locked`
+      // (handled above) for a claimed conversation unless the caller is a
+      // member — so reaching here with a host means the viewer may open the
+      // authed editor frame.
+      if (fromUrl && data.host) {
+        setMessages(data.messages);
+        setDraft({
+          host: data.host,
+          previewUrl: `/edit/${data.host}/frame`,
+          editUrl: `/edit/${data.host}`,
+        });
+        setPhase("preview");
+        return;
+      }
+      if (fromUrl && wantsResume && sameTabOAuth) {
+        // M12 §2: same-tab OAuth return — the user clicked «create» moments
+        // ago; the effect below consumes the flag AFTER this state flushes,
+        // so generation reads the restored facts (auth gate still applies).
+        setMessages(data.messages);
+        setAutoGenerate(true);
+        return;
+      }
+      if (fromUrl && wantsResume) {
+        // M12 §3: recap + single CTA (the CTA renders when `confirmed` was
+        // restored above). Transient by design — not persisted as a turn.
+        setMessages([
+          ...data.messages,
+          {
+            role: "assistant",
+            content: resumeRecap(
+              data.facts as Partial<BusinessFacts>,
+              (data.media ?? { photos: [] }).photos.length,
+              data.confirmed,
+            ),
+          },
+        ]);
+        return;
+      }
+      setMessages(data.messages);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only; `embedded` never changes at runtime
   }, []);
@@ -775,6 +885,17 @@ export function OnboardChat({
     setTimeout(() => {
       if (!embedded || expandedRef.current) inputRef.current?.focus();
     }, 50);
+  };
+
+  // The claimed-by-other refusal tells the user to start a NEW conversation —
+  // this button actually does it (review must-fix: the error screen's retry
+  // was guaranteed to refuse again, deterministically). resetChat clears the
+  // stored conversation id and returns local state to the greeting.
+  const startFreshConversation = () => {
+    resetChat();
+    setErrorMsg("");
+    setSiteUrl("");
+    setPhase("chat");
   };
 
   // Core send — used by the input row AND by quick-reply chips. Carries the
@@ -1884,39 +2005,102 @@ export function OnboardChat({
   // ---------------------------------------------------------------------------
 
   if (phase === "gate") {
-    // Embedded: the gate renders INSIDE the overlay (plan §5) — no redirect;
-    // the honest message was already persisted into the chat by
-    // handleCreateSite, and «Назад до розмови» returns to it.
+    // The trust-builder gate (M7): the preview of what was collected, three
+    // value lines, Google FIRST (zero emails), the email path second, and an
+    // always-visible way back. Embedded: renders INSIDE the overlay (plan §5)
+    // — no redirect; the honest message was already persisted into the chat
+    // by handleCreateSite, and «Назад до розмови» returns to it.
+    //
     // The ?conv= handoff (§3.2/M3): localStorage is per-origin, so the
     // conversation id must ride the login `next` URL to reach app./new.
     // Without a persisted conversation there is nothing to hand off — the
     // copy must not promise a resume.
+    //
+    // Cross-host Google (M7/M12): the gate NEVER calls the OAuth server
+    // action itself. On the marketing root the action would run on the ROOT
+    // origin and write the PKCE verifier cookie there, while /auth/callback
+    // lives on the app host — the code exchange would always fail. Instead
+    // BOTH hosts link to app./login?google=1&next=…, and /login (app host)
+    // auto-triggers the action: one code path, and /login also stamps the
+    // sessionStorage same-tab flag that M12's auto-resume requires.
     const gateConvId = convIdRef.current;
     const gateNext = gateConvId
       ? `/new?conv=${encodeURIComponent(gateConvId)}&resume=1`
       : "/new";
+    const gateBiz = (facts.businessName ?? "").trim().slice(0, 60);
+    const gateQuery =
+      `next=${encodeURIComponent(gateNext)}` +
+      (gateBiz ? `&biz=${encodeURIComponent(gateBiz)}` : "");
+    const gateCity = (facts.city ?? "").trim();
+    const gatePhotos = media.photos.length;
+    const collected: { label: string; value: string }[] = [
+      ...(gateBiz ? [{ label: "Назва", value: gateBiz }] : []),
+      ...(gateCity ? [{ label: "Місто", value: gateCity }] : []),
+      ...(gatePhotos > 0 ? [{ label: "Фото", value: String(gatePhotos) }] : []),
+    ];
     return inEmbeddedOverlay(
-      <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 ${rootBase}`}>
+      <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 py-10 ${rootBase}`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <div className="animate-rise flex w-full max-w-md flex-col items-center text-center">
-          <span className="flex h-24 w-24 items-center justify-center rounded-full bg-honey font-brand text-[42px] font-semibold text-honey-text shadow-[0_18px_40px_-14px_rgba(51,41,28,0.4)]">
+          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-honey font-brand text-[36px] font-semibold text-honey-text shadow-[0_18px_40px_-14px_rgba(51,41,28,0.4)]">
             3
           </span>
-          <h2 className="mt-8 font-brand text-[24px] font-semibold leading-tight">
-            Створіть акаунт, щоб зберегти ваш сайт
+          <h2 className="mt-6 font-brand text-[24px] font-semibold leading-tight">
+            {gateBiz ? `Сайт для «${gateBiz}» майже готовий` : "Ваш сайт майже готовий"}
           </h2>
-          <p className="mt-3 text-[17px] leading-relaxed text-ink-muted">
+          <p className="mt-2.5 text-[16px] leading-relaxed text-ink-muted">
             {gateConvId
-              ? "Розмова збережеться — ви продовжите з того самого місця"
+              ? "Створіть акаунт, щоб зберегти його за вами — розмова продовжиться з того самого місця"
               : "Розмову не вдалося зберегти — після входу почнете з коротких питань"}
           </p>
-          {/* Absolute app-host URL (M3) — /login does not exist on the
-              marketing root. ?conv= carries the conversation cross-origin. */}
+
+          {/* What the chat already collected — nothing will be lost. */}
+          {collected.length > 0 && (
+            <div className="mt-5 flex w-full flex-col gap-2 rounded-[20px] border border-line bg-surface p-4 text-left shadow-card">
+              {collected.map((row) => (
+                <div key={row.label} className="flex items-baseline justify-between gap-3">
+                  <span className="text-[13px] font-bold uppercase tracking-wide text-ink-faint">
+                    {row.label}
+                  </span>
+                  <span className="truncate text-[15px] font-semibold text-ink">{row.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <ul className="mt-5 flex w-full flex-col gap-1.5 text-left">
+            {[
+              "Безкоштовно — публікація нічого не коштує",
+              "Без коду — все робить помічник",
+              "Заявки клієнтів — одразу у ваш Telegram",
+            ].map((line) => (
+              <li key={line} className="flex items-center gap-2.5 text-[15px] font-semibold text-ink">
+                <span
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ok-soft text-[12px] text-ok"
+                  aria-hidden
+                >
+                  ✓
+                </span>
+                {line}
+              </li>
+            ))}
+          </ul>
+
+          {/* Google first (zero emails, Google-white per brand rules).
+              Absolute app-host URL (M3) — /login does not exist on the
+              marketing root; ?google=1 auto-triggers the OAuth action on the
+              app host (see the comment above). */}
           <a
-            href={appUrl(`/login?next=${encodeURIComponent(gateNext)}`)}
-            className="mt-8 flex min-h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-brand px-7 text-[18px] font-bold text-white shadow-[0_10px_28px_rgba(51,41,28,0.22)] transition-colors hover:bg-brand-hover"
+            href={appUrl(`/login?google=1&${gateQuery}`)}
+            className="mt-6 flex min-h-14 w-full items-center justify-center gap-2.5 rounded-[16px] border border-line-strong bg-surface px-7 text-[17px] font-bold text-ink shadow-[0_10px_28px_rgba(51,41,28,0.16)] transition-colors hover:bg-sunken"
           >
-            Увійти або зареєструватися
+            <GoogleIcon size={20} /> Продовжити з Google
+          </a>
+          <a
+            href={appUrl(`/login?${gateQuery}`)}
+            className="mt-2.5 flex min-h-[52px] w-full items-center justify-center rounded-[16px] bg-brand px-7 text-[16px] font-bold text-white shadow-[0_8px_22px_rgba(51,41,28,0.18)] transition-colors hover:bg-brand-hover"
+          >
+            Пошта і пароль
           </a>
           <Button variant="quiet" size="md" className="mt-2" onClick={() => setPhase("chat")}>
             <ArrowLeft size={17} /> Назад до розмови
@@ -2099,9 +2283,17 @@ export function OnboardChat({
         <p className="mt-4 w-full rounded-[16px] bg-danger-soft px-5 py-4 text-[15px] font-semibold leading-relaxed text-danger">
           {errorMsg}
         </p>
-        <Button size="lg" className="mt-6" onClick={() => void (draft ? handlePublish() : runGenerate())}>
-          Спробувати ще раз
-        </Button>
+        {errorMsg === CLAIMED_BY_OTHER_ERROR ? (
+          // Retrying a claimed conversation refuses again by design — the only
+          // honest way forward is the new conversation the copy promises.
+          <Button size="lg" className="mt-6" onClick={startFreshConversation}>
+            Почати нову розмову
+          </Button>
+        ) : (
+          <Button size="lg" className="mt-6" onClick={() => void (draft ? handlePublish() : runGenerate())}>
+            Спробувати ще раз
+          </Button>
+        )}
         {/* Never a dead end (plan should-fix): in embedded mode this screen
             covers the whole landing with body scroll locked — without an exit
             the only escape is a full reload. Returning to the chat keeps the

@@ -39,7 +39,8 @@ const HEARTBEAT_MS = 15_000;
 
 // The M1 claim gate lives INSIDE runGenerateFlow (spec §7): both transports —
 // this route and the fallback generateDraftAction — must pass the same gate,
-// so a route-local stub would be bypassable by design.
+// so a route-local check would be bypassable by design. Its refusal streams
+// back as {t:"error"} like any other flow refusal.
 
 interface GenerateBody {
   facts: Partial<BusinessFacts>;

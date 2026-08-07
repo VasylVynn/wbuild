@@ -21,6 +21,33 @@ export function appUrl(path = "/"): string {
   return `${publicSiteUrl(`app.${ROOT_DOMAIN}`)}${path}`;
 }
 
+/**
+ * sessionStorage key for the M12 same-tab OAuth resume flag. /login writes the
+ * conversation id here right before redirecting to Google; OnboardChat on
+ * /new?conv=…&resume=1 consumes it. sessionStorage is per-tab AND per-origin —
+ * both /login and /new live on the app host, and the OAuth round-trip stays in
+ * the same tab, so the flag survives exactly that path and nothing else: an
+ * email-confirmation link opened from the mail tab (or any later bearer-link
+ * visit) has no flag and must NOT auto-burn generation tokens.
+ */
+export const OAUTH_RESUME_KEY = "vitryna_oauth_resume";
+
+/**
+ * Conversation id carried by a login `next` path (`/new?conv=…`), or null.
+ * Pure string parsing — used by /login (set the OAuth flag, default to the
+ * signup mode, show the M8 «розмова збережена» line) and kept here next to
+ * the other cross-host handoff helpers.
+ */
+export function convFromNext(next: string | null | undefined): string | null {
+  // Path-boundary check: "/new" or "/new?…" only — a bare prefix test would
+  // also match unrelated paths like "/newsletter?conv=x" (review must-fix).
+  if (!next || !(next === "/new" || next.startsWith("/new?"))) return null;
+  const q = next.indexOf("?");
+  if (q === -1) return null;
+  const conv = new URLSearchParams(next.slice(q + 1)).get("conv");
+  return conv && conv.trim() ? conv.trim() : null;
+}
+
 export type RestorableConversation = {
   messages: readonly unknown[];
   /** Draft host — present once generation already produced a draft. */

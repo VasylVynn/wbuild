@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
+import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
 import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
 import type { ChatMsg } from "@/lib/ai/onboard";
 import { isStorageUrl, MAX_PHOTOS, mediaSchema, type SiteMedia } from "@/lib/media/media";
@@ -34,6 +35,48 @@ export type ConversationData = {
   /** Draft host, if a draft was already generated (draft-then-publish flow). */
   host?: string;
 };
+
+/** The conversation exists but is CLAIMED and the caller may not touch it:
+ *  `auth` = no session (the owner may simply be signed out), `member` = signed
+ *  in as someone who is not a member. */
+export type ConversationLocked = { locked: "auth" | "member" };
+
+/**
+ * W2 (security review must-fix): the `?conv=` link is a bearer token, so once
+ * a conversation's anchor tenant has been CLAIMED (the generate flow inserts
+ * the owner membership before any model spend), the transcript, facts, media
+ * and draft host stop being public. Before the claim (no members yet) the
+ * bearer-link phase stays open, and with auth unconfigured everything degrades
+ * open (§3.1). Verification errors fail closed.
+ */
+async function conversationAccess(
+  db: ReturnType<typeof getServiceClient>,
+  conversationId: string,
+): Promise<{ ok: true } | ({ ok: false } & ConversationLocked)> {
+  if (!isAuthConfigured()) return { ok: true }; // §3.1 degrade-open
+
+  const { data, error } = await db
+    .from("conversations")
+    .select("tenant_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (error) return { ok: false, locked: "member" }; // fail closed
+  const tenantId = (data?.tenant_id as string | null) ?? null;
+  if (!tenantId) return { ok: true }; // no anchor tenant — nothing claimable
+
+  const { data: members, error: memErr } = await db
+    .from("tenant_members")
+    .select("user_id")
+    .eq("tenant_id", tenantId);
+  if (memErr || !members) return { ok: false, locked: "member" }; // fail closed
+  if (members.length === 0) return { ok: true }; // unclaimed — bearer phase
+
+  const user = await getUser();
+  if (!user) return { ok: false, locked: "auth" };
+  return members.some((m) => m.user_id === user.id)
+    ? { ok: true }
+    : { ok: false, locked: "member" };
+}
 
 /**
  * Creates a placeholder tenant (host = null, status = demo) and a linked
@@ -104,6 +147,8 @@ export async function saveTurn(
   if (!isSupabaseConfigured()) return { ok: false };
 
   const db = getServiceClient();
+  const access = await conversationAccess(db, conversationId);
+  if (!access.ok) return { ok: false };
 
   // Message attachments are client-supplied storage URLs (composer photo
   // batches). Defense in depth: only our-bucket URLs persist (§4.8).
@@ -180,6 +225,9 @@ export async function saveMediaAction(
   };
 
   const db = getServiceClient();
+  const access = await conversationAccess(db, conversationId);
+  if (!access.ok) return { ok: false };
+
   const { data, error: readErr } = await db
     .from("conversations")
     .select("facts_state")
@@ -202,45 +250,26 @@ export async function saveMediaAction(
   return { ok: !error };
 }
 
-/**
- * Persists the DRAFT host into facts_state (draft-then-publish flow, 04 §2).
- * Merged so it survives later saveTurn writes; called by generateDraftAction
- * after the draft is generated. Best-effort, like the rest of persistence.
- */
-export async function saveDraftHost(
-  conversationId: string,
-  host: string,
-): Promise<{ ok: boolean }> {
-  if (!isSupabaseConfigured()) return { ok: false };
-  const db = getServiceClient();
-  const { data, error: readErr } = await db
-    .from("conversations")
-    .select("facts_state")
-    .eq("id", conversationId)
-    .maybeSingle();
-  if (readErr || !data) return { ok: false };
-  const fs = (data.facts_state as FactsState | null) ?? {
-    facts: {},
-    verticalId: undefined,
-    ready: false,
-  };
-  const { error } = await db
-    .from("conversations")
-    .update({ facts_state: { ...fs, host } })
-    .eq("id", conversationId);
-  return { ok: !error };
-}
+// saveDraftHost moved to lib/onboard/draft-host.ts (security review must-fix):
+// as an unauthenticated "use server" action it let any caller write an
+// arbitrary host into any conversation — the exact field the claim gate then
+// trusted as its authorization subject. Server-only now; only the generate
+// flow writes it.
 
 /**
  * Loads a persisted conversation by id. Returns null when Supabase is
- * unconfigured or the row is missing.
+ * unconfigured or the row is missing, and a `{ locked }` marker when the
+ * conversation is claimed and the caller may not read it (W2 — the transcript,
+ * facts, media and draft host must not leak to a bearer-link holder).
  */
 export async function loadConversation(
   conversationId: string,
-): Promise<ConversationData | null> {
+): Promise<ConversationData | ConversationLocked | null> {
   if (!isSupabaseConfigured()) return null;
 
   const db = getServiceClient();
+  const access = await conversationAccess(db, conversationId);
+  if (!access.ok) return { locked: access.locked };
 
   const { data, error } = await db
     .from("conversations")

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { isAuthConfigured, getAuthClient } from "@/lib/supabase/auth";
 import { ROOT_DOMAIN, isDashboardHost, publicSiteUrl } from "@/lib/config";
+import { safeNext } from "@/lib/auth/safe-next";
 
 /**
  * Auth server actions (§3.1). Sign-in/up run here (not in the browser) so the
@@ -42,11 +43,8 @@ function normalize(email: string, password: string): { email: string; password: 
   return { email: e, password };
 }
 
-/** Only ever redirect to a same-origin path — never an absolute/protocol-relative URL. */
-function safeNext(next?: string | null): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return "/sites";
-  return next;
-}
+// safeNext (same-origin redirect guard) lives in lib/auth/safe-next — ONE
+// hardened copy shared with app/app/auth/callback/route.ts.
 
 export async function signInAction(email: string, password: string, next?: string): Promise<SignInResult> {
   if (!isAuthConfigured()) return { error: "Вхід тимчасово недоступний." };
@@ -67,7 +65,18 @@ export async function signUpAction(email: string, password: string, next?: strin
   if (creds.password.length < 6) return { error: "Пароль має містити щонайменше 6 символів." };
 
   const sb = await getAuthClient();
-  const { data, error } = await sb.auth.signUp(creds);
+  // M2 (landing-chat plan §7): the confirmation email must land back on
+  // /auth/callback WITH the `next` handoff (`/new?conv=…&resume=1`), or the
+  // email branch guarantees losing the conversation. Same origin+encoding
+  // contract as signInWithGoogleAction below — GoTrue carries this URL as
+  // `redirect_to` (encoding it once more inside the email link, which is the
+  // plan's «двічі-закодований» on the wire; in code we encode exactly once,
+  // mirroring the proven OAuth path). The callback's safeNext copy unwraps it.
+  // Ops note: this URL pattern must be in the Supabase Redirect Allow List.
+  const { data, error } = await sb.auth.signUp({
+    ...creds,
+    options: { emailRedirectTo: await signupEmailRedirect(next) },
+  });
   if (error) return { error: uaError(error.message) };
 
   // "Confirm email" is ON in the project → no session yet. Ask the user to
@@ -97,6 +106,12 @@ async function appOrigin(): Promise<string> {
   const host = (await headers()).get("host") ?? "";
   if (isDashboardHost(host)) return publicSiteUrl(host);
   return publicSiteUrl(`app.${ROOT_DOMAIN}`);
+}
+
+/** The signup-confirmation landing URL (M2) — shared by signUpAction and the
+ *  resend action so the re-sent email carries the exact same handoff. */
+async function signupEmailRedirect(next?: string): Promise<string> {
+  return `${await appOrigin()}/auth/callback?next=${encodeURIComponent(safeNext(next))}`;
 }
 
 export type ResetRequestResult = { error: string } | { sent: true };
@@ -140,6 +155,49 @@ export async function signInWithGoogleAction(next?: string): Promise<OAuthResult
     return { error: "Вхід через Google зараз недоступний. Спробуйте пошту і пароль." };
   }
   redirect(data.url);
+}
+
+export type ConfirmContinueResult = { error: string } | undefined;
+
+/**
+ * M8 («Я підтвердив — продовжити»): the post-signup screen re-checks the
+ * session on click. Clicking the email link in ANOTHER TAB of the same browser
+ * writes the session cookies browser-wide (the /auth/callback exchange), so
+ * this tab sees them and can continue straight to `next`. No session yet →
+ * an honest hint (PKCE: the link only works in the browser that signed up).
+ */
+export async function confirmedContinueAction(next?: string): Promise<ConfirmContinueResult> {
+  if (!isAuthConfigured()) return { error: "Вхід тимчасово недоступний." };
+  const sb = await getAuthClient();
+  const { data, error } = await sb.auth.getUser();
+  if (error || !data.user) {
+    return {
+      error:
+        "Поки не бачу підтвердження. Відкрийте лист у цьому ж браузері, натисніть посилання — і поверніться сюди.",
+    };
+  }
+  redirect(safeNext(next));
+}
+
+export type ResendConfirmResult = { error: string } | { sent: true };
+
+/** M8: re-send the signup confirmation email — with the SAME `next` handoff. */
+export async function resendConfirmationAction(
+  email: string,
+  next?: string,
+): Promise<ResendConfirmResult> {
+  if (!isAuthConfigured()) return { error: "Реєстрація тимчасово недоступна." };
+  const e = email.trim().toLowerCase();
+  if (!e) return { error: "Введіть email." };
+
+  const sb = await getAuthClient();
+  const { error } = await sb.auth.resend({
+    type: "signup",
+    email: e,
+    options: { emailRedirectTo: await signupEmailRedirect(next) },
+  });
+  if (error) return { error: uaError(error.message) };
+  return { sent: true };
 }
 
 export type UpdatePasswordResult = { error: string } | undefined;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appUrl, shouldRestoreConversation } from "./embed-helpers";
+import { appUrl, convFromNext, shouldRestoreConversation } from "./embed-helpers";
 
 /**
  * ROOT_DOMAIN in the vitest env is the config default (lvh.me:3000 — no
@@ -24,6 +24,29 @@ describe("appUrl", () => {
       "https://app.3minsite.com.ua/sites",
     );
     expect(appUrl("http://other.example/x")).toBe("http://other.example/x");
+  });
+});
+
+describe("convFromNext", () => {
+  it("extracts the conversation id from a /new handoff path", () => {
+    expect(convFromNext("/new?conv=abc-123&resume=1")).toBe("abc-123");
+    expect(convFromNext("/new?conv=abc-123")).toBe("abc-123");
+  });
+
+  it("returns null for non-/new paths, missing or empty conv", () => {
+    expect(convFromNext(null)).toBe(null);
+    expect(convFromNext(undefined)).toBe(null);
+    expect(convFromNext("/sites")).toBe(null);
+    expect(convFromNext("/new")).toBe(null);
+    expect(convFromNext("/new?resume=1")).toBe(null);
+    expect(convFromNext("/new?conv=")).toBe(null);
+    expect(convFromNext("/edit/x?conv=abc")).toBe(null);
+  });
+
+  it("requires a /new path boundary — sibling paths never match", () => {
+    expect(convFromNext("/newsletter?conv=abc")).toBe(null);
+    expect(convFromNext("/news?conv=abc")).toBe(null);
+    expect(convFromNext("/new/sub?conv=abc")).toBe(null);
   });
 });
 
