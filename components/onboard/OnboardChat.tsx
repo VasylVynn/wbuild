@@ -18,6 +18,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useSmoothText } from "@/components/useSmoothText";
 import type { ChatMsg } from "@/lib/ai/onboard";
 import { hasContactChannel } from "@/lib/onboard/contact-channel";
@@ -2070,12 +2071,12 @@ export function OnboardChat({
                 same-origin exit back to the landing (the conversation is done
                 and its localStorage key already cleared). */}
             {embedded && (
-              <a
+              <Link
                 href="/"
                 className="flex min-h-11 items-center justify-center text-[15px] font-bold text-ink-muted transition-colors hover:text-ink"
               >
                 На головну
-              </a>
+              </Link>
             )}
           </div>
         </div>
