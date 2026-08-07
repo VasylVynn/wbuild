@@ -7,7 +7,6 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
@@ -17,6 +16,7 @@ import {
   Pencil,
   RotateCcw,
   Sparkles,
+  X,
 } from "lucide-react";
 import { useSmoothText } from "@/components/useSmoothText";
 import type { ChatMsg } from "@/lib/ai/onboard";
@@ -43,6 +43,7 @@ import type { BusinessFacts } from "@/lib/verticals/schema";
 import { MAX_PHOTOS, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
 import { processImage } from "@/lib/media/client-image";
 import { Button, Card, ConfirmDialog } from "@/components/ui";
+import { appUrl, shouldRestoreConversation } from "@/components/onboard/embed-helpers";
 import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 import DomainStep from "@/components/onboard/DomainStep";
 import { pixelTrack } from "@/lib/analytics/pixel";
@@ -404,7 +405,30 @@ const TelegramMark = ({ size = 34 }: { size?: number }) => (
 // Main component
 // ---------------------------------------------------------------------------
 
-export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boolean }) {
+/**
+ * Embedded-mode contract (W1, landing-chat-first plan §3.1/M10):
+ * - `embedded` (default false): renders a compact, height-bounded chat CARD
+ *   (for the landing hero) instead of the full-viewport page. The first
+ *   composer focus or the first send expands the card into a fullscreen
+ *   same-origin OVERLAY — position:fixed, dvh-based, body scroll locked, no
+ *   navigation (navigation would drop the localStorage conversation state).
+ *   The close (✕) button collapses back to the card with all state intact.
+ *   Non-chat phases (gate / generating / preview / done / error) always render
+ *   inside the overlay; the side live-preview panel is full-page mode only.
+ * - `source`: chat_start funnel segmentation (plan §3.4) — defaults to
+ *   "landing" when embedded, "new-page" otherwise.
+ * Full-page mode keeps its exact W0/V2 rendering; cross-host links are
+ * absolute app-host URLs (M3) — one code path, correct on both hosts.
+ */
+export function OnboardChat({
+  igImportEnabled = false,
+  embedded = false,
+  source,
+}: {
+  igImportEnabled?: boolean;
+  embedded?: boolean;
+  source?: "landing" | "new-page";
+}) {
   // --- Chat phase state ---
   const [messages, setMessages] = useState<ChatMsg[]>([igImportEnabled ? IG_GREETING : GREETING]);
   const [facts, setFacts] = useState<Partial<BusinessFacts>>({});
@@ -443,6 +467,14 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // facts/media applyResult just set, so runGenerate reads fresh state — a
   // direct call from send()'s closure would generate from the pre-turn facts.
   const [autoGenerate, setAutoGenerate] = useState(false);
+  // Embedded overlay (M10): false = collapsed hero card. Expanded by the first
+  // composer focus / first send, forced open while a non-chat phase needs the
+  // overlay, collapsed only by the explicit ✕. The ref mirror lets the
+  // post-turn auto-refocus check "is the overlay still open?" without stale
+  // closures — a programmatic focus must never re-open a just-closed overlay.
+  const [expanded, setExpanded] = useState(false);
+  const expandedRef = useRef(expanded);
+  expandedRef.current = expanded;
 
   // --- Media (logo + photos) — optional step before generation ---
   const [media, setMedia] = useState<SiteMedia>({ photos: [] });
@@ -524,15 +556,26 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     return () => cancelAnimationFrame(raf);
   }, [loading]);
 
-  // On mount: resume a previously persisted conversation from localStorage
+  // On mount: resume a previously persisted conversation. `?conv=` (the
+  // login-gate handoff, §3.2/M3) wins over localStorage — localStorage is
+  // per-ORIGIN, so an id written on the marketing root never reaches
+  // app./new by itself; the gate carries it across in the login `next` URL.
   useEffect(() => {
-    const stored = localStorage.getItem("vitryna_conv_id");
+    const fromUrl = embedded
+      ? null
+      : new URLSearchParams(window.location.search).get("conv");
+    const stored = fromUrl ?? localStorage.getItem("vitryna_conv_id");
     if (!stored) return;
 
     loadConversation(stored).then((data) => {
-      // Only restore when there is actual back-and-forth (>1 means user spoke)
-      if (!data || data.messages.length <= 1) return;
+      // Restore hygiene (M6): real back-and-forth only (>1 means user spoke);
+      // embedded additionally skips conversations that already minted a draft
+      // (they belong to the app-host preview flow — see the helper).
+      if (!data || !shouldRestoreConversation(data, embedded)) return;
       convIdRef.current = stored;
+      // Adopt the handed-off conversation on THIS origin so a later reload
+      // (without the query string) still resumes it.
+      if (fromUrl) localStorage.setItem("vitryna_conv_id", stored);
       setMessages(data.messages);
       setFacts(data.facts as Partial<BusinessFacts>);
       setVerticalId(data.verticalId);
@@ -544,7 +587,35 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       // The starter chip belongs to a FRESH conversation only (codex review).
       setQuickReplies([]);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only; `embedded` never changes at runtime
   }, []);
+
+  // Embedded (M10/§5): every non-chat screen lives in the fullscreen overlay —
+  // the auth gate renders INSIDE it (not a redirect), the preview occupies it —
+  // and returning to the chat afterwards must not collapse mid-flow.
+  useEffect(() => {
+    if (embedded && (phase !== "chat" || inlineGen)) setExpanded(true);
+  }, [embedded, phase, inlineGen]);
+
+  // Overlay open → lock body scroll (M10): the landing behind must not move;
+  // the chat column is the single scrollable. Restores the previous value on
+  // close/unmount so the landing keeps whatever it had.
+  const overlayActive = embedded && (expanded || phase !== "chat");
+  useEffect(() => {
+    if (!overlayActive) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [overlayActive]);
+
+  // M6: a finished conversation must never restore — on ANY host. Publish
+  // already clears the key inline; this phase-driven clear covers every other
+  // path into "done".
+  useEffect(() => {
+    if (phase === "done") localStorage.removeItem("vitryna_conv_id");
+  }, [phase]);
 
   // Generation progress clock: NO real per-step signal exists (generateDraftAction
   // is one awaited server action), so this ticks a plain elapsed-seconds counter
@@ -699,7 +770,10 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     setAutoGenerate(false);
     setDraft(null);
     setResetOpen(false);
-    setTimeout(() => inputRef.current?.focus(), 50);
+    // Same guard as send()'s refocus: never re-open a collapsed embedded card.
+    setTimeout(() => {
+      if (!embedded || expandedRef.current) inputRef.current?.focus();
+    }, 50);
   };
 
   // Core send — used by the input row AND by quick-reply chips. Carries the
@@ -716,12 +790,14 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     setQuickReplies([]);
     setActiveTools([]);
     setLoading(true);
+    // M10: the first send from the collapsed hero card opens the overlay.
+    if (embedded) setExpanded(true);
 
     // Lazily create the DB row BEFORE any optimistic UI (plan review): photo
     // uploads scope by conversationId, so a failed start must leave the
     // composer intact (text + attachments) instead of a dangling bubble.
     if (convIdRef.current === null) {
-      const started = await startConversation();
+      const started = await startConversation(source ?? (embedded ? "landing" : "new-page"));
       if (started) {
         convIdRef.current = started.conversationId;
         localStorage.setItem("vitryna_conv_id", started.conversationId);
@@ -892,8 +968,13 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       setTyping(false);
       setBatchCard(null);
       setActiveTools([]);
-      // Return focus to input so the owner can keep typing
-      setTimeout(() => inputRef.current?.focus(), 50);
+      // Return focus to input so the owner can keep typing. Embedded: only
+      // while the overlay is still open — a programmatic focus on the
+      // collapsed card would trip the focus-expands rule (M10) and re-open
+      // what the user just closed.
+      setTimeout(() => {
+        if (!embedded || expandedRef.current) inputRef.current?.focus();
+      }, 50);
     }
   };
 
@@ -1002,8 +1083,13 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       // ACTUALLY happen. Persisted via appendAssistant, so the restored
       // conversation after sign-in still points at the button.
       if (s.authOn && !s.loggedIn) {
+        // Honesty (M5): with no persisted conversation (rate-limited /
+        // unconfigured startConversation) NOTHING carries over — say so
+        // instead of promising a resume that cannot happen.
         appendAssistant(
-          "Щоб зберегти сайт за вами, спершу увійдіть. Після входу натисніть «Створити сайт» — і я зберу чернетку.",
+          convIdRef.current
+            ? "Щоб зберегти сайт за вами, спершу увійдіть. Після входу натисніть «Створити сайт» — і я зберу чернетку."
+            : "Щоб створити сайт, спершу увійдіть. Цю розмову не вдалося зберегти, тож після входу я поставлю кілька коротких питань ще раз.",
         );
         setPhase("gate");
         return;
@@ -1301,13 +1387,38 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     ? quickReplies.filter((q) => q.trim().toLowerCase() !== "створити сайт")
     : quickReplies;
 
+  // Outside the chat phase, every EMBEDDED screen renders inside the same
+  // fullscreen same-origin overlay (M10): the landing never navigates (that
+  // would drop conversation state) and the gate/preview/done screens occupy
+  // the overlay instead of taking over the page. The inner content keeps its
+  // full-page classes — min-h-[100dvh] centers short screens and lets tall
+  // ones scroll inside the overlay (no clipped tops, no nested traps). Full
+  // mode returns the node untouched.
+  const inEmbeddedOverlay = (node: ReactNode) =>
+    embedded ? (
+      <div className={`fixed inset-0 z-[100] overflow-y-auto overscroll-contain ${rootBase}`}>
+        {node}
+      </div>
+    ) : (
+      <>{node}</>
+    );
+
   // ---------------------------------------------------------------------------
   // Render — chat phase (design B: merged progress chips + quick-reply chips)
   // ---------------------------------------------------------------------------
 
   if (phase === "chat") {
+    // Shell per mode (W1): full page keeps the exact viewport grid; embedded
+    // is a height-bounded hero card that expands into the fullscreen overlay
+    // (M10). Same element tree in all three shells, so React keeps the DOM —
+    // composer text, chat scroll and input focus survive collapse/expand.
+    const shellClass = !embedded
+      ? `h-[100dvh] ${rootBase} lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(400px,32%)]`
+      : expanded
+        ? `fixed inset-0 z-[100] flex h-[100dvh] flex-col ${rootBase}`
+        : `relative flex h-[min(560px,72dvh)] flex-col overflow-hidden rounded-[24px] border border-line shadow-card ${rootBase}`;
     return (
-      <div className={`h-[100dvh] ${rootBase} lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(400px,32%)]`}>
+      <div className={shellClass}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <ConfirmDialog
           open={resetOpen}
@@ -1322,13 +1433,18 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         {/* Header: honey «3» avatar + Помічник + status */}
         <header className="border-b border-line bg-surface/85 backdrop-blur">
           <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-2.5">
-            <Link
-              href="/"
-              aria-label="Назад"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
-            >
-              <ArrowLeft size={20} />
-            </Link>
+            {/* Back to the dashboard — absolute app-host URL (M3). Hidden in
+                embedded mode: the chat already sits ON the landing, and a
+                cross-host hop would drop the hero context. */}
+            {!embedded && (
+              <a
+                href={appUrl("/")}
+                aria-label="Назад"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+              >
+                <ArrowLeft size={20} />
+              </a>
+            )}
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-honey font-brand text-[19px] font-semibold text-honey-text">
               3
             </span>
@@ -1354,6 +1470,19 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
                 <RotateCcw size={19} />
               </button>
             )}
+            {/* Collapse the overlay back to the hero card (M10) — state stays
+                intact, a running turn keeps streaming into the card. Takes
+                ml-auto only when the reset button (which owns it) is absent. */}
+            {embedded && expanded && (
+              <button
+                onClick={() => setExpanded(false)}
+                aria-label="Згорнути чат"
+                title="Згорнути чат"
+                className={`${messages.length > 1 ? "" : "ml-auto "}flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-sunken hover:text-ink`}
+              >
+                <X size={20} />
+              </button>
+            )}
           </div>
           {/* The questionnaire progress bar + chips are GONE (W0, plan §0.5):
               they read as a form and dictated the question script. The
@@ -1361,8 +1490,12 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               «видима робота» signal now. */}
         </header>
 
-        {/* Messages */}
-        <div ref={chatScrollRef} className="flex-1 overflow-y-auto">
+        {/* Messages. overscroll-contain in embedded mode: the overlay's chat
+            column must not chain its scroll into the landing (M10). */}
+        <div
+          ref={chatScrollRef}
+          className={embedded ? "flex-1 overflow-y-auto overscroll-contain" : "flex-1 overflow-y-auto"}
+        >
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-3.5 px-4 py-6">
             {/* Promise chip only while the conversation is still warming up
                 (C3): once the agent is ready to generate, the CTA/signal is
@@ -1616,6 +1749,9 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
+              // M10: the first focus on the collapsed hero card expands the
+              // chat into the fullscreen overlay — same origin, no navigation.
+              onFocus={embedded ? () => setExpanded(true) : undefined}
               disabled={loading}
               placeholder={confirmed ? "Або допишіть щось…" : "Написати…"}
               autoComplete="off"
@@ -1638,13 +1774,17 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         </footer>
         </div>
 
-        <SitePreviewPanel
-          facts={facts}
-          verticalId={verticalId}
-          photosCount={media.photos.length}
-          hasLogo={!!media.logoUrl}
-          className="hidden lg:flex"
-        />
+        {/* Live side preview belongs to the full-page mode only (plan §3.1) —
+            the landing hero is a single compact chat column. */}
+        {!embedded && (
+          <SitePreviewPanel
+            facts={facts}
+            verticalId={verticalId}
+            photosCount={media.photos.length}
+            hasLogo={!!media.logoUrl}
+            className="hidden lg:flex"
+          />
+        )}
       </div>
     );
   }
@@ -1659,7 +1799,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // ---------------------------------------------------------------------------
 
   if (phase === "preview" && draft) {
-    return (
+    return inEmbeddedOverlay(
       <div className={`flex min-h-[100dvh] flex-col ${rootBase}`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <header className="border-b border-line bg-surface/85 backdrop-blur">
@@ -1698,7 +1838,9 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               </span>
             </div>
             <iframe
-              src={draft.previewUrl}
+              // Absolute app-host URL (M3): the editor frame lives on app.<root>;
+              // a relative src from the landing would 404 on the marketing host.
+              src={appUrl(draft.previewUrl)}
               title="Попередній перегляд сайту"
               className="min-h-[420px] w-full flex-1 rounded-[16px] border border-line bg-canvas"
             />
@@ -1714,12 +1856,12 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               {loading ? "Публікую…" : "Опублікувати сайт"}
             </Button>
             <div className="flex gap-2">
-              <Link
-                href={draft.editUrl}
+              <a
+                href={appUrl(draft.editUrl)}
                 className="flex h-[52px] flex-1 items-center justify-center gap-2 rounded-[16px] border border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
               >
                 <Pencil size={17} /> Відредагувати
-              </Link>
+              </a>
               <Button
                 variant="quiet"
                 size="md"
@@ -1741,7 +1883,18 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // ---------------------------------------------------------------------------
 
   if (phase === "gate") {
-    return (
+    // Embedded: the gate renders INSIDE the overlay (plan §5) — no redirect;
+    // the honest message was already persisted into the chat by
+    // handleCreateSite, and «Назад до розмови» returns to it.
+    // The ?conv= handoff (§3.2/M3): localStorage is per-origin, so the
+    // conversation id must ride the login `next` URL to reach app./new.
+    // Without a persisted conversation there is nothing to hand off — the
+    // copy must not promise a resume.
+    const gateConvId = convIdRef.current;
+    const gateNext = gateConvId
+      ? `/new?conv=${encodeURIComponent(gateConvId)}&resume=1`
+      : "/new";
+    return inEmbeddedOverlay(
       <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 ${rootBase}`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <div className="animate-rise flex w-full max-w-md flex-col items-center text-center">
@@ -1752,14 +1905,18 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
             Створіть акаунт, щоб зберегти ваш сайт
           </h2>
           <p className="mt-3 text-[17px] leading-relaxed text-ink-muted">
-            Розмова збережеться — ви продовжите з того самого місця
+            {gateConvId
+              ? "Розмова збережеться — ви продовжите з того самого місця"
+              : "Розмову не вдалося зберегти — після входу почнете з коротких питань"}
           </p>
-          <Link
-            href="/login?next=/new"
+          {/* Absolute app-host URL (M3) — /login does not exist on the
+              marketing root. ?conv= carries the conversation cross-origin. */}
+          <a
+            href={appUrl(`/login?next=${encodeURIComponent(gateNext)}`)}
             className="mt-8 flex min-h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-brand px-7 text-[18px] font-bold text-white shadow-[0_10px_28px_rgba(51,41,28,0.22)] transition-colors hover:bg-brand-hover"
           >
             Увійти або зареєструватися
-          </Link>
+          </a>
           <Button variant="quiet" size="md" className="mt-2" onClick={() => setPhase("chat")}>
             <ArrowLeft size={17} /> Назад до розмови
           </Button>
@@ -1779,7 +1936,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     // early, never freezing.
     const { stepIndex, msgIndex, barPct } = genProgress(genElapsed, genStageStep);
 
-    return (
+    return inEmbeddedOverlay(
       <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-8 ${rootBase}`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <div className="flex w-full max-w-md flex-col items-center">
@@ -1834,7 +1991,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     } catch {
       /* keep "" — the edit link just doesn't render */
     }
-    return (
+    return inEmbeddedOverlay(
       <div className={`relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 ${rootBase}`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <Confetti />
@@ -1885,30 +2042,41 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
                 Підключіть Telegram, щоб заявки від клієнтів приходили прямо вам
               </div>
             </div>
-            <Link
-              href="/sites"
+            <a
+              href={appUrl("/sites")}
               className="flex min-h-11 shrink-0 items-center justify-center rounded-full bg-tg px-5 text-[15px] font-bold text-white transition-colors hover:bg-tg-dark"
             >
               Підключити
-            </Link>
+            </a>
           </div>
 
           {/* Exits: the success screen must never be a dead end. */}
           <div className="mt-6 flex w-full flex-col gap-2">
             {editHost && (
-              <Link
-                href={`/edit/${editHost}`}
+              <a
+                href={appUrl(`/edit/${editHost}`)}
                 className="flex h-[54px] w-full items-center justify-center gap-2 rounded-[16px] border border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
               >
                 <Pencil size={17} /> Редагувати сайт
-              </Link>
+              </a>
             )}
-            <Link
-              href="/sites"
+            <a
+              href={appUrl("/sites")}
               className="flex min-h-11 items-center justify-center text-[15px] font-bold text-ink-muted transition-colors hover:text-ink"
             >
               Мої сайти →
-            </Link>
+            </a>
+            {/* Embedded: every link above is cross-host — give the overlay a
+                same-origin exit back to the landing (the conversation is done
+                and its localStorage key already cleared). */}
+            {embedded && (
+              <a
+                href="/"
+                className="flex min-h-11 items-center justify-center text-[15px] font-bold text-ink-muted transition-colors hover:text-ink"
+              >
+                На головну
+              </a>
+            )}
           </div>
         </div>
       </div>
@@ -1919,7 +2087,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // Render — error
   // ---------------------------------------------------------------------------
 
-  return (
+  return inEmbeddedOverlay(
     <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 ${rootBase}`}>
       <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
       <div className="animate-rise flex w-full max-w-md flex-col items-center text-center">
@@ -1932,6 +2100,13 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
         </p>
         <Button size="lg" className="mt-6" onClick={() => void (draft ? handlePublish() : runGenerate())}>
           Спробувати ще раз
+        </Button>
+        {/* Never a dead end (plan should-fix): in embedded mode this screen
+            covers the whole landing with body scroll locked — without an exit
+            the only escape is a full reload. Returning to the chat keeps the
+            conversation intact. */}
+        <Button variant="quiet" size="md" className="mt-2" onClick={() => setPhase("chat")}>
+          <ArrowLeft size={17} /> Назад до розмови
         </Button>
       </div>
     </div>

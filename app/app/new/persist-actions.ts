@@ -40,7 +40,11 @@ export type ConversationData = {
  * conversations row. Returns null silently when Supabase is unconfigured so
  * the chat keeps working without persistence.
  */
-export async function startConversation(): Promise<{ conversationId: string } | null> {
+export async function startConversation(
+  // Funnel segmentation only (plan §3.4): which surface started the chat.
+  // Untrusted client input — collapsed to the known values below.
+  source?: "landing" | "new-page",
+): Promise<{ conversationId: string } | null> {
   if (!isSupabaseConfigured()) return null;
 
   // Caps placeholder-row creation per IP. Callers already tolerate null (the
@@ -69,7 +73,13 @@ export async function startConversation(): Promise<{ conversationId: string } | 
 
   // Top of the funnel: this row is created on the first real user message, so it
   // counts people who started talking, not people who loaded /new.
-  await trackFunnel("chat_start", { tenantId: tenant.id, conversationId: conv.id });
+  // meta.source segments landing-hero chats vs the app./new page (plan §3.4).
+  const src = source === "landing" ? "landing" : "new-page";
+  await trackFunnel("chat_start", {
+    tenantId: tenant.id,
+    conversationId: conv.id,
+    meta: { source: src },
+  });
 
   return { conversationId: conv.id };
 }

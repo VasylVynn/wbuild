@@ -1,70 +1,67 @@
 import Image from "next/image";
-import { ArrowRight, Phone, Send, Sparkles, Star } from "lucide-react";
+import { Phone, Sparkles, Star } from "lucide-react";
 import { TelegramCard } from "./TelegramCard";
-import { CtaLink } from "./CtaLink";
+import { HeroChat } from "./HeroChat";
 
 /**
- * Hero — sells the FUNNEL, not the site: «Клієнти з інтернету — прямо у ваш
- * Telegram». Left column carries the promise, the ₴999 offer and the only
- * primary CTA; right column shows the two ends of it at once — a finished phone
- * site, and the Telegram ping the owner gets when someone fills its form.
+ * Hero — the chat IS the CTA (landing-chat-first plan §3.4, W1). One text h1
+ * carries the promise (SEO), the embedded OnboardChat sits directly under it:
+ * on mobile the chat wins the viewport (ad traffic is mobile), so the subcopy
+ * hides and the phone mock is desktop-only. The old «Створити сайт» button is
+ * gone — the first message in the chat replaced it; header CTAs scroll here
+ * via the #chat anchor.
+ *
+ * Desktop keeps the phone mock + Telegram card in a side column: it shows the
+ * two ends of the funnel (a finished site, the owner's Telegram ping) beside
+ * the conversation that produces them. The old fake chat-bubble decorations
+ * were dropped — a real chat renders right next to them.
  *
  * Price copy must stay honest about WHERE the paywall sits (owner decision
- * 2026-08-06): building AND publishing on our subdomain are free, ₴999 buys the
- * owner's own domain plus a year of running it.
+ * 2026-08-06): building AND publishing on our subdomain are free, ₴999 buys
+ * the owner's own domain plus a year of running it.
  */
-export function Hero({ newUrl }: { newUrl: string }) {
+export function Hero({ igImportEnabled }: { igImportEnabled: boolean }) {
   return (
-    <section className="relative overflow-hidden pt-28 pb-10 sm:pt-36 sm:pb-16">
+    <section className="relative overflow-hidden pt-20 pb-10 sm:pt-28 sm:pb-16">
       <div
         aria-hidden
         className="pointer-events-none absolute -top-24 left-1/2 h-[36rem] w-[36rem] -translate-x-1/2 rounded-full opacity-50 blur-3xl"
         style={{ background: "radial-gradient(circle, var(--color-honey) 0%, transparent 65%)" }}
       />
 
-      <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2">
+      <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-start gap-10 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:gap-14">
         <div className="text-center lg:text-left">
-          <span className="animate-rise inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-[12px] font-semibold text-ink-muted shadow-card">
+          {/* Badge is sm+ only — on phones every vertical px above the chat
+              delays the real CTA; the claims strip below the chat carries the
+              same free/999 message. */}
+          <span className="hidden animate-rise items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-[12px] font-semibold text-ink-muted shadow-card sm:inline-flex">
             <Sparkles size={14} className="text-honey-text" />
             Сайт безкоштовно · Власний домен — 999 грн/рік
           </span>
 
-          <h1 className="animate-rise mt-5 text-balance font-brand text-[34px] font-semibold leading-[1.08] tracking-tight sm:text-[44px] lg:text-[54px]">
+          <h1 className="animate-rise text-balance font-brand text-[30px] font-semibold leading-[1.1] tracking-tight sm:mt-5 sm:text-[40px] lg:text-[46px]">
             Клієнти з інтернету — прямо у ваш{" "}
             <span className="relative whitespace-nowrap">
               <span className="relative z-10">Telegram</span>
               <span
                 aria-hidden
-                className="absolute inset-x-0 bottom-1 z-0 h-3.5 rounded-full bg-honey sm:h-4"
+                className="absolute inset-x-0 bottom-1 z-0 h-3 rounded-full bg-honey sm:h-3.5"
               />
             </span>
           </h1>
 
-          <p className="animate-rise mx-auto mt-5 max-w-md text-pretty text-[17px] leading-relaxed text-ink-muted sm:text-[19px] lg:mx-0">
-            Розкажіть про свою справу — помічник збере сайт, а заявки від клієнтів прилетять прямо у
-            ваш месенджер. Сайт і публікація —{" "}
-            <span className="font-semibold text-ink">безкоштовно</span>. Власний домен —{" "}
-            <span className="font-semibold text-ink">999 грн на рік</span>.
+          <p className="mx-auto mt-4 hidden max-w-md text-pretty text-[17px] leading-relaxed text-ink-muted sm:block sm:text-[18px] lg:mx-0">
+            Розкажіть про свою справу прямо тут — помічник збере сайт, а заявки від клієнтів
+            прилетять у ваш месенджер.
           </p>
 
-          <div className="animate-rise mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
-            <CtaLink
-              href={newUrl}
-              placement="hero"
-              className="group inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full bg-brand px-7 font-ui text-[16px] font-bold text-white transition-colors hover:bg-brand-hover sm:w-auto"
-            >
-              Створити сайт
-              <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
-            </CtaLink>
-            <a
-              href="#examples"
-              className="inline-flex min-h-13 w-full items-center justify-center rounded-full border-[1.5px] border-line-strong bg-surface px-7 font-ui text-[16px] font-semibold text-ink transition-colors hover:bg-sunken sm:w-auto"
-            >
-              Подивитись приклади
-            </a>
+          {/* The chat replaces the CTA buttons (§3.4). id="chat" is the anchor
+              the header CTAs scroll to; scroll-mt offsets the fixed header. */}
+          <div id="chat" className="mt-4 scroll-mt-24 text-left sm:mt-6 lg:max-w-xl">
+            <HeroChat igImportEnabled={igImportEnabled} />
           </div>
 
-          <div className="animate-rise mt-6 flex flex-wrap items-center justify-center gap-4 text-[13px] text-ink-muted lg:justify-start">
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[13px] text-ink-muted lg:justify-start">
             {["Публікація безкоштовна", "Власний домен — 999 грн/рік", "Без коду"].map((claim) => (
               <span key={claim} className="flex items-center gap-1.5">
                 <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-honey" />
@@ -74,8 +71,11 @@ export function Hero({ newUrl }: { newUrl: string }) {
           </div>
         </div>
 
-        <div className="relative mx-auto w-full max-w-sm">
-          <div className="animate-ui-float relative mx-auto w-[17rem] sm:w-[19rem]">
+        {/* Desktop-only proof column: the finished phone site + the Telegram
+            ping. On mobile the chat owns the viewport — the Examples section
+            below carries the visual proof instead. */}
+        <div className="relative hidden lg:block">
+          <div className="animate-ui-float relative mx-auto w-[17rem]">
             <div className="relative rounded-[2.75rem] border-[6px] border-ink bg-ink shadow-[0_40px_80px_-20px_rgba(60,40,10,0.35)]">
               <div
                 aria-hidden
@@ -85,21 +85,9 @@ export function Hero({ newUrl }: { newUrl: string }) {
                 <PhoneSitePreview />
               </div>
             </div>
-
-            {/* The conversation that produced the site above. */}
-            <div className="absolute -left-6 top-24 hidden w-44 rotate-[-4deg] rounded-2xl rounded-bl-sm border border-line bg-surface p-3 shadow-card sm:block">
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold text-honey-text">
-                <Sparkles size={12} /> Помічник
-              </div>
-              <p className="mt-1 text-[11px] leading-snug text-ink">Як називається ваша справа?</p>
-            </div>
-            <div className="absolute -right-4 top-44 hidden w-40 rotate-[3deg] items-center gap-2 rounded-2xl rounded-br-sm bg-brand p-3 text-white shadow-card sm:flex">
-              <p className="text-[11px] leading-snug">Квіти від Олени 🌷</p>
-              <Send size={12} className="shrink-0 opacity-70" />
-            </div>
           </div>
 
-          <div className="absolute -bottom-4 left-1/2 w-64 -translate-x-1/2 sm:-right-8 sm:left-auto sm:bottom-8 sm:translate-x-0">
+          <div className="absolute -bottom-4 right-0 w-64">
             <TelegramCard compact />
           </div>
         </div>
@@ -129,7 +117,6 @@ function PhoneSitePreview() {
           width={620}
           height={420}
           className="h-40 w-full object-cover"
-          priority
         />
         <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-4">

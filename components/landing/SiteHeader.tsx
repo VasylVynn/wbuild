@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Logo } from "./Logo";
-import { CtaLink } from "./CtaLink";
+import { phCapture } from "@/components/analytics/PostHogProvider";
 
 /**
  * Marketing top bar: transparent over the hero, then a hairline + blurred
- * canvas once the page scrolls. Anchors only — the two real destinations
- * (`newUrl`, `loginUrl`) live on the dashboard host and are resolved on the
- * server, so this component never touches lib/config.
+ * canvas once the page scrolls. «Створити сайт» no longer leaves for app./new —
+ * the chat in the hero IS the CTA (landing-chat-first plan §3.4), so both CTA
+ * buttons scroll to the #chat anchor. «Увійти» stays an absolute app-host link
+ * (`loginUrl`), resolved on the server so this component never touches
+ * lib/config.
  */
 const nav = [
   { label: "Як це працює", href: "#how" },
@@ -18,7 +20,7 @@ const nav = [
   { label: "Питання", href: "#faq" },
 ];
 
-export function SiteHeader({ newUrl, loginUrl }: { newUrl: string; loginUrl: string }) {
+export function SiteHeader({ loginUrl }: { loginUrl: string }) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -57,13 +59,13 @@ export function SiteHeader({ newUrl, loginUrl }: { newUrl: string; loginUrl: str
           >
             Увійти
           </a>
-          <CtaLink
-            href={newUrl}
-            placement="header"
+          <a
+            href="#chat"
+            onClick={() => phCapture("ui_landing_cta_click", { placement: "header" })}
             className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand px-5 font-ui text-[15px] font-semibold text-white transition-colors hover:bg-brand-hover"
           >
             Створити сайт
-          </CtaLink>
+          </a>
         </div>
 
         <button
@@ -98,13 +100,18 @@ export function SiteHeader({ newUrl, loginUrl }: { newUrl: string; loginUrl: str
             >
               Увійти
             </a>
-            <CtaLink
-              href={newUrl}
-              placement="header_mobile"
+            <a
+              href="#chat"
+              onClick={() => {
+                // Close the menu first — an in-page anchor keeps us on the
+                // landing, and an open menu would cover the chat it scrolled to.
+                setOpen(false);
+                phCapture("ui_landing_cta_click", { placement: "header_mobile" });
+              }}
               className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-brand font-ui text-[16px] font-semibold text-white"
             >
               Створити сайт
-            </CtaLink>
+            </a>
           </div>
         </div>
       )}
