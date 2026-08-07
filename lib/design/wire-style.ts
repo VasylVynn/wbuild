@@ -172,7 +172,7 @@ ${tsx}
     // budget (150s): the client default of 120s was firing FIRST and starved
     // the widened stage budget (measured live: "Request timed out" at 120.0s
     // on the post-V3 prompt, which crosses 120s routinely).
-  }, { signal: opts.signal, maxRetries: 0, timeout: 145_000 });
+  }, { signal: opts.signal, maxRetries: 0, timeout: 160_000 });
 
   const text = res.content
     .map((b) => (b.type === "text" ? b.text : ""))
