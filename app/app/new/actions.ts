@@ -2,20 +2,17 @@
 
 import { headers } from "next/headers";
 import { onboardTurn, type ChatMsg, type OnboardTurnResult } from "@/lib/ai/onboard";
-import { uniqueSubdomain } from "@/lib/tenant/subdomain";
-import { generateDraft, publishDraft } from "@/lib/site/publish";
-import { classifyVertical } from "@/lib/verticals/registry";
-import { buildDossierForConversation } from "@/lib/dossier";
-import { getLatestSnapshot } from "@/lib/ig/snapshots";
+import { publishDraft } from "@/lib/site/publish";
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
 import { requireMember } from "@/lib/tenant/membership";
-import { sanitizeMedia, type SiteMedia } from "@/lib/media/media";
-import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
+import type { SiteMedia } from "@/lib/media/media";
+import type { BusinessFacts } from "@/lib/verticals/schema";
+import { runGenerateFlow } from "@/lib/onboard/generate-flow";
+import type { GenerateDraftResult } from "@/lib/onboard/generate-flow";
 import { trackFunnel } from "@/lib/analytics/funnel";
 import { createLogger } from "@/lib/log";
-import { saveDraftHost } from "./persist-actions";
 
 const log = createLogger("onboard-actions");
 
@@ -72,167 +69,26 @@ export async function sessionStateAction(): Promise<{ authOn: boolean; loggedIn:
   return { authOn: true, loggedIn: Boolean(user) };
 }
 
-/** Strip onboarding-flow flags (plan A5) — never business facts, never generated. */
-function toBusinessFacts(parsed: BusinessFacts): BusinessFacts {
-  const bizFacts: BusinessFacts = { ...parsed };
-  delete bizFacts.hasLogo;
-  delete bizFacts.hasPhotos;
-  if (bizFacts.services) bizFacts.services = bizFacts.services.filter((s) => s.name.trim());
-  return bizFacts;
-}
-
-export type GenerateDraftResult =
-  | { ok: true; host: string; previewUrl: string; editUrl: string }
-  | { ok: false; error: string; authRequired?: true };
+// NOTE: no `export type { GenerateDraftResult }` here — a "use server" module
+// registers every export as a server action, and Turbopack leaves a runtime
+// reference for the re-export (build-time ReferenceError). The type lives in
+// lib/onboard/generate-flow.ts; clients type-import it from there.
 
 /**
- * Refactor 04 §2/§4: confirmed facts → generate a DRAFT (no publish) and return
- * a preview. Generation moved earlier (to "ready") so the owner confirms a real
- * site. The draft preview is the authed editor frame, so this also assigns
- * ownership + re-links the conversation now (both were at finalize before).
+ * Non-stream fallback for draft generation (V2, spec §7): the primary
+ * transport is POST /api/generate (SSE — stage events, preview at s3), and the
+ * whole flow (facts backstop, auth gate, onboard_generate limit, host
+ * reuse/mint, pipeline, ownership + conversation re-link, saveDraftHost,
+ * funnel) lives in lib/onboard/generate-flow.ts, shared by both. This action
+ * stays signature-identical for the client's fallback when the stream fails.
  */
 export async function generateDraftAction(
-  // Partial since W0 (plan C7): city/phone are no longer required inputs — the
-  // backstop below checks name + contact channel and bridges the rest.
   facts: Partial<BusinessFacts>,
   verticalId?: string,
   media?: SiteMedia,
   conversationId?: string,
 ): Promise<GenerateDraftResult> {
-  // Server-side backstop (adversarial review): a bypassed client must not reach
-  // generation with a hollow facts object. W0 (plan C7): the requirement is
-  // businessName + ANY contact channel (phone / telegram / instagram / viber) —
-  // a phone-less site with IG-direct as the contact is legitimate (lead_form is
-  // force-injected regardless, invariant 8).
-  //
-  // TODO(V2): businessFactsSchema still requires city/phone as z.string() and
-  // generateSite parses dossier.facts strictly. Bridge until the V2 relax:
-  // absent city/phone enter as "" — an empty string parses, and every renderer
-  // simply omits the row (WireContacts `if (d.phone)`, footer `contact?.phone &&`,
-  // groundHrefs routes tel: to #lead_form on empty digits).
-  const parsedFacts = businessFactsSchema.safeParse({ city: "", phone: "", ...(facts ?? {}) });
-  const contactChannel =
-    parsedFacts.success &&
-    [
-      parsedFacts.data.phone,
-      parsedFacts.data.telegram,
-      parsedFacts.data.instagram,
-      parsedFacts.data.viber,
-    ].some((v) => typeof v === "string" && v.trim().length > 0);
-  if (!parsedFacts.success || !parsedFacts.data.businessName.trim() || !contactChannel) {
-    return {
-      ok: false,
-      error:
-        "Бракує назви бізнесу або хоча б одного контакту (телефон, Instagram, Telegram чи Viber). Поверніться до розмови й додайте їх.",
-    };
-  }
-
-  // Generation + the authed draft preview require a signed-in owner (§3.1,
-  // journal #43): the tenant gets its owner at draft time; no anonymous drafts.
-  let ownerId: string | null = null;
-  if (isAuthConfigured()) {
-    const user = await getUser();
-    if (!user) return { ok: false, error: "Щоб створити сайт, спершу увійдіть.", authRequired: true };
-    ownerId = user.id;
-  }
-
-  // Gate the expensive AI call before any work starts (per-tenant/IP).
-  const limit = await checkRateLimit("onboard_generate", ipFromHeaders(await headers()));
-  if (!limit.ok) return { ok: false, error: rateLimitMessage(limit.retryAfterSec) };
-
-  const cleanMedia = sanitizeMedia(media);
-  const bizFacts = toBusinessFacts(parsedFacts.data);
-
-  // Named outside the try so a failure can be logged against the site it was for.
-  let host = "";
-  try {
-    const snapshot = conversationId ? await getLatestSnapshot({ conversationId }) : null;
-    const aboutText = [
-      bizFacts.businessName,
-      bizFacts.about,
-      ...(bizFacts.services?.map((s) => s.name) ?? []),
-    ]
-      .filter(Boolean)
-      .join(" ");
-    const vId =
-      verticalId ?? classifyVertical(aboutText, { igCategory: snapshot?.parsed.businessCategoryName });
-
-    // Reuse the persisted draft host on re-generate (advances the design nonce =
-    // «same data ⇒ different site», and avoids orphan draft tenants); else mint.
-    let existingHost: string | undefined;
-    if (conversationId && isSupabaseConfigured()) {
-      const sb = getServiceClient();
-      const { data } = await sb
-        .from("conversations")
-        .select("facts_state")
-        .eq("id", conversationId)
-        .maybeSingle();
-      existingHost = (data?.facts_state as { host?: string } | null)?.host;
-    }
-    host = existingHost ?? (await uniqueSubdomain(bizFacts.businessName));
-
-    const rawDossier = conversationId ? await buildDossierForConversation(conversationId) : null;
-    // TODO(V2): same bridge as the backstop above — generateSite strict-parses
-    // dossier.facts as full BusinessFacts (lib/ai/generate.ts), so absent
-    // city/phone/businessName from the persisted facts_state must enter as the
-    // confirmed value or "". Empty strings render nothing (verified: contacts
-    // row, footer link and tel: grounding all skip falsy values).
-    const dossier = rawDossier
-      ? {
-          ...rawDossier,
-          facts: {
-            businessName: bizFacts.businessName,
-            city: "",
-            phone: "",
-            ...(rawDossier.facts ?? {}),
-          },
-        }
-      : null;
-
-    const res = await generateDraft({
-      host,
-      facts: bizFacts,
-      verticalId: vId,
-      media: cleanMedia,
-      dossier: dossier ?? undefined,
-    });
-    if (!res.ok) return { ok: false, error: res.error ?? "Не вдалося згенерувати сайт." };
-
-    // Ownership + transcript re-link now (the authed preview needs membership;
-    // the editor/dossier need the transcript). Idempotent on re-generate.
-    let tenantId: string | undefined;
-    if (isSupabaseConfigured()) {
-      const sb = getServiceClient();
-      const { data: t } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
-      if (t) {
-        tenantId = t.id as string;
-        if (ownerId) {
-          const { data: mem } = await sb
-            .from("tenant_members")
-            .select("tenant_id")
-            .eq("tenant_id", t.id)
-            .eq("user_id", ownerId)
-            .maybeSingle();
-          if (!mem) {
-            await sb.from("tenant_members").insert({ tenant_id: t.id, user_id: ownerId, role: "owner" });
-          }
-        }
-        if (conversationId) {
-          await sb.from("conversations").update({ tenant_id: t.id }).eq("id", conversationId);
-        }
-      }
-    }
-
-    if (conversationId) await saveDraftHost(conversationId, host);
-
-    await trackFunnel("draft_generated", { tenantId, conversationId, meta: { host } });
-
-    // Preview = the authed editor live-preview frame; editUrl = the full editor.
-    return { ok: true, host, previewUrl: `/edit/${host}/frame`, editUrl: `/edit/${host}` };
-  } catch (e) {
-    log.error("draft generation failed", { host: host || undefined, error: e });
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
+  return runGenerateFlow({ facts, verticalId, media, conversationId });
 }
 
 export type FinalizeResult =

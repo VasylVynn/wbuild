@@ -18,7 +18,8 @@ import { blockLibrary } from "@/lib/blocks/library";
 /** The facts the brief reads. `BusinessFacts` satisfies this structurally. */
 export interface StyleBriefFacts {
   businessName: string;
-  city: string;
+  /** Optional since the V2 facts relax — a missing city is simply not said. */
+  city?: string;
   about?: string;
   services?: { name: string }[];
 }
@@ -76,7 +77,7 @@ export function buildStyleBrief(input: {
   const sections = sectionTypes?.length ? sectionNames(sectionTypes).join(" → ") : "";
 
   return [
-    `Бізнес: ${facts.businessName}, ${facts.city}.`,
+    `Бізнес: ${facts.businessName}${facts.city?.trim() ? `, ${facts.city.trim()}` : ""}.`,
     `Ніша: ${niche}`,
     vertical.genHint ? `Настрій: ${vertical.genHint}.` : "",
     facts.about ? `Про бізнес: ${facts.about}` : "",

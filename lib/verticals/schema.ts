@@ -27,8 +27,14 @@ export const socialFactSchema = z.object({
 
 export const businessFactsSchema = z.object({
   businessName: z.string(),
-  city: z.string(),
-  phone: z.string(),
+  // V2 relax (spec §11-V2, W0 plan C7): city and phone are OPTIONAL facts. The
+  // only hard requisite for generation is businessName + ANY contact channel
+  // (phone / telegram / instagram / viber — lib/onboard/contact-channel.ts);
+  // a phone-less site with IG-direct as the contact is legitimate (the
+  // lead_form is force-injected regardless, invariant 8). Absent = omitted
+  // everywhere downstream, never bridged as "" and never invented (invariant 5).
+  city: z.string().optional(),
+  phone: z.string().optional(),
   address: z.string().optional(),
   hours: z.string().optional(),
   viber: z.string().optional(), // freeform phone number, any formatting

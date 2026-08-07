@@ -1,4 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
+// Type-only: keeps zod/culori (design-spec's runtime deps) out of the client
+// bundle this registry is imported into.
+import type { DesignSpec } from "@/lib/site/design-spec";
 import {
   studioMeta,
   studioSections,
@@ -43,6 +46,12 @@ export interface TemplateBrand {
   /** The stylesheet the model wrote for THIS site, injected after the
    *  wireframe's own CSS. Legacy templates ignore it. */
   wireCss?: string;
+  /** The S1 design brief (pipeline v2 §3) versioned WITH the content being
+   *  rendered (published for the public site, draft for the editor frame).
+   *  The wireframe wrapper reads typography (`--font-*` inline vars) and the
+   *  motion level (`data-motion`) from it; absent → wire.css fallbacks.
+   *  Legacy templates ignore it. */
+  designSpec?: DesignSpec;
   /** Real contact facts for the footer's «Контакти» column. */
   contact?: {
     phone?: string;

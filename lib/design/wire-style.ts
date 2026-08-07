@@ -2,6 +2,8 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getAnthropic, isAnthropicConfigured, GEN_MODEL } from "@/lib/ai/anthropic";
+import { FONT_FAMILIES, getFontPair } from "@/lib/design/font-pairs";
+import type { DesignSpec } from "@/lib/site/design-spec";
 
 /**
  * Wireframe styling — where a site's design actually comes from.
@@ -30,7 +32,7 @@ async function wireframeSource(): Promise<{ css: string; tsx: string }> {
 const SYSTEM = `Ти — сильний веб-дизайнер, який пише CSS руками. Тобі дають структурний каркас сайту (responsive wireframe) і опис бізнесу. Твоє завдання — написати ОДИН CSS-файл, який перетворює цей сірий каркас на завершений, характерний сайт саме для цього бізнесу.
 
 ЩО ТОБІ ДОЗВОЛЕНО — майже все, що стосується ПОВЕРХНІ:
-- будь-які кольори, які ти сам вважаєш правильними для цього бізнесу. НЕ обмежуйся «безпечними» відтінками і НЕ бери кольори з якогось стандартного набору — обери палітру свідомо, під галузь, настрій і аудиторію
+- кольори. Якщо бриф нижче задає РОЛІ ПАЛІТРИ (тло/поверхня/текст/акцент) — збудуй палітру НАВКОЛО цих якорів: тон, нюанси, проміжні відтінки, похідні для рамок, тіней і декору — твої; якорі тримають кольоровий світ, а не диктують кожен піксель. Якщо ролей у брифі нема — обери палітру повністю сам: свідомо, під галузь, настрій і аудиторію, а не з якогось «безпечного» стандартного набору
 - фони: суцільні, градієнти, тонкі патерни через background-image, різні фони для різних секцій
 - типографіка: розміри, вага, letter-spacing, line-height, text-transform, оптичні розміри
 - box-shadow, border, border-radius, outline
@@ -51,10 +53,12 @@ const SYSTEM = `Ти — сильний веб-дизайнер, який пиш
 - display:none на секціях чи їхньому вмісті
 - @import, url() на зовнішні домени, будь-які шрифти ззовні
 
-ШРИФТ: у цьому експерименті шрифт ОДИН і вже заданий. Не підключай нові сімʼї, не пиши font-family. Працюй вагою, розміром, трекінгом і регістром.
+ШРИФТИ: шрифтову пару (заголовки/основний текст) задає бриф, а підключає код при рендері. НЕ пиши font-family і НЕ чіпай змінні --font-heading/--font-body — вони будуть вирізані. Твої інструменти — вага, розмір, letter-spacing, line-height, регістр.
+
+MOTION: рівень руху задає бриф (0 — статика … 3 — виразний рух); носій рівня — код. Твої transition, hover-стани і 1–2 @keyframes мають відповідати заявленому рівню: на 0–1 — стриманість, на 2–3 — помітніші, але досі делікатні появи.
 
 ПАЛІТРА — дисципліна, без якої сайт розсипається:
-- два базові поверхневі тони (основне тло + друга поверхня для чергування секцій і карток) плюс ОДИН акцент на дію: кнопки, ціни, активні стани. Відтінки тексту — не «третій колір»
+- структура рольова: основне тло + друга поверхня для чергування секцій і карток плюс ОДИН акцент на дію: кнопки, ціни, активні стани. Відтінки тексту — не «третій колір». Задані в брифі ролі — якорі цієї структури: не міняй їхню суть (світле тло має лишитись світлим, акцент — упізнаваним), нюансуй і доповнюй вільно
 - насиченість узгоджена: або весь набір приглушений, або весь насичений. Пастель поруч із кислотним — це поламана палітра
 - жодних кислотних сполучень (неон на неоні, чистий #00FF00, вібруючі доповнювальні пари) — вони читаються як помилка, а не як сміливість
 - акцент має бути один і впізнаваний; якщо все кричить, не кричить ніщо
@@ -90,14 +94,52 @@ function hueLine(hue: number): string {
   return `\nКОЛІРНИЙ ЯКІР: побудуй палітру навколо відтінку ≈${hue}° (як hue в OKLCH). Це СТАРТОВА ТОЧКА, не обмеження — сам добери тон і насиченість так, щоб результат пасував саме цьому бізнесу. Якщо для нього цей відтінок доречний лише як акцент на нейтральному тлі — зроби його акцентом. Якір уже забезпечує різноманіття між сайтами, тому не тікай навмисне від того, що звично для галузі: пекарня має право виглядати як пекарня. Просто не зупиняйся на першому очевидному рішенні.`;
 }
 
+/**
+ * The S1 design brief rendered for the STYLIST call (pipeline v2 §3: «палітра —
+ * якір, не диктат»). Same manner as the hue anchor: roles are where the colour
+ * world STARTS, tone and nuance stay the model's. Pure — exported for vitest.
+ *
+ * Fonts/motion are stated as facts the code owns (injected at render from
+ * designSpec, never a wireCss line): the model needs to know the pair's
+ * character to set weights/tracking, and the level to scale its transitions.
+ */
+export function designSpecStyleLines(spec: DesignSpec): string {
+  const p = spec.palette;
+  const pair = getFontPair(spec.typography.pairId);
+  const lines = [
+    "",
+    "РОЛІ ПАЛІТРИ (якорі з дизайн-брифу — збудуй палітру навколо них; тон, нюанси й похідні відтінки твої):",
+    `- тло: ${p.bg}; поверхня: ${p.surface}; основний текст: ${p.ink}`,
+    `- акцент дії: ${p.accent}; текст на акценті: ${p.accentInk}`,
+  ];
+  if (pair) {
+    lines.push(
+      `ТИПОГРАФІКА: заголовки — ${FONT_FAMILIES[pair.heading].label}, текст — ${FONT_FAMILIES[pair.body].label} (підключає код — font-family не пиши; передай характер цих шрифтів вагою, розміром і трекінгом).`,
+    );
+  }
+  lines.push(
+    `MOTION: рівень ${spec.motion.level} з 3${spec.motion.notes ? ` — ${spec.motion.notes}` : ""}.`,
+  );
+  if (spec.positioning.tone) lines.push(`ТОН ПОДАЧІ: ${spec.positioning.tone}.`);
+  if (spec.imagery.treatment) lines.push(`ФОТО: ${spec.imagery.treatment}.`);
+  return lines.join("\n");
+}
+
 export async function generateWireStyle(
   brief: string,
-  opts: { hue?: number; signal?: AbortSignal } = {},
+  // v2 path passes `designSpec` (palette roles supersede the bare hue anchor —
+  // `hue` is then ignored); v1 fallback passes `hue` only and behaves exactly
+  // as before the brief existed.
+  opts: { hue?: number; signal?: AbortSignal; designSpec?: DesignSpec } = {},
 ): Promise<WireStyleResult> {
   if (!isAnthropicConfigured()) throw new Error("ANTHROPIC_API_KEY not set");
   const { css, tsx } = await wireframeSource();
   const client = getAnthropic();
-  const anchor = typeof opts.hue === "number" ? hueLine(((opts.hue % 360) + 360) % 360) : "";
+  const anchor = opts.designSpec
+    ? designSpecStyleLines(opts.designSpec)
+    : typeof opts.hue === "number"
+      ? hueLine(((opts.hue % 360) + 360) % 360)
+      : "";
 
   const res = await client.messages.create({
     model: GEN_MODEL,
@@ -124,7 +166,10 @@ ${tsx}
 Напиши CSS, який зробить із цього каркаса сайт для описаного бізнесу.`,
       },
     ],
-  }, { signal: opts.signal });
+    // Retries disabled (pipeline v2 §6): one attempt IS the S2а/S4-regen stage
+    // budget — a failed call degrades (prev sheet / grey) instead of retrying
+    // past the deadline.
+  }, { signal: opts.signal, maxRetries: 0 });
 
   const text = res.content
     .map((b) => (b.type === "text" ? b.text : ""))

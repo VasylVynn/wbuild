@@ -1,4 +1,5 @@
 import type { StoredBlock } from "@/lib/blocks/schema";
+import type { DesignSpec } from "@/lib/site/design-spec";
 
 /**
  * Two-level data model (brief §5.1):
@@ -76,5 +77,9 @@ export interface Page {
    *  live site (invariant 6). */
   templateId?: string;
   wireCss?: string;
+  /** The S1 design brief (pipeline v2 §3) — PUBLISHED copy. The renderer reads
+   *  typography (`pairId`) and motion level from it; absent (pre-v2 sites or
+   *  S1 fallback) → the wireframe's own CSS fallbacks apply. */
+  designSpec?: DesignSpec;
 }
 

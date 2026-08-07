@@ -6,6 +6,7 @@ import { stripLoneSurrogates } from "@/lib/ai/sanitize";
 import { lintWireCss } from "@/lib/design/css-lint";
 import { fixContrast } from "@/lib/design/css-contrast";
 import { generateWireStyle } from "@/lib/design/wire-style";
+import type { DesignSpec } from "@/lib/site/design-spec";
 import type { StyleAuditReport } from "@/lib/site/page-content";
 
 /**
@@ -88,7 +89,20 @@ export async function runStyleAudit(opts: {
    * one the art director just rejected. Omitted → the retry reuses `hue`.
    */
   altHue?: number;
-  /** Caller's chain-wide deadline — covers both verdicts AND the regen call. */
+  /**
+   * The S1 design brief this stylesheet answers to (pipeline v2 §3-S4): a
+   * corrective regen re-asserts the palette-role ANCHORS (designSpec supersedes
+   * the hue inside generateWireStyle) instead of rolling a bare altHue — and
+   * keeps fonts/motion out of the CSS, since the renderer owns them now.
+   * Absent → exactly the v1 altHue retry.
+   */
+  designSpec?: DesignSpec;
+  /**
+   * Budget gate for the one regen (pipeline v2 §6: a corrective CSS call only
+   * starts while ≥120s of the caller's S4 budget remain). Absent → allowed.
+   */
+  canRegen?: () => boolean;
+  /** Caller's deadline — covers both verdicts AND the regen call. */
   signal?: AbortSignal;
 }): Promise<{ css: string | undefined; report: StyleAuditReport }> {
   const report: StyleAuditReport = {
@@ -113,11 +127,16 @@ export async function runStyleAudit(opts: {
     const first = await auditStyleWithModel(css, opts.sectionDigest, opts.signal);
     report.verdict = first.verdict;
     report.correctiveNote = first.note;
-    if (first.verdict === "fail") {
+    if (first.verdict === "fail" && opts.canRegen && !opts.canRegen()) {
+      // Budget spent (§6): the regen wouldn't fit — keep the failing verdict
+      // honest, `flagged` below surfaces it in the admin QA column.
+      console.warn(`[style-audit] corrective regen skipped: S4 budget too low`);
+    } else if (first.verdict === "fail") {
       report.regenerated = true;
       const correctedBrief = `${opts.brief}\nПопередня версія стилю мала ваду — обов'язково уникни її: ${first.note ?? "нечитабельний, конфліктний стиль"}.`;
       const regen = await generateWireStyle(correctedBrief, {
         hue: opts.altHue ?? opts.hue,
+        designSpec: opts.designSpec,
         signal: opts.signal,
       });
       const relint = lintWireCss(regen.css);

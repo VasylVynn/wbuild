@@ -99,6 +99,7 @@ export default async function TenantPage({ params }: { params: Params }) {
       template,
       tenant.brand.logoUrl,
       page.wireCss,
+      page.designSpec,
     );
   }
 

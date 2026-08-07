@@ -27,6 +27,9 @@ import {
   finalizeAction,
   sessionStateAction,
 } from "@/app/app/new/actions";
+// Type-only: erased at build time, so the module's `server-only` guard never
+// enters the client bundle.
+import type { GenerateDraftResult } from "@/lib/onboard/generate-flow";
 import {
   analyzePhotoAction,
   type AnalyzePhotoResult,
@@ -303,12 +306,13 @@ function routeBatch(
   };
 }
 
-// Generation-screen pacing (design D fix, wave TPL3): there is no real
-// per-step signal — generateDraftAction is one awaited server action — so
-// the step list, sub-message and progress bar are driven by a plain client
-// clock (`genElapsed`, ticked in an effect below). Paced to keep visibly
-// advancing across the real ~3-minute server budget without ever looking
-// frozen or claiming 100% before the call actually resolves.
+// Generation-screen pacing (design D fix, wave TPL3; V2 spec §7): the primary
+// transport is now the /api/generate SSE stream, whose REAL stage events pin
+// the step list via STAGE_TO_STEP below. The plain client clock (`genElapsed`,
+// ticked in an effect below) survives as the fallback pacing — for the
+// non-stream generateDraftAction path and for the seconds before the first
+// stage event arrives. Paced to keep visibly advancing across the real
+// ~3-minute server budget without ever looking frozen or claiming 100%.
 const GEN_STEPS = [
   "Тексти про ваш бізнес",
   "Послуги та ціни",
@@ -333,10 +337,33 @@ const GEN_MESSAGES = [
   "Майже готово — фінальні перевірки перед показом.",
 ];
 
+// Real pipeline stages (V2 spec §3/§7) → GEN_STEPS indices. s2_generate covers
+// both the texts and the stylesheet legs, so it maps to the middle of the list;
+// s3_compile lands one short of the end (assembly), s4_qa is the last visible
+// step — the preview transition happens at s3_done anyway. Full stage CARDS
+// (replacing this mapping) are wave V4.
+const STAGE_TO_STEP: Record<string, number> = {
+  s0_grounding: 0,
+  s1_brief: 1,
+  s2_generate: 2,
+  s3_compile: 4,
+  s4_qa: 5,
+};
+
 // Shared pacing math for BOTH generation renders (full-screen phase and the
 // inline chat card, W0): step list index, rotating sub-message, bar width.
-function genProgress(elapsed: number): { stepIndex: number; msgIndex: number; barPct: number } {
-  const stepIndex = GEN_STEP_SECONDS.reduce((acc, at, i) => (elapsed >= at ? i : acc), 0);
+// `stageStep` is the REAL stage index from the SSE stream — when present it
+// acts as a FLOOR under the paced clock (max, not replace): s2_generate alone
+// legitimately runs up to 120s, and pinning the list to its index froze the
+// bar at 45% for two minutes — the exact «looking frozen» state the paced
+// clock exists to prevent. The clock keeps the list advancing through a long
+// stage; a real stage that arrives ahead of the clock still jumps it forward.
+function genProgress(
+  elapsed: number,
+  stageStep: number | null = null,
+): { stepIndex: number; msgIndex: number; barPct: number } {
+  const clockIndex = GEN_STEP_SECONDS.reduce((acc, at, i) => (elapsed >= at ? i : acc), 0);
+  const stepIndex = stageStep === null ? clockIndex : Math.max(stageStep, clockIndex);
   const msgIndex = Math.min(GEN_MESSAGES.length - 1, Math.floor(elapsed / 40));
   const barPct = 15 + (stepIndex / (GEN_STEPS.length - 1)) * 75; // 15% → 90%, never 100%
   return { stepIndex, msgIndex, barPct };
@@ -407,6 +434,10 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // signal runs INLINE — phase stays "chat" and a compact progress card sits
   // in the message column instead of the full-screen takeover.
   const [inlineGen, setInlineGen] = useState(false);
+  // Real stage index from the /api/generate SSE stream (V2 spec §7) — when
+  // non-null it pins the GEN_STEPS list instead of the paced clock. Null on
+  // the fallback (non-stream) path and before the first stage event.
+  const [genStageStep, setGenStageStep] = useState<number | null>(null);
   // Set when the stream delivers {t:"generate"} (or final carries
   // generate:true). An EFFECT consumes it: by then React has flushed the
   // facts/media applyResult just set, so runGenerate reads fresh state — a
@@ -1004,8 +1035,114 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // Generation moved earlier (04 §2/§4): confirmed facts → a real DRAFT the
   // owner previews, then publishes by hand (invariant 6). W0 (plan C7): the
   // only client requirement is a business name + ANY contact channel — the
-  // server backstop in generateDraftAction mirrors exactly this.
+  // server backstop (shared by both transports) mirrors exactly this.
   // ---------------------------------------------------------------------------
+
+  // Primary transport (V2 spec §7): POST /api/generate, an SSE stream of the
+  // pipeline's stage boundaries (same parsing approach as streamTurn). The
+  // promise RESOLVES AT s3_done — the preview-ready point — and keeps draining
+  // the tail (s4 QA events) detached: the owner must not wait out the QA pass
+  // (late resolve/reject on a settled promise is a no-op by design). Rejects
+  // only on TRANSPORT failure (network / non-SSE / cut stream) — the caller
+  // falls back to generateDraftAction ONLY when no stage event arrived yet
+  // (flags.sawStage below); a server-REPORTED failure ({t:"error"}) resolves
+  // ok:false like the action would (re-running a failed generation would
+  // double the model spend and the daily budget).
+  const streamGenerate = (
+    factsNow: Partial<BusinessFacts>,
+    // Out-param: flips to true on the FIRST stage event — i.e. the moment the
+    // server pipeline verifiably started. The caller's fallback decision hangs
+    // on it: after model spend began, a blind action re-run would double-charge
+    // the onboard_generate budget and fork a second pipeline onto the same host.
+    flags?: { sawStage: boolean },
+  ): Promise<GenerateDraftResult> =>
+    new Promise((resolve, reject) => {
+      (async () => {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            facts: factsNow,
+            verticalId,
+            media,
+            conversationId: convIdRef.current ?? undefined,
+          }),
+        });
+        const ct = res.headers.get("content-type") ?? "";
+        if (ct.includes("application/json")) {
+          // Pre-stream refusal (bad body / no session) — mirror the action.
+          const j = (await res.json()) as { message?: string; authRequired?: boolean };
+          resolve({
+            ok: false,
+            error: j.message || "Не вдалося згенерувати сайт.",
+            ...(j.authRequired && { authRequired: true as const }),
+          });
+          return;
+        }
+        if (!res.ok || !res.body) throw new Error(`generate stream failed: ${res.status}`);
+
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+        let settled = false;
+        const settle = (r: GenerateDraftResult) => {
+          settled = true;
+          resolve(r);
+        };
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const chunks = buf.split("\n\n");
+          buf = chunks.pop() ?? "";
+          for (const c of chunks) {
+            const line = c.trim();
+            if (!line.startsWith("data:")) continue; // ":" heartbeats etc.
+            let obj: {
+              t?: string;
+              name?: string;
+              status?: string;
+              message?: string;
+              authRequired?: boolean;
+              host?: string;
+              previewUrl?: string;
+              editUrl?: string;
+            };
+            try {
+              obj = JSON.parse(line.slice(5));
+            } catch {
+              continue;
+            }
+            if (obj.t === "stage" && typeof obj.name === "string") {
+              if (flags) flags.sawStage = true;
+              // Real signal replaces the paced clock (kept as fallback). After
+              // settle (preview shown) the tail is s4-only — stop writing so a
+              // draining old stream can never bump a NEW generation's card.
+              const step = STAGE_TO_STEP[obj.name];
+              if (!settled && step !== undefined && (obj.status === "start" || obj.status === "done")) {
+                setGenStageStep((prev) => (prev === null || step > prev ? step : prev));
+              }
+            } else if (obj.t === "s3_done" && obj.host && obj.previewUrl && obj.editUrl) {
+              // Preview-ready (TFAO): hand the draft to the caller NOW; the
+              // stream keeps draining below so s4 completes server-side.
+              settle({ ok: true, host: obj.host, previewUrl: obj.previewUrl, editUrl: obj.editUrl });
+            } else if (obj.t === "done" && obj.host && obj.previewUrl && obj.editUrl) {
+              settle({ ok: true, host: obj.host, previewUrl: obj.previewUrl, editUrl: obj.editUrl });
+            } else if (obj.t === "error") {
+              // After the preview point an S4/QA error must not undo a shown
+              // preview — settle() already won and this resolve is a no-op.
+              settle({
+                ok: false,
+                error: obj.message || "Не вдалося згенерувати сайт.",
+                ...(obj.authRequired && { authRequired: true as const }),
+              });
+            }
+            // Unknown event types are ignored — forward-compatible.
+          }
+        }
+        if (!settled) throw new Error("generate stream ended without a result");
+      })().catch(reject); // no-op if already resolved (settled promise)
+    });
 
   const runGenerate = async (opts?: { inline?: boolean }) => {
     const businessName = (facts.businessName ?? "").trim();
@@ -1038,16 +1175,43 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     };
 
     setLoading(true);
+    setGenStageStep(null);
     if (opts?.inline) setInlineGen(true);
     else setPhase("generating");
 
     try {
-      const result = await generateDraftAction(
-        fullFacts,
-        verticalId,
-        media,
-        convIdRef.current ?? undefined,
-      );
+      let result: GenerateDraftResult;
+      const streamFlags = { sawStage: false };
+      try {
+        // Primary: the SSE transport — real stage events, preview at s3_done
+        // (the QA tail keeps running server-side after we transition).
+        result = await streamGenerate(fullFacts, streamFlags);
+      } catch {
+        setGenStageStep(null);
+        if (streamFlags.sawStage) {
+          // The stream died AFTER the pipeline verifiably started (a proxy cut
+          // mid-S2, a network blip): the server keeps generating and persists
+          // the draft regardless of our connection. Re-running the action here
+          // would double-charge the rate limit and start a SECOND pipeline on
+          // the same host — surface an honest message instead.
+          result = {
+            ok: false,
+            error:
+              "З'єднання перервалося, але генерація триває на сервері. Зачекайте хвилину-дві й оновіть сторінку — сайт, найімовірніше, вже готовий.",
+          };
+        } else {
+          // Stream TRANSPORT failed before any stage event (network, non-SSE
+          // response, refused connection) → no model spend happened; the proven
+          // non-stream server action still answers, exactly like the
+          // onboardAction fallback. The paced clock carries the progress UI.
+          result = await generateDraftAction(
+            fullFacts,
+            verticalId,
+            media,
+            convIdRef.current ?? undefined,
+          );
+        }
+      }
       if (result.ok) {
         setDraft({ host: result.host, previewUrl: result.previewUrl, editUrl: result.editUrl });
         setPhase("preview");
@@ -1064,6 +1228,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     } finally {
       setLoading(false);
       setInlineGen(false);
+      setGenStageStep(null);
     }
   };
 
@@ -1286,7 +1451,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
                 Full Lovable-style cards land in wave V4. */}
             {inlineGen &&
               (() => {
-                const gp = genProgress(genElapsed);
+                const gp = genProgress(genElapsed, genStageStep);
                 return (
                   <div className="flex items-start gap-2.5">
                     <AgentAvatar busy />
@@ -1608,10 +1773,11 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // ---------------------------------------------------------------------------
 
   if (phase === "generating") {
-    // Derived from the plain elapsed-seconds clock (effect above) — no real
-    // per-step signal exists, so this only has to feel like steady progress
-    // across the real ~3-minute budget, never finish early, and never freeze.
-    const { stepIndex, msgIndex, barPct } = genProgress(genElapsed);
+    // Real SSE stage index when the stream is delivering (V2 spec §7); the
+    // plain elapsed-seconds clock (effect above) paces the fallback path and
+    // the gap before the first stage event — steady progress, never finishing
+    // early, never freezing.
+    const { stepIndex, msgIndex, barPct } = genProgress(genElapsed, genStageStep);
 
     return (
       <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-8 ${rootBase}`}>

@@ -45,6 +45,7 @@ export default async function EditorFramePage({
           template,
           data.displayLogoUrl,
           data.wireCss,
+          data.designSpec,
         )}
       />
     </div>

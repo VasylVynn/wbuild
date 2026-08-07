@@ -21,6 +21,9 @@ export function buildTemplateBrand(
   /** The stylesheet the model wrote for this site, stored on its page content
    *  next to the blocks it was written for. */
   wireCss?: string,
+  /** The design brief stored on the SAME page content copy as `wireCss`
+   *  (published vs draft) — the wrapper renders fonts/motion from it. */
+  designSpec?: TemplateBrand["designSpec"],
 ): TemplateBrand {
   // Nav real estate is precious: a name like «DIVA | салон краси Самбір»
   // renders as just «DIVA» — the first segment before a separator. The full
@@ -51,6 +54,7 @@ export function buildTemplateBrand(
     navLinks,
     ctaHref: "#lead_form",
     ...(wireCss ? { wireCss } : {}),
+    ...(designSpec ? { designSpec } : {}),
     contact,
   };
 }

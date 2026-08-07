@@ -1,5 +1,6 @@
 import type { Tenant, Page, PageSeo } from "./types";
 import type { StoredBlock } from "@/lib/blocks/schema";
+import type { DesignSpec } from "@/lib/site/design-spec";
 import { isSupabaseConfigured, getServiceClient } from "@/lib/supabase/server";
 
 /**
@@ -29,8 +30,8 @@ interface PageRow {
   title: string;
   show_in_nav: boolean;
   nav_order: number;
-  draft_content: { blocks: StoredBlock[]; pocket?: StoredBlock[]; seo?: PageSeo; templateId?: string; wireCss?: string };
-  published_content: { blocks: StoredBlock[]; seo?: PageSeo; templateId?: string; wireCss?: string } | null;
+  draft_content: { blocks: StoredBlock[]; pocket?: StoredBlock[]; seo?: PageSeo; templateId?: string; wireCss?: string; designSpec?: DesignSpec };
+  published_content: { blocks: StoredBlock[]; seo?: PageSeo; templateId?: string; wireCss?: string; designSpec?: DesignSpec } | null;
   is_published: boolean;
 }
 
@@ -64,6 +65,7 @@ function mapPage(row: PageRow): Page {
     // that (invariant 6). Same split `seo` already uses.
     templateId: row.published_content?.templateId,
     wireCss: row.published_content?.wireCss,
+    designSpec: row.published_content?.designSpec,
   };
 }
 

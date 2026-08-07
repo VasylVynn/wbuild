@@ -1,5 +1,11 @@
 import "server-only";
-import { stripLoneSurrogates } from "@/lib/ai/sanitize";
+import { safeSlice, stripLoneSurrogates } from "@/lib/ai/sanitize";
+import {
+  buildFactsCorpus,
+  type DesignSpec,
+  type FactsCorpus,
+  type SectionPlanEntry,
+} from "@/lib/site/design-spec";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, GEN_MODEL } from "./anthropic";
@@ -144,6 +150,9 @@ function clampSeo(
   return { ...(title && { title }), ...(description && { description }) };
 }
 
+/** One shipped section of the assembled page — what actually renders. */
+export type ShippedSection = { section: string; variant?: string };
+
 export interface GeneratedSite {
   blocks: StoredBlock[];
   // Always the wireframe; kept on the shape because the render path and the
@@ -153,6 +162,11 @@ export interface GeneratedSite {
   // Model-written page meta (D1) — persisted with the page content (draft →
   // published), consumed by generateMetadata/OG/JSON-LD on the public render.
   seo?: { title?: string; description?: string };
+  /** The POST-assembly composition truth (force-injections and drops
+   *  included), in page order. Pipeline v2 §3-S3 reconcile: overwrite
+   *  designSpec.sectionPlan with this before persisting, so S4 never punishes
+   *  legitimate plan/assembly divergence. */
+  shippedPlan: ShippedSection[];
 }
 
 /**
@@ -170,9 +184,11 @@ export interface GeneratedSite {
  *    drops it. The schema stays for storage compatibility.
  *
  * One list, read by both prompt docs and the drop filter — so re-enabling
- * either block is deleting one entry, not hunting three call sites.
+ * either block is deleting one entry, not hunting three call sites. Exported
+ * for the S1 capabilities doc (lib/ai/design-brief.ts): a section fed by an
+ * unreachable type must not be PLANNED either.
  */
-const UNREACHABLE_TYPES = new Set<BlockType>(["switchback", "richText"]);
+export const UNREACHABLE_TYPES = new Set<BlockType>(["switchback", "richText"]);
 
 function buildLibraryDoc(): string {
   return (Object.keys(blockLibrary) as BlockType[])
@@ -304,6 +320,12 @@ export async function generateSite(
   // convention as the hue roll (lib/design/hue.ts). Default 0 → "split", i.e.
   // exactly today's behaviour for a caller that doesn't thread a seed yet.
   variantSeed = 0,
+  // The validated S1 design brief (pipeline v2 §3). When present: positioning
+  // rides the prompt, sectionPlan becomes the composition DEFAULT (deviations
+  // only within registered variants of planned sections — enforced by
+  // assemble), and budgetHint drives the deterministic char clamps. Absent →
+  // exactly the v1 behaviour.
+  designSpec?: DesignSpec,
 ): Promise<GeneratedSite> {
   const client = getAnthropic();
   const vertical = getVertical(verticalId);
@@ -326,14 +348,16 @@ export async function generateSite(
   const facts = factsParsed.data;
 
   // Prompt order is cache-friendly (04 §2): the static docs come FIRST and are
-  // byte-stable per vertical, the volatile per-business dossier LAST.
+  // byte-stable per vertical, the volatile per-business parts (design brief,
+  // dossier) LAST.
+  const briefDoc = designSpec ? `${buildDesignBriefDoc(designSpec)}\n\n` : "";
   const userPrompt = `Бібліотека блоків:
 ${buildLibraryDoc()}
 
 Секції, з яких компонується сторінка:
 ${buildSectionDoc(template)}
 
-${formatDossierForPrompt(dossier)}
+${briefDoc}${formatDossierForPrompt(dossier)}
 
 Збери сайт за правилами вище і виклич build_site.`;
 
@@ -354,7 +378,10 @@ ${formatDossierForPrompt(dossier)}
     tools: [buildSiteTool],
     tool_choice: { type: "auto" },
     messages: [{ role: "user", content: stripLoneSurrogates(userPrompt) }],
-  }, { signal });
+    // Retries disabled (pipeline v2 §6): one attempt IS the 120s S2б stage
+    // budget — a second full composition can't fit, so a 429/transient goes
+    // straight to the caller's honest-error path.
+  }, { signal, maxRetries: 0 });
 
   const toolUse = res.content.find((b) => b.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {
@@ -382,12 +409,49 @@ ${formatDossierForPrompt(dossier)}
     throw new Error(`Generation failed schema validation: ${issues}`);
   }
 
+  const blocks = assemble(
+    parsed.data.blocks,
+    facts,
+    media,
+    template,
+    dossier,
+    variantSeed,
+    designSpec?.sectionPlan,
+  );
   return {
     templateId: template.id,
-    blocks: assemble(parsed.data.blocks, facts, media, template, dossier, variantSeed),
+    blocks,
+    shippedPlan: shippedSectionPlan(blocks),
     imageSubject: parsed.data.imageSubject,
     seo: clampSeo(parsed.data.seo),
   };
+}
+
+/**
+ * The S1 brief rendered for the COPYWRITER call (positioning + the section
+ * plan as the composition default). Deviation contract mirrors the code-side
+ * enforcement in assemble(): skipping a planned section or picking another
+ * registered variant is allowed; sections OUTSIDE the plan get dropped, so the
+ * prompt says so honestly.
+ */
+function buildDesignBriefDoc(spec: DesignSpec): string {
+  const pos = spec.positioning;
+  const lines: string[] = ["ДИЗАЙН-БРИФ ЦЬОГО САЙТУ (узгоджений перед композицією):"];
+  if (pos.promise) lines.push(`- Обіцянка бренду (веди сторінку від неї): «${pos.promise}»`);
+  if (pos.painPoints.length)
+    lines.push(`- Болі клієнта, на які відповідає сторінка: ${pos.painPoints.join("; ")}`);
+  if (pos.tone) lines.push(`- Тон: ${pos.tone}`);
+  if (pos.voiceNotes) lines.push(`- Голос: ${pos.voiceNotes}`);
+  lines.push(
+    "",
+    "ПЛАН СЕКЦІЙ — плануй композицію ЗА ЦИМ ПЛАНОМ; відхиляйся лише з причини: можеш пропустити секцію, для якої справді нема контенту, чи обрати інший зареєстрований variant — але НЕ додавай секцій поза планом (код їх відкине). Форму заявки і контакти додає код — не плануй їх:",
+    ...spec.sectionPlan.map((e, i) => {
+      const v = e.variant ? ` [variant: ${e.variant}]` : "";
+      const budget = e.budgetHint ? ` — обсяг: ${e.budgetHint}` : "";
+      return `${i + 1}. ${e.section}${v}${budget}`;
+    }),
+  );
+  return lines.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -466,17 +530,261 @@ function resolvedVariant(
 }
 
 // ---------------------------------------------------------------------------
+// sectionPlan enforcement (pipeline v2 §3): the S1 plan is MANDATORY for the
+// composition — S2а styles against it, so a model block whose section the plan
+// never named would be a composition-phantom. Applied to MODEL blocks BEFORE
+// the force-injections (invariant 8 stays whole: lead_form/contacts/gallery
+// are code's, legitimately outside any plan). All helpers are pure + exported
+// for vitest.
+// ---------------------------------------------------------------------------
+
+/** Types the plan gate never touches: hero/contacts are structural bookends
+ *  the assembly synthesizes or force-keeps, lead_form/gallery are injected. */
+const PLAN_EXEMPT_TYPES = new Set<BlockType>(["hero", "contacts", "lead_form", "gallery"]);
+
+/**
+ * Drop model-authored blocks whose resolved section is OUTSIDE the plan.
+ * No plan / no template → identity (v1 path). Typed structurally so it runs on
+ * GENERATION blocks (before id→URL conversion) — enforcement must see exactly
+ * what the model authored, nothing the code added.
+ */
+export function enforceSectionPlan<T extends { type: BlockType; section?: string }>(
+  blocks: T[],
+  plan: readonly SectionPlanEntry[] | undefined,
+  template: SiteTemplate | undefined,
+): T[] {
+  if (!template || !plan?.length) return blocks;
+  const planned = new Set(plan.map((p) => p.section));
+  const filtered = blocks.filter((b) => {
+    if (PLAN_EXEMPT_TYPES.has(b.type)) return true;
+    const section = resolvedSection(template, b);
+    return section !== undefined && planned.has(section);
+  });
+  // Minimum-content floor (review must-fix): validateDesignSpec only
+  // guarantees ≥1 KNOWN section, and hero/gallery/contacts/lead_form are
+  // plan-exempt — so a schema-valid plan like [hero, gallery] would strip
+  // every content section and ship a page of bookends. When enforcement would
+  // remove ALL non-exempt model blocks, the plan — not the composition — is
+  // the phantom: keep the model's composition for this run.
+  const hadContent = blocks.some((b) => !PLAN_EXEMPT_TYPES.has(b.type));
+  const keptContent = filtered.some((b) => !PLAN_EXEMPT_TYPES.has(b.type));
+  if (hadContent && !keptContent) {
+    console.warn(
+      "[generate] sectionPlan enforcement skipped: the plan would strip every content section",
+    );
+    return blocks;
+  }
+  return filtered;
+}
+
+/**
+ * The plan's variant as the DEFAULT layout: fills only blocks the model left
+ * without a (valid) variant — a model's explicit registered choice is a
+ * legitimate deviation and always wins. First plan entry per section wins;
+ * unregistered plan variants are ignored (validateDesignSpec already degraded
+ * them, this is the seatbelt). Hero is untouched here: its variant is always
+ * resolved at conversion (photo veto + seeded fallback).
+ */
+export function applyPlanVariantDefaults(
+  blocks: StoredBlock[],
+  plan: readonly SectionPlanEntry[] | undefined,
+  template: SiteTemplate | undefined,
+): StoredBlock[] {
+  if (!template || !plan?.length) return blocks;
+  const defaults = new Map<string, string>();
+  for (const entry of plan) {
+    if (!entry.variant || defaults.has(entry.section)) continue;
+    if (template.sections[entry.section]?.variants?.[entry.variant]) {
+      defaults.set(entry.section, entry.variant);
+    }
+  }
+  if (defaults.size === 0) return blocks;
+  return blocks.map((b) => {
+    if (b.variant !== undefined || !b.section) return b;
+    const v = defaults.get(b.section);
+    return v ? { ...b, variant: v } : b;
+  });
+}
+
+/** The post-assembly composition truth (visible placed blocks, page order) —
+ *  what the pipeline writes BACK into designSpec.sectionPlan (§3 reconcile). */
+export function shippedSectionPlan(blocks: readonly StoredBlock[]): ShippedSection[] {
+  const out: ShippedSection[] = [];
+  for (const b of blocks) {
+    if (!b.section || b.hidden) continue;
+    out.push({ section: b.section, ...(b.variant && { variant: b.variant }) });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// charBudget clamps (pipeline v2 §3-S3): budgetHint is consumed HERE, as a
+// deterministic post-clamp on the block's primary text fields — clampSeo's
+// pattern, never zod .max (overshoot must not drop a block). Only the compact
+// family of hints clamps; «розгорнуто» and friends are prompt-side guidance
+// the model already followed.
+// ---------------------------------------------------------------------------
+
+const COMPACT_HINT_RE = /стисл|коротк|лаконі|мінімал/i;
+
+/** Compact-tier ceilings per field kind (chars). Generous vs what «стисло»
+ *  should have produced — the clamp is a seatbelt, not the writer. */
+const COMPACT_CAPS = {
+  title: 70,
+  subtitle: 160,
+  itemText: 140,
+  answer: 260,
+} as const;
+
+/** Word-boundary truncation, surrogate-safe (visible copy — unlike clampSeo's
+ *  metadata, a mid-word cut here would read as a rendering bug). */
+function clampText(s: string, max: number): string {
+  if (s.length <= max) return s;
+  let cut = safeSlice(s, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  if (lastSpace > max * 0.6) cut = cut.slice(0, lastSpace);
+  return `${cut.replace(/[\s,.;:…—–-]+$/u, "")}…`;
+}
+
+/** Contact-shaped material (handles, e-mails, URLs) — mirrors the fact-gate's
+ *  CONTACT_RE shape; by clamp time every surviving contact token is grounded. */
+const CONTACT_SHAPE_RE = /@[a-z0-9_.]{3,}|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|(?:https?:\/\/|www\.)\S+/i;
+
+/**
+ * True when the copy carries confirmed-fact material: a digit run that matches
+ * the facts corpus (hours, prices, addresses — by clamp time the fact gate has
+ * already stripped ungrounded numerals, so a corpus hit IS a requisite) or a
+ * contact-shaped token. Truncating such a string can turn a true fact into a
+ * false one («…пн–пт 9:00–18:00, сб 10:00–…») — worse than the length
+ * overshoot the clamp guards, so fact-bearing copy ships unclamped and the
+ * budgetHint stays prompt-side guidance there (invariant 5).
+ */
+function carriesFactMaterial(s: string, corpus: FactsCorpus | undefined): boolean {
+  if (!corpus) return false;
+  if (CONTACT_SHAPE_RE.test(s)) return true;
+  for (const run of s.match(/\d+/g) ?? []) {
+    if (corpus.digitRuns.has(run)) return true;
+  }
+  return false;
+}
+
+/** Clamp ONE block's primary text fields to the compact tier. Quotes are
+ *  exempt everywhere: testimonial text is a customer's real words (a fact) —
+ *  truncating testimony would change what someone said. Fact-bearing strings
+ *  (see carriesFactMaterial) are exempt too. */
+function clampBlockText(b: StoredBlock, corpus: FactsCorpus | undefined): StoredBlock {
+  const clampSafe = (s: string, max: number): string =>
+    carriesFactMaterial(s, corpus) ? s : clampText(s, max);
+  const clampOpt = (s: string | undefined, max: number): string | undefined =>
+    s === undefined ? undefined : clampSafe(s, max);
+  switch (b.type) {
+    case "hero":
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          title: clampSafe(b.props.title, COMPACT_CAPS.title),
+          subtitle: clampOpt(b.props.subtitle, COMPACT_CAPS.subtitle),
+        },
+      };
+    case "services":
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          title: clampOpt(b.props.title, COMPACT_CAPS.title),
+          items: b.props.items.map((it) => ({
+            ...it,
+            description: clampOpt(it.description, COMPACT_CAPS.itemText),
+          })),
+        },
+      };
+    case "cta":
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          title: clampSafe(b.props.title, COMPACT_CAPS.title),
+          subtitle: clampOpt(b.props.subtitle, COMPACT_CAPS.subtitle),
+        },
+      };
+    case "faq":
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          items: b.props.items.map((it) => ({
+            ...it,
+            answer: clampSafe(it.answer, COMPACT_CAPS.answer),
+          })),
+        },
+      };
+    case "timeline":
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          items: b.props.items.map((it) => ({
+            ...it,
+            subtitle: clampOpt(it.subtitle, COMPACT_CAPS.itemText),
+            description: clampOpt(it.description, COMPACT_CAPS.itemText),
+          })),
+        },
+      };
+    case "team":
+      return {
+        ...b,
+        props: {
+          ...b.props,
+          items: b.props.items.map((it) => ({
+            ...it,
+            bio: clampOpt(it.bio, COMPACT_CAPS.itemText),
+          })),
+        },
+      };
+    default:
+      return b;
+  }
+}
+
+/**
+ * Apply the plan's budget hints to the assembled page: every visible block
+ * whose section carries a compact hint gets its primary text fields clamped.
+ * Deterministic, pure, exported for vitest. No plan / no compact hints → the
+ * exact same array back. `facts` (when given) builds the grounding corpus that
+ * exempts fact-bearing strings — the clamp must never truncate a requisite.
+ */
+export function applyCharBudgets(
+  blocks: StoredBlock[],
+  plan: readonly SectionPlanEntry[] | undefined,
+  facts?: unknown,
+): StoredBlock[] {
+  if (!plan?.length) return blocks;
+  const compact = new Set<string>();
+  for (const e of plan) {
+    if (e.budgetHint && COMPACT_HINT_RE.test(e.budgetHint)) compact.add(e.section);
+  }
+  if (compact.size === 0) return blocks;
+  const corpus = facts === undefined ? undefined : buildFactsCorpus(facts);
+  return blocks.map((b) => (b.section && compact.has(b.section) ? clampBlockText(b, corpus) : b));
+}
+
+// ---------------------------------------------------------------------------
 // Post-generation: cast photos id→URL, enforce composition, ground facts,
 // project nav placement.
 // ---------------------------------------------------------------------------
 function assemble(
-  raw: GenBlockInstance[],
+  rawInput: GenBlockInstance[],
   facts: BusinessFacts,
   media: SiteMedia | undefined,
   template: SiteTemplate | undefined,
   dossier: Dossier,
   variantSeed: number,
+  plan?: readonly SectionPlanEntry[],
 ): StoredBlock[] {
+  // sectionPlan gate FIRST — on the model's own blocks, before any conversion
+  // or force-injection (§3: the order of enforcement is part of the contract).
+  const raw = enforceSectionPlan(rawInput, plan, template);
   const photos = media?.photos ?? [];
   const generatedHero = media?.generatedHero;
   const metaByUrl = new Map((media?.photoMeta ?? []).map((m) => [m.url, m]));
@@ -562,16 +870,21 @@ function assemble(
         : imageUrl
           ? `Атмосферне зображення — ${altBase}`
           : undefined;
-      // Layout: the model's choice when the section actually defines it, else
-      // the seeded roll. The `banner` photo veto applies to BOTH paths — the
-      // model is briefed on photo quality but must not be trusted with it: a
-      // blurry or text-covered shot blown up full-bleed is worse than any
-      // other layout. groundAndPlace re-validates either way.
+      // Layout precedence: the model's choice → the S1 plan's hero variant →
+      // the seeded roll. The `banner` photo veto applies to ALL paths — the
+      // model (and the brief) are briefed on photo quality but must not be
+      // trusted with it: a blurry or text-covered shot blown up full-bleed is
+      // worse than any other layout. groundAndPlace re-validates either way.
       const allowBanner = bannerWorthy(heroPhoto ? metaByUrl.get(heroPhoto) : undefined);
       const chosen = resolvedVariant(template, resolvedSection(template, b), b.variant);
+      const planned = resolvedVariant(
+        template,
+        "hero",
+        plan?.find((e) => e.section === "hero")?.variant,
+      );
+      const vetoed = (v: string | undefined) => (v === "banner" && !allowBanner ? undefined : v);
       const variant =
-        (chosen === "banner" && !allowBanner ? undefined : chosen) ??
-        heroVariantForSeed(variantSeed, allowBanner);
+        vetoed(chosen) ?? vetoed(planned) ?? heroVariantForSeed(variantSeed, allowBanner);
       return { type: "hero", props: { ...props, imageUrl, imageAlt }, section: b.section, variant };
     }
     if (b.type === "gallery") {
@@ -698,7 +1011,7 @@ function assemble(
   const seen: Partial<Record<BlockType, number>> = {};
   const factHrefs = allowedFactHrefs(facts);
   const igFollowers = dossier.ig.followers;
-  const placed = ordered.map((b) =>
+  let placed = ordered.map((b) =>
     groundAndPlace(
       groundHrefs(groundImages(b, allowed), facts, factHrefs),
       facts,
@@ -707,6 +1020,11 @@ function assemble(
       igFollowers,
     ),
   );
+
+  // The plan's variants fill the gaps the model left — BEFORE the repeat-
+  // layout safety net below, so a plan-assigned layout participates in the
+  // «no two identical adjacent layouts» check like any other.
+  placed = applyPlanVariantDefaults(placed, plan, template);
 
   // C1/C4 safety net: a repeated section must never repeat the SAME layout —
   // the prompt asks for different variants, but a model slip would render two
@@ -757,11 +1075,16 @@ function assemble(
     }
   }
   const leadAnchor = template ? "#lead_form" : "#lead";
-  return placed.map((sb) =>
+  const grounded = placed.map((sb) =>
     mapHrefFields(sb, (href) =>
       href?.startsWith("#") && !validAnchors.has(href) ? leadAnchor : href,
     ),
   );
+
+  // Last: the plan's budget hints (deterministic char clamps, §3-S3). After
+  // every structural pass so the clamp sees exactly what will render — and
+  // with the confirmed facts, so fact-bearing copy is never truncated.
+  return applyCharBudgets(grounded, plan, facts);
 }
 
 /**
@@ -877,7 +1200,8 @@ function groundHrefs(
     if (/^tel:/i.test(value)) {
       // Requisites are copied 1:1 from facts (§4.4): a model-typed number is
       // never trusted — a tel: link always dials the owner's confirmed phone.
-      const digits = normalizeUaPhoneDigits(facts.phone);
+      // No phone fact (optional since V2) → the link routes to the lead form.
+      const digits = facts.phone ? normalizeUaPhoneDigits(facts.phone) : "";
       return digits ? `tel:+${digits}` : "#lead_form";
     }
     if (isStorageUrl(value) || factHrefs.has(value)) return value;

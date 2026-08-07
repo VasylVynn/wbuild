@@ -1,4 +1,5 @@
 import type { StoredBlock } from "@/lib/blocks/schema";
+import type { DesignSpec } from "@/lib/site/design-spec";
 import type { PageSeo } from "@/lib/tenant/types";
 
 /** Result of the style QA gate (css-lint + contrast + model verdict). Draft-only:
@@ -16,6 +17,9 @@ export interface StyleAuditReport {
   /** Final fail after the regen budget, OR a code-proven unresolved contrast
    *  pair (see contrastFixes) — surfaces in the admin QA column. */
   flagged: boolean;
+  /** Honest log of every code-side repair validateDesignSpec applied to the S1
+   *  brief (pipeline v2 §3) — rides the audit so the admin surface sees it. */
+  briefRepairs?: string[];
   checkedAt: string;
 }
 
@@ -29,7 +33,9 @@ export interface StyleAuditReport {
  * job, which left published sites rendering blocks with no design at all.
  *
  * So: writers spread what they read and override only what they changed, and
- * the draft→published direction goes through `publishedFromDraft` below.
+ * the draft→published direction goes through `publishedFromDraft` below. A new
+ * field needs exactly ONE decision here: does it publish (nothing to do) or is
+ * it draft-only (add its key to DRAFT_ONLY)?
  */
 export interface PageContent {
   blocks: StoredBlock[];
@@ -47,10 +53,28 @@ export interface PageContent {
   generatedHero?: string;
   /** Style QA gate report — editor/admin diagnostics only (see StyleAuditReport). */
   styleAudit?: StyleAuditReport;
+  /** The S1 design brief this content was generated against (pipeline v2 §3).
+   *  PUBLISHES with the content: the renderer reads typography/motion from it,
+   *  so the live site and the draft each carry their own. */
+  designSpec?: DesignSpec;
+  /** The model's reasoning for the brief — editor/admin diagnostics, never
+   *  published (spec §3: a top-level key BECAUSE DRAFT_ONLY strips only
+   *  top-level keys; nested inside designSpec it would publish). */
+  designRationale?: string;
+  /** Monotonic draft revision — the CAS key for EVERY async writer of the
+   *  DRAFT copy (QA blocks/style, S4 patches, image-job draft patch; spec §9).
+   *  Draft-only: published-copy patches keep the genToken CAS. Pre-v2 rows
+   *  lack it — writers CAS with coalesce(…, 0). */
+  contentRev?: number;
 }
 
 /** Keys that exist only in a draft and must never reach the live site. */
-const DRAFT_ONLY = ["pocket", "styleAudit"] as const satisfies readonly (keyof PageContent)[];
+const DRAFT_ONLY = [
+  "pocket",
+  "styleAudit",
+  "designRationale",
+  "contentRev",
+] as const satisfies readonly (keyof PageContent)[];
 
 /**
  * The published copy of a draft: everything the draft carries except the

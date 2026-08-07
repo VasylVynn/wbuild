@@ -32,6 +32,12 @@ export interface LintResult {
 }
 
 const STRIP_ALWAYS = new Set(["font-family"]);
+/** The renderer owns the font pair — it injects `--font-heading`/`--font-body`
+ *  as INLINE style from the designSpec (pipeline v2 §1). A model-authored
+ *  `--font-*` would beat that injection (`!important` custom properties win
+ *  over inline style) or leak globally through an unscoped `:root`, so every
+ *  such declaration is stripped, not just the two known names. */
+const FONT_VAR_PREFIX = "--font-";
 const STRIP_ON_REAL_ELEMENTS = new Set(["display", "float"]);
 /** `position: relative` is a legitimate anchor for a rule's own ::before/::after
  *  decor (the wireframe provides no containing blocks) — only the values that
@@ -69,7 +75,7 @@ export function lintWireCss(css: string): LintResult {
     rule.walkDecls((decl: Declaration) => {
       const prop = decl.prop.toLowerCase();
       const where = `${rule.selector.slice(0, 80)}`;
-      if (STRIP_ALWAYS.has(prop)) {
+      if (STRIP_ALWAYS.has(prop) || prop.startsWith(FONT_VAR_PREFIX)) {
         violations.push(`stripped \`${prop}\` from \`${where}\``);
         decl.remove();
         return;

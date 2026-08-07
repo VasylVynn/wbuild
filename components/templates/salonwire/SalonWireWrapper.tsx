@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
+import { wireDesignAttrs } from "@/lib/design/wire-attrs";
 import {
   instagramHref,
   normalizeIgHandle,
@@ -24,13 +25,21 @@ const BLOCKED = [
   /<\s*\/?\s*(script|style|iframe)/gi,
   /behavior\s*:/gi,
   /-moz-binding/gi,
+  // §4.8 / spec v2 §3-S3: url() to a REMOTE origin is network egress —
+  // css-lint strips those before persist, this belt re-blocks them at render
+  // (a sheet that reached storage unlinted must still not phone home). It
+  // mirrors css-lint's policy exactly: http(s) and protocol-relative only —
+  // `data:` URIs are not egress, and the stylist prompt legitimately uses
+  // inline-SVG background patterns (blanket-blocking every `url(` mangled
+  // those declarations into unbalanced garbage the CSS parser dropped).
+  /url\s*\(\s*['"]?(?:https?:)?\/\//gi,
 ];
 
 /**
  * Minimal hardening for model-authored CSS. CSS cannot execute script in modern
- * browsers, but `@import` and `url()` are network egress, and a stray closing
- * tag would break out of the <style> element. Dev-spike grade, not a substitute
- * for a real sanitiser if this ever ships.
+ * browsers, but `@import` and remote `url()` are network egress, and a stray
+ * closing tag would break out of the <style> element. Dev-spike grade, not a
+ * substitute for a real sanitiser if this ever ships.
  */
 function sanitizeCss(css: string): string {
   let out = css.slice(0, 60_000);
@@ -53,6 +62,10 @@ export function SalonWireWrapper({
   brand?: TemplateBrand;
 }) {
   const generated = brand?.wireCss ? sanitizeCss(brand.wireCss) : null;
+  // Fonts + motion come from the designSpec at render time, NOT from the
+  // generated stylesheet (pipeline v2 §3-S3). No designSpec → no attributes;
+  // wire.css's `var(--font-heading, inherit)` fallbacks take over.
+  const design = wireDesignAttrs(brand?.designSpec);
   const links = brand?.navLinks ?? [];
   const contact = brand?.contact;
   const phoneDigits = contact?.phone ? normalizeUaPhoneDigits(contact.phone) : "";
@@ -61,7 +74,11 @@ export function SalonWireWrapper({
   const igLink = instagramHref(contact?.instagram);
 
   return (
-    <div className="tpl-salonwire">
+    <div
+      className="tpl-salonwire"
+      {...(design.style ? { style: design.style as CSSProperties } : {})}
+      {...(design.motion !== undefined ? { "data-motion": design.motion } : {})}
+    >
       {generated && <style dangerouslySetInnerHTML={{ __html: generated }} />}
 
       <header className="wire-nav">

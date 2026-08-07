@@ -9,6 +9,8 @@ import type { SiteMedia } from "@/lib/media/media";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
 import { getServiceClient } from "@/lib/supabase/server";
 import type { PageContent } from "@/lib/site/page-content";
+import type { DesignSpec } from "@/lib/site/design-spec";
+import { casUpdateDraft, readContentRev } from "@/lib/site/draft-cas";
 import { runStyleAudit } from "@/lib/design/style-audit";
 
 /**
@@ -423,12 +425,27 @@ export async function runDraftQualityLoop(opts: {
   styleHue?: number;
   /** Independent second hue roll for the audit's one regen (style-audit altHue). */
   styleAltHue?: number;
-  /** generateDraft's chain-wide deadline — every model call in the loop
-   *  (inspection, rebuilds, style audit + regen) shares it, so the loop can
-   *  never outlive the caller's serverless budget. Fail-open throughout. */
+  /** The caller's S4 deadline — every model call in the loop (inspection,
+   *  rebuilds, style audit + regen) shares it, so the loop can never outlive
+   *  the caller's budget. Fail-open throughout. */
   signal?: AbortSignal;
+  /** Inspect→fix rounds (pipeline v2 §6: onboard 1, editor 0). Default keeps
+   *  the legacy 2-round behavior for callers that don't pass it. */
+  textRounds?: number;
+  /** Per-round cap on applied fixes (§6: pipeline passes 2). */
+  maxFixesPerRound?: number;
+  /** The S1 design brief this draft was generated against — threaded into the
+   *  style audit so a corrective regen re-asserts the palette-role anchors
+   *  instead of a bare altHue (pipeline v2 §3-S4). */
+  designSpec?: DesignSpec;
+  /** validateDesignSpec's repair log — rides the persisted audit report. */
+  briefRepairs?: string[];
+  /** Budget gate for the audit's one corrective regen (§6: only while ≥120s of
+   *  the S4 budget remain). Absent → always allowed (legacy behavior). */
+  canRegenStyle?: () => boolean;
 }): Promise<void> {
   const { host, facts, dossier } = opts;
+  const textRounds = opts.textRounds ?? 2;
   try {
     const sb = getServiceClient();
     const { data: tenant } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
@@ -446,6 +463,10 @@ export async function runDraftQualityLoop(opts: {
     const draft = (page.draft_content ?? {}) as PageContent;
     let blocks = draft.blocks ?? [];
     if (!blocks.length) return;
+    // Every write below is CAS'd on genToken (identity) + contentRev (version,
+    // spec §9): the old naked block write could resurrect a stale draft over a
+    // concurrent generation's — and never even checked its error.
+    let rev = readContentRev(draft);
 
     // Style gate (spec 2026-07-28): kicked off alongside the first text
     // inspection; awaited after the text rounds so the two model calls overlap.
@@ -457,6 +478,8 @@ export async function runDraftQualityLoop(opts: {
             brief: opts.styleBrief,
             hue: opts.styleHue,
             altHue: opts.styleAltHue,
+            designSpec: opts.designSpec,
+            canRegen: opts.canRegenStyle,
             signal: opts.signal,
           }).catch((e) => {
             console.warn(`[style-audit] failed (fail-open): ${e instanceof Error ? e.message : e}`);
@@ -467,9 +490,10 @@ export async function runDraftQualityLoop(opts: {
     // Sections already fixed once: flagged again next round → dropped (04 §4
     // drop-don't-polish; protected types are kept as-is instead).
     const fixedOnce = new Set<string>();
+    const maxFixes = opts.maxFixesPerRound ?? MAX_FIXES_PER_ROUND;
     let dirty = false;
 
-    for (let round = 0; round < 2; round++) {
+    for (let round = 0; round < textRounds; round++) {
       // Deadline already hit → stop polishing, keep the draft as generated.
       // The loop is quality improvement, not validation — running out of time
       // must never cost the owner content.
@@ -486,7 +510,7 @@ export async function runDraftQualityLoop(opts: {
       const byId = new Map(entries.map((e) => [e.id, e]));
       const dropIndexes = new Set<number>();
 
-      for (const v of report.violations.slice(0, MAX_FIXES_PER_ROUND)) {
+      for (const v of report.violations.slice(0, maxFixes)) {
         const entry = byId.get(v.sectionId);
         if (!entry || dropIndexes.has(entry.index)) continue;
         const block = blocks[entry.index];
@@ -534,10 +558,25 @@ export async function runDraftQualityLoop(opts: {
         blocks = blocks.filter((_, i) => !dropIndexes.has(i));
       }
       if (dirty) {
-        await sb
-          .from("pages")
-          .update({ draft_content: { ...draft, blocks } })
-          .eq("id", page.id);
+        // CAS write (spec §9): identity via genToken, version via contentRev.
+        // Stale → a newer writer (regeneration, image job) owns the row now —
+        // ABORT the whole loop, polishing a dead draft helps no one. An error
+        // aborts too: the old code swallowed it and kept "fixing" unsaved state.
+        const cas = await casUpdateDraft(
+          sb,
+          { pageId: page.id, genToken: draft.genToken, contentRev: rev },
+          { ...draft, blocks },
+        );
+        if (!cas.ok) {
+          console.warn(
+            cas.stale
+              ? `[inspect] ${host}: stale contentRev/genToken — newer writer won, loop aborted`
+              : `[inspect] ${host}: draft save failed, loop aborted: ${cas.error}`,
+          );
+          return;
+        }
+        rev = cas.nextRev;
+        dirty = false;
       }
     }
 
@@ -546,20 +585,27 @@ export async function runDraftQualityLoop(opts: {
       // One CAS-gated write: blocks from the text rounds are already saved
       // above; this adds the audited css + report. The spread keeps every
       // other PageContent field (templateId, pocket, genToken, seo...).
-      const styled = {
+      const styled: PageContent = {
         ...draft,
         blocks,
         ...(style.css && { wireCss: style.css }),
-        styleAudit: style.report,
+        styleAudit: {
+          ...style.report,
+          ...(opts.briefRepairs?.length && { briefRepairs: opts.briefRepairs }),
+        },
       };
-      let q = sb.from("pages").update({ draft_content: styled }).eq("id", page.id);
-      if (draft.genToken) q = q.eq("draft_content->>genToken", draft.genToken);
-      // .select("id") row-count check = the established CAS convention
-      // (publish.ts patchGeneratedImages) — a stale CAS must log, not vanish.
-      const { data: sRows, error: sErr } = await q.select("id");
-      if (sErr) console.warn(`[style-audit] save failed (fail-open): ${sErr.message}`);
-      else if (!sRows?.length)
-        console.warn(`[style-audit] ${host}: stale genToken — newer generation won, report dropped`);
+      const cas = await casUpdateDraft(
+        sb,
+        { pageId: page.id, genToken: draft.genToken, contentRev: rev },
+        styled,
+      );
+      if (!cas.ok) {
+        console.warn(
+          cas.stale
+            ? `[style-audit] ${host}: stale contentRev/genToken — newer writer won, report dropped`
+            : `[style-audit] save failed (fail-open): ${cas.error}`,
+        );
+      }
       if (style.report.flagged) {
         console.warn(`[style-audit] ${host} FLAGGED: ${style.report.correctiveNote ?? "final fail"}`);
       }

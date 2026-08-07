@@ -41,6 +41,16 @@ describe("buildStyleBrief", () => {
     expect(brief).not.toContain("Послуга 9");
   });
 
+  it("omits the city cleanly when the fact is absent (V2 optional city)", () => {
+    const brief = buildStyleBrief({
+      facts: { businessName: "Ромашка" },
+      vertical: getVertical("generic"),
+    });
+    expect(brief).toContain("Бізнес: Ромашка.");
+    expect(brief).not.toContain("undefined");
+    expect(brief).not.toContain("Ромашка,");
+  });
+
   it("degrades to the bare minimum when only name and city are known", () => {
     const brief = buildStyleBrief({
       facts: { businessName: "Ромашка", city: "Одеса" },
