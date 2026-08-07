@@ -373,7 +373,19 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
     // composition (spec §3). Retries are disabled per-call inside both legs —
     // one attempt IS the 120s stage budget (spec §6).
     const [siteRes, cssRes] = await Promise.allSettled([
-      generateSite(dossier, vertical.id, media, stageSignal(S2_BUDGET_MS), seeded.variantRoll, brief?.spec),
+      generateSite(
+        dossier,
+        vertical.id,
+        media,
+        stageSignal(S2_BUDGET_MS),
+        seeded.variantRoll,
+        brief?.spec,
+        // Per-section variant fallback (spec §4): one independent seeded
+        // stream per section id. Hero stays on the legacy `variant` purpose
+        // (seeded.variantRoll above) — renaming a purpose string re-rolls the
+        // axis for every existing tenant, so the old stream is kept as-is.
+        (sectionId) => rollAxis(host, designNonce, `variant:${sectionId}`),
+      ),
       generateWireStyle(styleBrief, {
         // hue is consumed only when the brief is null (designSpec supersedes it).
         hue: seeded.hue,

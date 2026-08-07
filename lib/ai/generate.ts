@@ -11,9 +11,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, GEN_MODEL } from "./anthropic";
 import {
   heroSchema,
-  richTextSchema,
-  switchbackSchema,
-  servicesSchema,
+  switchbackItemSchema,
+  serviceItemSchema,
   statsSchema,
   testimonialsSchema,
   faqSchema,
@@ -34,7 +33,11 @@ import {
   type StoredBlock,
 } from "@/lib/blocks/schema";
 import { blockLibrary, COMPOSITION_RULES } from "@/lib/blocks/library";
-import { getTemplate, type SiteTemplate } from "@/lib/templates/registry";
+import {
+  getTemplate,
+  type SiteTemplate,
+  type TemplateSectionDef,
+} from "@/lib/templates/registry";
 import { WIRE_TEMPLATE_ID } from "@/lib/design/wire-style";
 import { getVertical } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
@@ -64,9 +67,13 @@ import {
 
 // ---------------------------------------------------------------------------
 // GENERATION-side block union (photo casting by id, 03 §2.1). Differs from the
-// STORED blockInstanceSchema in exactly two arms: hero gains `photoId` and
+// STORED blockInstanceSchema in exactly four arms: hero gains `photoId` and
 // loses the url fields; gallery items are `{photoId, title?, category?}`
-// instead of `{url, alt, …}`. Everything else reuses the registry prop schemas
+// instead of `{url, alt, …}`; services items and switchback (story) rows swap
+// their free-form `imageUrl` for an optional/required `photoId` (V3 §5 —
+// every image slot the model can address is an id-cast, never a URL). One arm
+// is MISSING on purpose: richText has no generation surface at all (see
+// UNREACHABLE_TYPES). Everything else reuses the registry prop schemas
 // verbatim, so the two unions cannot drift on content fields.
 // ---------------------------------------------------------------------------
 const genHeroSchema = heroSchema.omit({ imageUrl: true, imageAlt: true }).extend({
@@ -89,11 +96,40 @@ const genGallerySchema = z.object({
   images: z.array(genGalleryImageSchema).min(1),
 });
 
+// Services photo casting (V3 §5, the cards-with-photo variant): same id-cast
+// door as the gallery. Optional — a services block without photos is the norm;
+// the prompt tells the model when a cast is appropriate.
+const genServiceItemSchema = serviceItemSchema.omit({ imageUrl: true }).extend({
+  photoId: z
+    .string()
+    .optional()
+    .describe(
+      "id фото з медіа-інвентаря (наСайт:так), що СПРАВДІ показує цю послугу — лише для фото-макета послуг; інакше пропусти",
+    ),
+});
+const genServicesSchema = z.object({
+  title: z.string().optional(),
+  items: z.array(genServiceItemSchema).min(1),
+});
+
+// Story (switchback) rows cast their photo by id too — REQUIRED per row: the
+// zig-zag renders its image unconditionally, so a row without a real photo is
+// dropped in assemble(). Reachable only when the wireframe registers the story
+// section as variants-capable (see UNREACHABLE_TYPES).
+const genSwitchbackItemSchema = switchbackItemSchema.omit({ imageUrl: true }).extend({
+  photoId: z
+    .string()
+    .describe("id фото з медіа-інвентаря (наСайт:так) для цього рядка — рядок без валідного фото буде видалений"),
+});
+const genSwitchbackSchema = z.object({
+  title: z.string().optional(),
+  items: z.array(genSwitchbackItemSchema).min(1),
+});
+
 const genBlockSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("hero"), props: genHeroSchema, section: sectionField, variant: variantField }),
-  z.object({ type: z.literal("richText"), props: richTextSchema, section: sectionField, variant: variantField }),
-  z.object({ type: z.literal("switchback"), props: switchbackSchema, section: sectionField, variant: variantField }),
-  z.object({ type: z.literal("services"), props: servicesSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("switchback"), props: genSwitchbackSchema, section: sectionField, variant: variantField }),
+  z.object({ type: z.literal("services"), props: genServicesSchema, section: sectionField, variant: variantField }),
   z.object({ type: z.literal("gallery"), props: genGallerySchema, section: sectionField, variant: variantField }),
   z.object({ type: z.literal("stats"), props: statsSchema, section: sectionField, variant: variantField }),
   z.object({ type: z.literal("testimonials"), props: testimonialsSchema, section: sectionField, variant: variantField }),
@@ -171,24 +207,42 @@ export interface GeneratedSite {
 
 /**
  * Block types the composition pipeline CANNOT ship, and therefore must not
- * advertise (plan §4, wave D — «спалені слоти»):
+ * advertise (plan §4, wave D — «спалені слоти»). V3 connect-or-delete DECISION
+ * (spec §5/§11-V3):
  *
- *  - `switchback` needs a trusted image per row, and the model casts photos by
- *    id only for hero and gallery — a free-form `imageUrl` would be invented, so
- *    assemble() has always dropped the whole block. Wiring it properly means a
- *    photoId-cast arm plus a photo budget shared with the gallery; until then,
- *    advertising it burns a slot the model spends on a section that never
- *    renders. The `story` section stays REGISTERED so already-stored content
- *    keeps rendering through WireSwitchback — it is only hidden from the model.
- *  - `richText` has no section in the wireframe at all, so resolvedSection()
- *    drops it. The schema stays for storage compatibility.
+ *  - `richText` — DELETED from the generation surface for good: no wireframe
+ *    section renders it, none is planned, and marketing prose already lives in
+ *    the structured blocks. The schema stays a STORED block type for manual
+ *    editor use only; there is no richText arm in genBlockSchema, so the model
+ *    cannot produce one even by accident.
+ *  - `switchback` — CONNECTED, conditionally: the gen union carries a
+ *    photoId-cast arm (genSwitchbackSchema — the free-form per-row `imageUrl`
+ *    that burned this slot is gone), and assemble() casts/drops rows
+ *    deterministically. It becomes reachable ONLY once the wireframe registers
+ *    the `story` section as variants-capable — the runtime registry read below
+ *    is the coordination point with the parallel wireframe session: this
+ *    module must work against BOTH the pre-V3 wireframe (story unstyled, type
+ *    stays burned) and the post-V3 one (variants registered, type opens up).
  *
- * One list, read by both prompt docs and the drop filter — so re-enabling
- * either block is deleting one entry, not hunting three call sites. Exported
- * for the S1 capabilities doc (lib/ai/design-brief.ts): a section fed by an
- * unreachable type must not be PLANNED either.
+ * One list, read by both prompt docs and the drop filter — so the state of
+ * either block is one entry, not three call sites. Exported for the S1
+ * capabilities doc (lib/ai/design-brief.ts): a section fed by an unreachable
+ * type must not be PLANNED either.
  */
-export const UNREACHABLE_TYPES = new Set<BlockType>(["switchback", "richText"]);
+export function computeUnreachableTypes(template: SiteTemplate | undefined): Set<BlockType> {
+  const types = new Set<BlockType>(["richText"]);
+  const storyConnected = Boolean(
+    template &&
+      Object.values(template.sections).some(
+        (def) => def.block === "switchback" && Object.keys(def.variants ?? {}).length > 0,
+      ),
+  );
+  if (!storyConnected) types.add("switchback");
+  return types;
+}
+export const UNREACHABLE_TYPES: ReadonlySet<BlockType> = computeUnreachableTypes(
+  getTemplate(WIRE_TEMPLATE_ID),
+);
 
 function buildLibraryDoc(): string {
   return (Object.keys(blockLibrary) as BlockType[])
@@ -226,17 +280,40 @@ function buildSectionDoc(template: SiteTemplate): string {
       const vs = def.variants
         ? ` [layout: default | ${Object.keys(def.variants).join(" | ")}]`
         : "";
-      return `· ${id} — ${def.label}: ${def.description} (блок ${def.block})${vs}`;
+      // The repeat licence is the section's OWN flag, advertised so the model
+      // never has to guess which sections may appear twice (§5 repeat-cap).
+      const rep = def.repeatable ? " [можна двічі]" : "";
+      return `· ${id} — ${def.label}: ${def.description} (блок ${def.block})${vs}${rep}`;
     })
     .filter(Boolean)
     .join("\n");
 }
 
-function buildSystem(vertical: VerticalConfig): string {
+/** Does the wireframe register a photo-capable services layout? Detected by
+ *  variant NAME (the V3 contract with the wireframe session: the services
+ *  photo layout is registered as `cards-with-photo` — any id carrying «photo»
+ *  matches, so a rename doesn't silently mute the casting rule). */
+function servicesPhotoVariants(template: SiteTemplate): string[] {
+  return Object.values(template.sections)
+    .filter((def) => def.block === "services")
+    .flatMap((def) => Object.keys(def.variants ?? {}))
+    .filter((v) => /photo/i.test(v));
+}
+
+function buildSystem(vertical: VerticalConfig, template: SiteTemplate): string {
   // The page is composed against a single structural wireframe; its surface is
   // written by a second call (lib/design/wire-style.ts). Nothing about the LOOK
   // is decided here, so the rules below are purely about composition and copy.
   const templateRule = `СЕКЦІЇ: компонуй сторінку ЛИШЕ із секцій, перелічених у повідомленні нижче. Правила:`;
+  // Casting rules exist only for slots the CURRENT wireframe can render —
+  // advertising a cast the registry can't show would burn tokens on photos
+  // that never appear (same economy as UNREACHABLE_TYPES).
+  const servicesCastRule = servicesPhotoVariants(template).length
+    ? `- services: items[].photoId — ЛИШЕ коли обираєш фото-макет послуг (layout зі словом photo) і в інвентарі є якісне фото САМЕ цієї послуги; інакше пропусти — картки без фото це норма. Фото для команди підставляє код.`
+    : `- Фото для послуг/команди підставляє код — не вигадуй їх.`;
+  const storyCastRule = UNREACHABLE_TYPES.has("switchback")
+    ? ""
+    : `\n- story (зиг-заг): КОЖЕН рядок мусить мати items[].photoId (наСайт:так) — рядок без валідного фото видаляє код; обирай story лише коли є 2–3 РІЗНІ якісні фото для рядків.`;
   return `Ти — досвідчений веб-дизайнер і копірайтер, що збирає односторінковий сайт українському бізнесу: ${vertical.label} (${vertical.personaHint}).
 Тон і акценти: ${vertical.genHint}.
 Ти НЕ пишеш HTML. Ти КОМПОНУЄШ сторінку з фіксованої бібліотеки блоків: обираєш, які блоки і в якому порядку, і заповнюєш їхній вміст. Виклич інструмент build_site.
@@ -265,17 +342,17 @@ GROUNDING (критично для довіри):
 - У <scraped_data> є медіа-інвентар: id, тип, опис, підпис, OCR. Кастуй ЛИШЕ фото з позначкою наСайт:так.
 - hero.photoId — ОДНЕ найатмосферніше / найзагальніше фото як фон першого екрана.
 - У gallery обери решту придатних фото (images[].photoId) і дай кожному короткий title на основі РЕАЛЬНОГО підпису/опису (category — коли доречно). НЕ вигадуй id і не описуй того, чого не видно.
-- Фото для послуг/команди підставляє код — не вигадуй їх.
+${servicesCastRule}${storyCastRule}
 
 ${templateRule}
 - Для КОЖНОГО блоку вкажи section = id секції шаблону; тип блоку має відповідати вказаному («блок X»).
-- Якщо секція має layout-варіанти [layout: default | …] — обери variant, що найкраще пасує цьому бізнесу; якщо не впевнений, не вказуй (буде default).
+- Якщо секція має layout-варіанти [layout: default | …] — обери variant, що найкраще пасує цьому бізнесу; якщо не впевнений, не вказуй — макет обере код.
 - HERO має РІВНО три макети, обирай свідомо під бізнес і під ФОТО:
   · split — текст ліворуч, фото праворуч. Універсальний; бери, коли фото важливе, але не самодостатнє (прайс-орієнтований бізнес, багато тексту).
   · mirror — те саме дзеркально, фото ліворуч. Коли фото має вести око першим (візуальні ніші: квіти, кондитерська, б'юті).
   · banner — фото на весь екран тлом, світлий текст по центру. Найсильніший, але ЛИШЕ якщо в медіа-інвентарі є фото з високою «якість:N/10» і БЕЗ позначки «текст поверх фото» (ідеально — з «годиться на банер»). Слабке, темне чи «текстове» фото на весь екран виглядає гірше за будь-який інший макет — тоді бери split або mirror.
 - hero-секція — перша, contacts-секція — остання; порядок — орієнтир, не догма.
-- Кожну секцію зазвичай один раз. Якщо контенту СПРАВДІ багато — секцію можна використати ДВІЧІ (напр. послуги: основні + додаткові), але лише секцію з layout-варіантами, і повтори МУСЯТЬ мати РІЗНІ variant і РІЗНІ заголовки — сусідні однакові макети виглядають як помилка верстки. РІЗНІ секції можуть живитись ОДНИМ типом блоку (ліміт «макс ×» діє на секцію, не на тип).
+- Кожну секцію зазвичай один раз. Якщо контенту СПРАВДІ багато — секцію можна використати ДВІЧІ (напр. послуги: основні + додаткові), але ЛИШЕ секцію з позначкою [можна двічі], і повтори МУСЯТЬ мати РІЗНІ variant і РІЗНІ заголовки — сусідні однакові макети виглядають як помилка верстки. РІЗНІ секції можуть живитись ОДНИМ типом блоку (ліміт «макс ×» діє на секцію, не на тип).
 
 SEO-МЕТА (обов'язково заповни seo):
 - seo.title — за формулою «{головна послуга} у {місто} — {назва}», до 60 символів. Головну послугу бери з фактів, місто — з фактів.
@@ -326,6 +403,16 @@ export async function generateSite(
   // assemble), and budgetHint drives the deterministic char clamps. Absent →
   // exactly the v1 behaviour.
   designSpec?: DesignSpec,
+  // Per-section seeded rolls (spec §4 «варіанти секцій», axis `variant:<id>`):
+  // uniform [0, 1) per section id, consumed only for a variant-capable section
+  // the model AND the plan left on the default layout. A FUNCTION rather than
+  // a rolls map so the caller doesn't have to enumerate registry sections —
+  // the pipeline passes `(id) => rollAxis(host, nonce, `variant:${id}`)`.
+  // The SECOND instance of a repeatable section is rolled with `<id>:2` so
+  // the two instances draw from distinct streams (the first keeps the bare id
+  // — existing tenants' rolls stay byte-identical).
+  // Absent → no seeded fallback for non-hero sections (today's behaviour).
+  sectionVariantRoll?: (sectionId: string) => number,
 ): Promise<GeneratedSite> {
   const client = getAnthropic();
   const vertical = getVertical(verticalId);
@@ -374,7 +461,7 @@ ${briefDoc}${formatDossierForPrompt(dossier)}
     output_config: { effort: "high" },
     // Belt at the API boundary: the dossier carries emoji-heavy scraped text —
     // a lone surrogate anywhere in the body is a hard 400 (§lib/ai/sanitize).
-    system: stripLoneSurrogates(buildSystem(vertical)),
+    system: stripLoneSurrogates(buildSystem(vertical, template)),
     tools: [buildSiteTool],
     tool_choice: { type: "auto" },
     messages: [{ role: "user", content: stripLoneSurrogates(userPrompt) }],
@@ -417,6 +504,7 @@ ${briefDoc}${formatDossierForPrompt(dossier)}
     dossier,
     variantSeed,
     designSpec?.sectionPlan,
+    sectionVariantRoll,
   );
   return {
     templateId: template.id,
@@ -483,6 +571,96 @@ export function heroVariantForSeed(roll: number, allowBanner: boolean): string {
 function bannerWorthy(meta: PhotoMeta | undefined): boolean {
   if (meta?.burnedText === true) return false;
   return photoScore(meta) >= USABLE_SITE_QUALITY;
+}
+
+/**
+ * How many instances of one section a page may carry (pipeline v2 §5): the
+ * explicit `repeatable` flag is the ONLY licence to repeat. It used to be
+ * «has alternate layouts», which silently made every variant-capable section
+ * repeatable — with the V3 variant sections that rule would have meant two
+ * CTA bands on one page. Variants still matter for making the two instances
+ * LOOK different (the reassignment pass in assemble), they just no longer
+ * grant the repeat itself. Exported for vitest.
+ */
+export function sectionRepeatCap(def: TemplateSectionDef | undefined): number {
+  return def?.repeatable === true ? 2 : 1;
+}
+
+/**
+ * Uniform roll in [0, 1) → a section's layout id (or undefined = the default
+ * layout) — the GENERIC arm of the seeded variant fallback (spec §4 axis
+ * `variant:<sectionId>`), applied only when neither the model nor the S1 plan
+ * named a layout. Same reason as the hero's seeded roll: an empty choice that
+ * always lands on the default is how every site converged on one look.
+ *
+ * The pool includes the unnamed default — UNLESS the section registers its
+ * default under a name too (the hero pattern: `variants.split === component`),
+ * in which case the named ids already cover every layout and adding undefined
+ * would double-count it. Wireframe authors should PREFER the hero pattern so
+ * audits and stored content can always name the layout they mean.
+ *
+ * Hero itself never routes through here — its variant resolves at conversion
+ * (photo veto + the legacy `variant` purpose stream, a reproducibility
+ * contract with existing tenants).
+ */
+export function sectionVariantForRoll(
+  def: TemplateSectionDef | undefined,
+  roll: number,
+  // Per-variant precondition (V3 §5): a layout the BLOCK cannot honour must
+  // not be rollable — e.g. `cards-with-photo` on a services block whose items
+  // carry no photos renders as the plain grid, silently collapsing the axis.
+  // Excluding everything leaves the (unnamed) default.
+  exclude?: (variantId: string) => boolean,
+): string | undefined {
+  const ids = Object.keys(def?.variants ?? {}).filter((id) => !exclude?.(id));
+  if (!def?.variants || ids.length === 0) return undefined;
+  const namesDefault = Object.values(def.variants).includes(def.component);
+  const pool: (string | undefined)[] = namesDefault ? ids : [undefined, ...ids];
+  const t = Number.isFinite(roll) ? Math.min(Math.max(roll, 0), 1 - 1e-9) : 0;
+  return pool[Math.floor(t * pool.length)];
+}
+
+/**
+ * C1/C4 safety net (v2 §5): a repeated section must never repeat the SAME
+ * layout — the prompt asks for different variants, but a model slip would
+ * render two identical-looking sections (reads as a bug). Deterministic
+ * reassignment: the later instance gets the first layout the section hasn't
+ * used yet.
+ *
+ * The option list is CANONICALIZED over the hero pattern: when a section
+ * registers its default under a name (`variants.grid === component`, as
+ * services/gallery/testimonials all do), `undefined` and that name are the
+ * same component — offering `undefined` as a "different" layout would ship
+ * two visually identical sections, the exact failure this net exists to
+ * prevent. Same check as sectionVariantForRoll's pool. A repeatable section
+ * with no (or exhausted) variants keeps the default — repeats and variants
+ * are decoupled (§5), so the flag owner should pair `repeatable` with
+ * registered variants. Exported for vitest.
+ */
+export function reassignRepeatedLayouts(
+  placed: StoredBlock[],
+  template: SiteTemplate,
+): StoredBlock[] {
+  const out = [...placed];
+  const usedLayouts = new Map<string, Set<string>>();
+  for (let i = 0; i < out.length; i++) {
+    const sb = out[i];
+    // Hidden blocks don't render/number — skip them so the pass keeps
+    // matching PageRenderer semantics if it's ever reused on stored content
+    // (generation itself always emits hidden:false).
+    if (!sb.section || sb.hidden) continue;
+    const used = usedLayouts.get(sb.section) ?? new Set<string>();
+    usedLayouts.set(sb.section, used);
+    if (used.has(sb.variant ?? "")) {
+      const def = template.sections[sb.section];
+      const ids = Object.keys(def?.variants ?? {});
+      const namesDefault = def ? Object.values(def.variants ?? {}).includes(def.component) : false;
+      const options: (string | undefined)[] = namesDefault ? ids : [undefined, ...ids];
+      out[i] = { ...sb, variant: options.find((v) => !used.has(v ?? "")) };
+    }
+    used.add(out[i].variant ?? "");
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -781,6 +959,7 @@ function assemble(
   dossier: Dossier,
   variantSeed: number,
   plan?: readonly SectionPlanEntry[],
+  sectionVariantRoll?: (sectionId: string) => number,
 ): StoredBlock[] {
   // sectionPlan gate FIRST — on the model's own blocks, before any conversion
   // or force-injection (§3: the order of enforcement is part of the contract).
@@ -820,33 +999,44 @@ function assemble(
   // best-vetted eligible photo → the generated atmospheric hero (assigned at
   // conversion below). The fallback used to be `eligible[0]`, i.e. whatever the
   // owner posted most recently — a banner-sized bet on feed order (plan §1).
-  // The gallery pool is everything eligible minus the hero's photo, so the hero
-  // background never repeats inside the gallery.
   const genHero = raw.find((b) => b.type === "hero");
   const castHeroId = genHero?.type === "hero" ? genHero.props.photoId : undefined;
   const heroPhoto =
     (castHeroId ? urlById.get(castHeroId) : undefined) ?? pickHeroUrl(eligible, metaByUrl);
-  const galleryPool = eligible.filter((u) => u !== heroPhoto);
+  // Page-wide photo budget (V3 §5): every slot that renders a photo draws from
+  // ONE shared set. The hero seeds it, the services/story casts add to it, and
+  // the gallery pool is derived AT THE POINT OF USE — never snapshotted — so
+  // the same photo can't render as a service card AND a gallery tile, and a
+  // second gallery instance pulls only photos the first didn't. First use wins
+  // in document order (deterministic).
+  const usedPhotos = new Set<string>(heroPhoto ? [heroPhoto] : []);
+  const galleryPool = () => eligible.filter((u) => !usedPhotos.has(u));
 
   type StoredGalleryImage = { url: string; alt?: string; title?: string; category?: string };
-  const galleryFromPool = (): StoredGalleryImage[] =>
-    galleryPool.map((url, i) => ({
+  const galleryFromPool = (): StoredGalleryImage[] => {
+    const pool = galleryPool();
+    for (const u of pool) usedPhotos.add(u);
+    return pool.map((url, i) => ({
       url,
       alt: photoAlt(url, `${altBase} — фото ${i + 1}`),
       ...(captionFor(url) && { title: captionFor(url) }),
     }));
-  // The model's cast list (валідні id, no hero repeat, deduped) wins — its
-  // titles/categories are the whole point of casting. A cast that maps to <2
-  // real photos is unusable → all remaining eligible photos, captions as titles.
+  };
+  // The model's cast list (валідні id, nothing already used elsewhere on the
+  // page, deduped) wins — its titles/categories are the whole point of
+  // casting. A cast that maps to <2 real photos is unusable → all remaining
+  // unused photos, captions as titles. The cast's photos are committed to the
+  // budget only when the cast is actually used, so a failed cast doesn't burn
+  // them for the pool fallback.
   const galleryFromCast = (
     cast: { photoId: string; title?: string; category?: string }[],
   ): StoredGalleryImage[] => {
     const out: StoredGalleryImage[] = [];
-    const seen = new Set<string>();
+    const local = new Set<string>();
     for (const item of cast) {
       const url = urlById.get(item.photoId);
-      if (!url || url === heroPhoto || seen.has(url)) continue;
-      seen.add(url);
+      if (!url || usedPhotos.has(url) || local.has(url)) continue;
+      local.add(url);
       out.push({
         url,
         alt: photoAlt(url, `${altBase} — фото ${out.length + 1}`),
@@ -854,7 +1044,9 @@ function assemble(
         ...(item.category && { category: item.category }),
       });
     }
-    return out.length >= 2 ? out : galleryFromPool();
+    if (out.length < 2) return galleryFromPool();
+    for (const u of local) usedPhotos.add(u);
+    return out;
   };
 
   // GENERATION → STORED conversion (03 §2.1): the id-cast arms become concrete
@@ -909,6 +1101,42 @@ function assemble(
         variant: b.variant,
       };
     }
+    if (b.type === "services") {
+      // Services photo casting (V3 §5, cards-with-photo): the same id→URL door
+      // as the gallery, drawing on the page-wide photo budget — only an
+      // eligible inventory photo can land on a card, the hero background never
+      // repeats here, one photo is never reused on a second card, and a photo
+      // cast here is subtracted from the gallery's pool. An
+      // unresolvable/duplicate id keeps the CARD and drops the PHOTO (cards
+      // degrade to text; a casting slip must not cost a service). The stored
+      // servicesSchema is unchanged — this arm only turns photoId into the
+      // imageUrl the schema always had.
+      const items = b.props.items.map((it) => {
+        const { photoId, ...rest } = it;
+        const url = photoId ? urlById.get(photoId) : undefined;
+        if (!url || usedPhotos.has(url)) return rest;
+        usedPhotos.add(url);
+        return { ...rest, imageUrl: url };
+      });
+      return { type: "services", props: { ...b.props, items }, section: b.section, variant: b.variant };
+    }
+    if (b.type === "switchback") {
+      // Story rows cast per-row photos by id — the reason this type was burned
+      // pre-V3: a free-form imageUrl per row would be invented (§4.8). Unlike
+      // services, the photo IS the row (the zig-zag renders it
+      // unconditionally), so a row whose id doesn't resolve — or repeats a
+      // photo already used anywhere on the page (hero, a service card,
+      // another row) — is dropped whole; a story left with no rows is dropped
+      // in the middle filter below. Draws on the same page-wide budget.
+      const items = b.props.items.flatMap((it) => {
+        const { photoId, ...rest } = it;
+        const url = urlById.get(photoId);
+        if (!url || usedPhotos.has(url)) return [];
+        usedPhotos.add(url);
+        return [{ ...rest, imageUrl: url }];
+      });
+      return { type: "switchback", props: { ...b.props, items }, section: b.section, variant: b.variant };
+    }
     return b;
   });
 
@@ -924,9 +1152,13 @@ function assemble(
   const perSection: Record<string, number> = {};
   const middle = converted
     .filter((b) => b.type !== "hero" && b.type !== "contacts" && b.type !== "lead_form")
-    // Belt for the types the prompt no longer offers (UNREACHABLE_TYPES): a
-    // switchback would carry model-invented per-row images (§4.8).
+    // Belt for the types the prompt doesn't offer (UNREACHABLE_TYPES): always
+    // richText; switchback too until the wireframe registers the story
+    // section as variants-capable (V3 connect decision).
     .filter((b) => !UNREACHABLE_TYPES.has(b.type))
+    // A connected story whose rows all lost their photo cast has nothing to
+    // render — the zig-zag needs an image per row (§4.8).
+    .filter((b) => b.type !== "switchback" || b.props.items.length >= 1)
     // gallery is kept when ≥2 real photos fill it — or when background
     // generation will (pendingImages shimmer placeholders). A fabricated or
     // single-photo gallery still reads as a bug on the live site (§4.8).
@@ -949,13 +1181,12 @@ function assemble(
         const section = resolvedSection(template, b)!;
         const used = (perSection[section] ?? 0) + 1;
         perSection[section] = used;
-        // C1: a section may repeat ONCE (rich content, e.g. services: main +
-        // additional) — but only when it ships alternate layouts, so the two
-        // instances can look different. A single-layout section repeated reads
-        // as a rendering bug, never as design (plan risk #1).
-        const hasAltLayouts =
-          Object.keys(template.sections[section]?.variants ?? {}).length > 0;
-        return used <= (hasAltLayouts ? 2 : 1);
+        // C1 → v2 §5: a section may repeat ONCE (rich content, e.g. services:
+        // main + additional) — but ONLY when its def carries the explicit
+        // `repeatable` flag. The licence used to be «has alternate layouts»,
+        // which would have turned every V3 variant section into a repeatable
+        // one (two CTA bands). See sectionRepeatCap.
+        return used <= sectionRepeatCap(template.sections[section]);
       }
       const seenCount = (perSection[b.type] ?? 0) + 1;
       perSection[b.type] = seenCount;
@@ -984,7 +1215,7 @@ function assemble(
   const canHostGallery = !template || sectionForType(template, "gallery") !== undefined;
   const pendingGenerated = media?.generatedPending ?? 0;
   const injectedGallery: BlockInstance[] =
-    galleryPool.length >= 2 && !modelChoseGallery && canHostGallery
+    galleryPool().length >= 2 && !modelChoseGallery && canHostGallery
       ? [{ type: "gallery", props: { title: "Наші фото", images: galleryFromPool() } }]
       : pendingGenerated > 0 && !modelChoseGallery && canHostGallery
         ? [{ type: "gallery", props: { title: "Наша атмосфера", images: [], pendingImages: pendingGenerated } }]
@@ -1026,30 +1257,48 @@ function assemble(
   // «no two identical adjacent layouts» check like any other.
   placed = applyPlanVariantDefaults(placed, plan, template);
 
-  // C1/C4 safety net: a repeated section must never repeat the SAME layout —
-  // the prompt asks for different variants, but a model slip would render two
-  // identical-looking sections (reads as a bug). Deterministic reassignment:
-  // the later instance gets the first layout the section hasn't used yet
-  // (guaranteed to exist — repeats are only allowed on sections WITH variants).
+  // Generic seeded variant fallback (spec §4, axis `variant:<sectionId>`):
+  // a variant-capable section that BOTH the model and the plan left on the
+  // default layout gets a seeded roll — the hero's «empty choice must not
+  // always land on the default» rule, generalized. Hero is excluded: its
+  // variant was already resolved at conversion (photo veto + its own legacy
+  // `variant` stream). Runs BEFORE the repeat-layout reassignment so a rolled
+  // layout participates in the no-identical-repeats check like any other.
+  if (template && sectionVariantRoll) {
+    // Per-INSTANCE roll streams: `rollAxis` is a pure function of its purpose
+    // string, so keying on the section id alone would hand both instances of
+    // a repeatable section the identical roll — the second instance would
+    // always collide with the first and the safety net below would resolve
+    // the collision instead of the axis. First instance keeps the bare id
+    // (existing tenants' rolls stay byte-identical); the second rolls
+    // `<sectionId>:2`.
+    const occurrence: Record<string, number> = {};
+    placed = placed.map((sb) => {
+      if (!sb.section) return sb;
+      const nth = (occurrence[sb.section] = (occurrence[sb.section] ?? 0) + 1);
+      if (sb.section === "hero" || sb.variant !== undefined) return sb;
+      // Photo-layout precondition: a photo-named layout (the V3 naming
+      // contract, cf. servicesPhotoVariants) is only rollable when the block
+      // actually carries per-item photos — the model was told to cast
+      // photoIds ONLY when choosing a photo layout itself, so an unset
+      // variant means an empty cast, and rolling cards-with-photo onto it
+      // would render the plain grid.
+      const hasItemPhotos =
+        sb.type === "services" && sb.props.items.some((it) => Boolean(it.imageUrl));
+      const rolled = sectionVariantForRoll(
+        template.sections[sb.section],
+        sectionVariantRoll(nth === 1 ? sb.section : `${sb.section}:${nth}`),
+        (id) => /photo/i.test(id) && !hasItemPhotos,
+      );
+      return rolled ? { ...sb, variant: rolled } : sb;
+    });
+  }
+
+  // C1/C4 safety net — see reassignRepeatedLayouts: a repeated section must
+  // never repeat the SAME layout, with the option list canonicalized over the
+  // hero pattern (a named default is the same component as `undefined`).
   if (template) {
-    const usedLayouts = new Map<string, Set<string>>();
-    for (let i = 0; i < placed.length; i++) {
-      const sb = placed[i];
-      // Hidden blocks don't render/number — skip them so the pass keeps
-      // matching PageRenderer semantics if it's ever reused on stored content
-      // (generation itself always emits hidden:false).
-      if (!sb.section || sb.hidden) continue;
-      const used = usedLayouts.get(sb.section) ?? new Set<string>();
-      usedLayouts.set(sb.section, used);
-      if (used.has(sb.variant ?? "")) {
-        const options: (string | undefined)[] = [
-          undefined,
-          ...Object.keys(template.sections[sb.section]?.variants ?? {}),
-        ];
-        placed[i] = { ...sb, variant: options.find((v) => !used.has(v ?? "")) };
-      }
-      used.add(placed[i].variant ?? "");
-    }
+    placed = reassignRepeatedLayouts(placed, template);
   }
 
   // Second href pass, AFTER placement: only now are the real in-page targets

@@ -5,8 +5,12 @@ import { SalonWireWrapper } from "./SalonWireWrapper";
 import {
   WireContacts,
   WireCta,
+  WireCtaCard,
+  WireCtaFullBleed,
   WireFaq,
   WireGallery,
+  WireGalleryMasonry,
+  WireGalleryStream,
   WireHero,
   WireHeroBanner,
   WireHeroMirror,
@@ -16,11 +20,16 @@ import {
   WireMarquee,
   WirePublications,
   WireServices,
+  WireServicesList,
+  WireServicesPhoto,
   WireStats,
   WireSwitchback,
   WireTeam,
   WireTestimonials,
+  WireTestimonialsBigQuote,
+  WireTestimonialsStrip,
   WireTimeline,
+  WireTimelineCards,
 } from "./sections";
 
 /**
@@ -51,8 +60,17 @@ export const salonwireSections: Record<string, TemplateSectionDef> = {
   services: {
     block: "services",
     label: "Послуги",
-    description: "Каркас послуг: сітка карток — назва, опис, ціна.",
+    description:
+      "Каркас послуг: назва, опис, ціна. Три макети: grid — сітка карток (універсальний); " +
+      "list-rows — компактний прайс-лист рядками, ціна праворуч (для довгих переліків); " +
+      "cards-with-photo — картки з фото послуги зверху (лише коли є справжні фото саме цих " +
+      "послуг; картка без фото рендериться як звичайна текстова).",
     component: WireServices,
+    // The hero pattern: the default layout is ALSO registered under a name, so
+    // the model, the plan and stored content can always name the layout.
+    variants: { grid: WireServices, "list-rows": WireServicesList, "cards-with-photo": WireServicesPhoto },
+    // Rich content section (main + additional services) — may appear twice.
+    repeatable: true,
   },
   story: {
     block: "switchback",
@@ -64,14 +82,23 @@ export const salonwireSections: Record<string, TemplateSectionDef> = {
     block: "timeline",
     label: "Як відбувається візит",
     navLabel: "Візит",
-    description: "Каркас кроків візиту: нумерований список карток.",
+    description:
+      "Каркас кроків візиту. Два макети: list — вертикальний нумерований список карток; " +
+      "numbered-cards — кроки поруч у сітці, кожна картка з великим номером.",
     component: WireTimeline,
+    variants: { list: WireTimeline, "numbered-cards": WireTimelineCards },
   },
   gallery: {
     block: "gallery",
     label: "Галерея",
-    description: "Каркас галереї: сітка фото з опційними підписами.",
+    description:
+      "Каркас галереї: фото з опційними підписами. Три макети: grid — рівна сітка 4:3; " +
+      "masonry-2col — дві колонки з чергуванням пропорцій кадрів (мудборд); " +
+      "stream — горизонтальна стрічка з прокруткою і snap (добре для багатьох фото).",
     component: WireGallery,
+    variants: { grid: WireGallery, "masonry-2col": WireGalleryMasonry, stream: WireGalleryStream },
+    // Accumulating content (roboty / interior / process shots) — may repeat.
+    repeatable: true,
   },
   team: {
     block: "team",
@@ -82,8 +109,18 @@ export const salonwireSections: Record<string, TemplateSectionDef> = {
   testimonials: {
     block: "testimonials",
     label: "Відгуки",
-    description: "Каркас відгуків: сітка цитат з автором і роллю.",
+    description:
+      "Каркас відгуків: цитати з автором і роллю. Три макети: cards — сітка карток-цитат; " +
+      "big-quote — перший відгук як одна велика цитата, решта дрібнішими картками " +
+      "(добре, коли є один сильний відгук); strip — горизонтальна стрічка карток із прокруткою.",
     component: WireTestimonials,
+    variants: {
+      cards: WireTestimonials,
+      "big-quote": WireTestimonialsBigQuote,
+      strip: WireTestimonialsStrip,
+    },
+    // Accumulating content — may appear twice on long pages.
+    repeatable: true,
   },
   faq: {
     block: "faq",
@@ -113,8 +150,12 @@ export const salonwireSections: Record<string, TemplateSectionDef> = {
   cta: {
     block: "cta",
     label: "Заклик до дії",
-    description: "Каркас CTA-смуги: заголовок, підзаголовок, одна кнопка.",
+    description:
+      "Каркас CTA: заголовок, підзаголовок, одна кнопка. Три макети: band — центрована смуга; " +
+      "centered-card — вміст в одній картці по центру; full-bleed — стрічка на всю ширину екрана, " +
+      "текст ліворуч, кнопка праворуч (вісь ширини — інший силует сторінки).",
     component: WireCta,
+    variants: { band: WireCta, "centered-card": WireCtaCard, "full-bleed": WireCtaFullBleed },
   },
   values: {
     block: "marquee",

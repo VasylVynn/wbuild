@@ -34,9 +34,14 @@ export interface ContrastResult {
   fixes: string[];
 }
 
-/** Structural pairs from components/templates/salonwire/sections.tsx. sameElement
- *  pairs read color+background off one selector (buttons). */
-const PAIRS: { text: string; surface: string; sameElement?: boolean }[] = [
+/** Structural pairs from components/templates/salonwire/sections.tsx (nav and
+ *  footer classes live in SalonWireWrapper.tsx). sameElement pairs read
+ *  color+background off one selector (buttons). Exported for the maintenance
+ *  test (css-contrast-pairs.test.ts) that keeps this hand-kept map honest
+ *  against the wireframe markup — every class here must still exist there,
+ *  and every NEW variant-modifier class there must land here or in
+ *  PAIRS_EXEMPT below. */
+export const PAIRS: readonly { text: string; surface: string; sameElement?: boolean }[] = [
   { text: ".wire-title", surface: ".wire-hero" },
   { text: ".wire-subtitle", surface: ".wire-hero" },
   { text: ".wire-eyebrow", surface: ".wire-hero" },
@@ -47,7 +52,77 @@ const PAIRS: { text: string; surface: string; sameElement?: boolean }[] = [
   { text: ".wire-price", surface: ".wire-card" },
   { text: ".wire-btn--primary", surface: ".wire-btn--primary", sameElement: true },
   { text: ".wire-footer", surface: ".wire-footer", sameElement: true },
+  // V3 variant relationships (wireframe session), paired on VARIANT-LOCAL
+  // hooks — never on .wire-title/.wire-subtitle/.wire-heading themselves.
+  // fixContrast is variant-blind and findLast resolves a text class to its ONE
+  // color declaration in the sheet, so pairing a shared text class against a
+  // SECOND surface (card vs section — exactly the axis the stylist prompt
+  // tells the model to differentiate) makes the shared declaration oscillate
+  // across fixpoint passes on every site, whether or not the variant renders.
+  // The hooks below exist only where the variant relationship is real: a sheet
+  // that declares no color on them makes the pair "not computable" and it
+  // silently skips (correct fail-open).
+  //  - cta centered-card puts the section title/subtitle inside a card
+  //    (.wire-cta__title / .wire-cta__subtitle in sections.tsx);
+  //  - testimonials big-quote sets the lead author line straight on the
+  //    section surface (.wire-quote__author wraps its .wire-heading).
+  { text: ".wire-cta__title", surface: ".wire-card" },
+  { text: ".wire-cta__subtitle", surface: ".wire-card" },
+  { text: ".wire-quote__author", surface: ".wire-section" },
 ];
+
+/**
+ * Variant-modifier classes (`wire-<section>--<variant>`) deliberately NOT
+ * carried by PAIRS. Every entry needs a one-line WHY — «couldn't be bothered»
+ * is not a reason; the maintenance test fails any modifier class that is
+ * neither paired nor exempted, which is how the manual PAIRS coupling stays
+ * honest as the wireframe session adds variants. Prefer a real PAIRS entry
+ * whenever the variant introduces its own text-on-surface relationship.
+ */
+export const PAIRS_EXEMPT: ReadonlySet<string> = new Set([
+  // Same grid and surfaces as the base hero, photo column mirrored — the base
+  // .wire-hero pairs cover its text verbatim.
+  "wire-hero--mirror",
+  // Text sits over a photo backdrop (an <img>, not a CSS color) — statically
+  // unknowable, exactly the case fixContrast skips url() backgrounds for.
+  "wire-hero--banner",
+  // The scrim's dark-overlay/light-text contract is wire.css's own locked
+  // rules (`.wire-hero--scrim .wire-title` etc.), not model-writable surface.
+  "wire-hero--scrim",
+  // Rows are still .wire-card with .wire-heading/.wire-text/.wire-price on
+  // them — the base card pairs cover the text verbatim; only the flow changes.
+  "wire-services--list-rows",
+  // Same card text pairs as the grid; the added photo is an <img>, exactly
+  // the statically-unknowable case fixContrast skips url() backgrounds for.
+  "wire-services--cards-with-photo",
+  // Photo tiles; captions are .wire-text on the .wire-section surface, which
+  // the base (.wire-text, .wire-section) pair already carries.
+  "wire-gallery--masonry-2col",
+  // Same as masonry: photos + .wire-text captions on the section surface.
+  "wire-gallery--stream",
+  // The lead quote is .wire-text on .wire-section (base pair) and its author
+  // line is the variant-local (.wire-quote__author, .wire-section) pair above.
+  "wire-testimonials--big-quote",
+  // The same .wire-card quote cards as the grid, in a horizontal strip.
+  "wire-testimonials--strip",
+  // Carried by the variant-local (.wire-cta__title/.wire-cta__subtitle,
+  // .wire-card) pairs above; the button is the sameElement .wire-btn--primary
+  // pair.
+  "wire-cta--centered-card",
+  // Same band text-on-section surfaces as the base cta; only the container
+  // cap and the row flow change.
+  "wire-cta--full-bleed",
+  // The same .wire-card step cards as the stacked list, re-gridded; the big
+  // index is covered by the card pairs' surface.
+  "wire-process--numbered-cards",
+  // Nav ink/surface is untouched — the variant only re-places brand/links/CTA
+  // (the base nav carries no pairs either; its chrome is wire.css's own).
+  "wire-nav--centered-brand",
+  // Column count only; the sameElement .wire-footer pair carries the footer.
+  "wire-footer--2col",
+  // Column count only; the sameElement .wire-footer pair carries the footer.
+  "wire-footer--single",
+]);
 
 const MIN_RATIO = 4.5;
 const toOklch = converter("oklch");

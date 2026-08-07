@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
 import { wireDesignAttrs } from "@/lib/design/wire-attrs";
+import { wireChromeVariants } from "./chrome-variants";
 import {
   instagramHref,
   normalizeIgHandle,
@@ -66,6 +67,9 @@ export function SalonWireWrapper({
   // generated stylesheet (pipeline v2 §3-S3). No designSpec → no attributes;
   // wire.css's `var(--font-heading, inherit)` fallbacks take over.
   const design = wireDesignAttrs(brand?.designSpec);
+  // Nav/footer silhouette (spec §5): seeded per site, derived from the same
+  // designSpec — see chrome-variants.ts for the interim derivation contract.
+  const chrome = wireChromeVariants(brand?.designSpec);
   const links = brand?.navLinks ?? [];
   const contact = brand?.contact;
   const phoneDigits = contact?.phone ? normalizeUaPhoneDigits(contact.phone) : "";
@@ -81,7 +85,9 @@ export function SalonWireWrapper({
     >
       {generated && <style dangerouslySetInnerHTML={{ __html: generated }} />}
 
-      <header className="wire-nav">
+      <header
+        className={`wire-nav${chrome.nav === "centered-brand" ? " wire-nav--centered-brand" : ""}`}
+      >
         <div className="wire-container wire-nav__inner">
           {/* brandName/brandAccent are the old templates' two-tone split: the
               last word is handed over separately so their chrome can colour it.
@@ -110,7 +116,15 @@ export function SalonWireWrapper({
 
       <main>{children}</main>
 
-      <footer className="wire-footer">
+      <footer
+        className={`wire-footer${
+          chrome.footer === "2col"
+            ? " wire-footer--2col"
+            : chrome.footer === "single"
+              ? " wire-footer--single"
+              : ""
+        }`}
+      >
         <div className="wire-container wire-footer__inner">
           <div className="wire-stack">
             {brand?.logoUrl && (

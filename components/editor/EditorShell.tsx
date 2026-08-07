@@ -15,6 +15,8 @@ import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-ac
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
 import { getTemplate, type SiteTemplate, type TemplateBrand } from "@/lib/templates/registry";
+import { buildTemplateBrand } from "@/lib/templates/brand";
+import { TENANT_FONT_CLASSES } from "@/lib/fonts";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/components/ui";
 import EditableSection from "./EditableSection";
@@ -309,36 +311,23 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   // matching the published site.
   const template = getTemplate(initial.templateId);
   const TemplateWrapper = template?.wrapper;
-  // Feed the template chrome (Nav/Footer) the REAL business identity — same rule
-  // as the published site (app/s/[host]) — so the editor preview shows the real
-  // brand, nav and contacts instead of the template's demo defaults. Recomputed
-  // from the LIVE blocks so nav/contacts track edits.
-  const brand: TemplateBrand | undefined = (() => {
-    if (!template) return undefined;
-    const name = (initial.businessName ?? "").trim();
-    const words = name.split(/\s+/).filter(Boolean);
-    const NAV_SKIP = new Set(["hero", "stats", "cta", "lead_form", "contacts"]);
-    const seen = new Set<string>();
-    const navLinks: { href: string; label: string }[] = [];
-    for (const b of blocks) {
-      const s = b.section;
-      if (!s || b.hidden || NAV_SKIP.has(s) || seen.has(s)) continue;
-      const label = template.sections[s]?.label;
-      if (!label) continue;
-      seen.add(s);
-      navLinks.push({ href: `#${s}`, label });
-    }
-    const contact = blocks.find((b) => b.type === "contacts")?.props as
-      | { phone?: string; address?: string; hours?: string; email?: string; telegram?: string; viber?: string }
-      | undefined;
-    return {
-      brandName: words.length > 1 ? words.slice(0, -1).join(" ") + " " : name,
-      brandAccent: words.length > 1 ? words[words.length - 1] : "",
-      navLinks,
-      ctaHref: "#lead_form",
-      contact,
-    };
-  })();
+  // Desktop editor parity (pipeline v2 §11-V3): the inline preview goes
+  // through the SAME brand builder as the frame route and the published site
+  // (buildTemplateBrand), so the wrapper injects the draft's wireCss and reads
+  // typography/motion from its designSpec — the owner previews the styled
+  // site, not a grey wireframe with product fonts. Recomputed from the LIVE
+  // blocks so nav/contacts track edits; wireCss/designSpec are the draft's
+  // (regeneration remounts the whole editor page with fresh EditorData).
+  const brand: TemplateBrand | undefined = template
+    ? buildTemplateBrand(
+        initial.businessName,
+        blocks,
+        template,
+        initial.displayLogoUrl,
+        initial.wireCss,
+        initial.designSpec,
+      )
+    : undefined;
   const sectionEls = blocks.map((block, index) => (
     <EditableSection
       key={index}
@@ -507,6 +496,10 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
                 <span aria-hidden className="w-[42px] shrink-0" />
               </div>
               <div
+                // Tenant font parity (v2 §11-V3): the same font-variable classes
+                // the frame route and the public layout attach, so the draft's
+                // designSpec `--font-*` vars resolve to real families inline too.
+                className={TENANT_FONT_CLASSES}
                 // The preview's Nav uses `position: fixed`; a transform here makes
                 // this the containing block for it so it stays INSIDE the framed
                 // preview instead of floating over the editor chrome.

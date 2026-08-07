@@ -19,15 +19,22 @@ describe("buildWireframeCapabilities", () => {
   it("lists plannable wireframe sections with their registered variants", () => {
     const hero = caps.find((c) => c.section === "hero");
     expect(hero).toBeDefined();
-    expect(hero!.variants).toEqual(["split", "mirror", "banner"]);
-    expect(caps.find((c) => c.section === "services")?.variants).toEqual([]);
+    // Superset-tolerant: the parallel wireframe session adds variants this
+    // wave — the three hero layouts are the floor, not the whole set.
+    expect(hero!.variants).toEqual(expect.arrayContaining(["split", "mirror", "banner"]));
+    expect(caps.find((c) => c.section === "services")).toBeDefined();
   });
 
   it("excludes force-injected and unreachable sections from the plan space", () => {
     const ids = caps.map((c) => c.section);
     expect(ids).not.toContain("lead_form");
     expect(ids).not.toContain("contacts");
-    expect(ids).not.toContain("story"); // fed by switchback (UNREACHABLE_TYPES)
+    // story is fed by switchback — V3 connect decision: plannable exactly when
+    // the wireframe registers it as variants-capable (computeUnreachableTypes).
+    const storyDef = getTemplate("salonwire")!.sections.story;
+    const storyConnected = Object.keys(storyDef?.variants ?? {}).length > 0;
+    if (storyConnected) expect(ids).toContain("story");
+    else expect(ids).not.toContain("story");
   });
 
   it("only names sections the wireframe actually registers", () => {

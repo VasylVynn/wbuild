@@ -49,6 +49,19 @@ export interface TemplateSectionDef {
    * absent/unknown). Keeps every site visually distinct without new templates.
    */
   variants?: Record<string, ComponentType<{ data: unknown; extra?: unknown }>>;
+  /**
+   * May this section appear TWICE on one page (rich content, e.g. services:
+   * main + additional)? Deliberately DECOUPLED from `variants` (pipeline v2
+   * spec §5): «has alternate layouts» used to double as the repeat licence,
+   * so every section that gained a variant silently became repeatable — five
+   * new variant-capable sections would have meant two CTA bands on one page.
+   * Absent/false → the section ships at most once. Only content sections that
+   * genuinely accumulate items (gallery, testimonials, services) opt in;
+   * structural bookends and one-per-page bands (hero, cta, lead_form,
+   * contacts, nav, footer) must NEVER carry this flag. Enforced by
+   * `sectionRepeatCap` in lib/ai/generate.ts + vitest.
+   */
+  repeatable?: boolean;
 }
 
 export const studioSections: Record<string, TemplateSectionDef> = {

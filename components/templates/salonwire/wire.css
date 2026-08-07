@@ -19,6 +19,31 @@
  * Everything here is authored so the generated sheet never has to fight
  * specificity: single-class selectors, no !important, no Tailwind colour
  * utilities anywhere in the components.
+ *
+ * ── VARIANTS (pipeline v2 §5) ───────────────────────────────────────────────
+ * A section may ship alternate LOCKED layouts; each is one modifier class on
+ * the section element (see sections.tsx for the markup):
+ *   hero          .wire-hero--mirror | .wire-hero--banner (+ --scrim)
+ *   services      .wire-services--list-rows | .wire-services--cards-with-photo
+ *   gallery       .wire-gallery--masonry-2col | .wire-gallery--stream
+ *   testimonials  .wire-testimonials--big-quote | .wire-testimonials--strip
+ *   process       .wire-process--numbered-cards
+ *   cta           .wire-cta--centered-card | .wire-cta--full-bleed (width axis)
+ *   nav           .wire-nav--centered-brand      (seeded per site, not chosen)
+ *   footer        .wire-footer--2col | .wire-footer--single   (seeded per site)
+ * Style a modifier like any other surface hook — its flow/columns/overflow are
+ * locked below and must not be re-arranged.
+ *
+ * ── MOTION LEVELS (data-motion on .tpl-salonwire, from the designSpec) ──────
+ *   0 — no non-essential motion: transitions and every reveal are neutralised;
+ *   1 — baseline (also when the attribute is absent): hover transitions plus
+ *       a scroll-linked reveal where the engine supports it;
+ *   2 — adds a support-independent load entrance for non-hero sections and a
+ *       stagger across grid children;
+ *   3 — level 2 slowed and deepened, plus hover lift choreography.
+ * The HERO never animates on first paint (its heading is the LCP element), and
+ * the prefers-reduced-motion block at the end of this file neutralises ALL
+ * motion — including animations the generated sheet writes.
  * ────────────────────────────────────────────────────────────────────────────
  */
 
@@ -147,6 +172,29 @@
   .wire-nav__links { width: auto; order: 0; flex-wrap: nowrap; padding-bottom: 0; gap: 1.5rem; }
 }
 
+/* Centered-brand nav (silhouette axis; seeded per site in the wrapper, not a
+   model choice). Below 768px it behaves exactly like the base nav — brand and
+   CTA first, links wrapping to a second line. From 768px the brand sits truly
+   centred (1fr | brand | 1fr) with the CTA at the right edge and the link row
+   centred underneath. */
+@media (min-width: 768px) {
+  .wire-nav--centered-brand .wire-nav__inner {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+  }
+  .wire-nav--centered-brand .wire-nav__brandlock { grid-column: 2; grid-row: 1; justify-content: center; }
+  .wire-nav--centered-brand .wire-nav__cta { grid-column: 3; grid-row: 1; justify-self: end; }
+  .wire-nav--centered-brand .wire-nav__links {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding-bottom: 0.5rem;
+  }
+}
+
 /* ── Hero — three structural layouts (wave B) ──────────────────────────────
  *
  * The block's `variant` picks the component (WireHero / WireHeroMirror /
@@ -218,6 +266,133 @@
   background: transparent;
 }
 
+/* ── Section layout variants — LOCKED (pipeline v2 §5) ─────────────────────
+ *
+ * One modifier class per alternate layout; the section markup carries it (see
+ * sections.tsx). The rules below own each variant's flow, columns and
+ * overflow. Surface stays yours: style the modifier like any other hook —
+ * e.g. `.wire-services--list-rows .wire-service { border-width: 0 0 1px; }`.
+ */
+
+/* services list-rows — card rows instead of a grid: name · description · price
+   share the line (baseline-aligned) and wrap naturally on narrow screens. */
+.wire-services__list { display: flex; flex-direction: column; gap: 1rem; }
+.wire-services--list-rows .wire-service {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.375rem 1.25rem;
+}
+.wire-services--list-rows .wire-service__desc { flex: 1 1 16rem; }
+.wire-services--list-rows .wire-service__price { margin-inline-start: auto; }
+
+/* services cards-with-photo — the grid card gains an optional photo on top; a
+   card WITHOUT a photo renders as the plain text card (the slot collapses). */
+.wire-services--cards-with-photo .wire-service__photo { aspect-ratio: 3 / 2; }
+
+/* gallery masonry-2col — CSS columns. The interlock comes from a DETERMINISTIC
+   per-item ratio rotation (4:3 base / 3:4 / 1:1), NOT from releasing the crop:
+   the gallery <img> ships no width/height attributes, so `aspect-ratio: auto`
+   would render every image 0px tall until it loads and the whole section would
+   collapse, then reflow image-by-image (hard CLS). Every item keeps a reserved
+   box; pending placeholders stay 4:3 so they hold real space. */
+.wire-gallery__masonry { columns: 2; column-gap: 1rem; }
+.wire-gallery--masonry-2col .wire-gallery__item,
+.wire-gallery--masonry-2col .wire-gallery__pending { break-inside: avoid; margin: 0 0 1rem; }
+.wire-gallery--masonry-2col .wire-gallery__item:nth-child(3n + 2) img.wire-media { aspect-ratio: 3 / 4; }
+.wire-gallery--masonry-2col .wire-gallery__item:nth-child(4n + 3) img.wire-media { aspect-ratio: 1 / 1; }
+
+@media (min-width: 640px) {
+  .wire-gallery__masonry { column-gap: 1.5rem; }
+  .wire-gallery--masonry-2col .wire-gallery__item,
+  .wire-gallery--masonry-2col .wire-gallery__pending { margin-bottom: 1.5rem; }
+}
+
+/* gallery stream — a horizontal scroll-snap strip, pure CSS, touch-first. The
+   strip owns its overflow: the PAGE never gains a horizontal scrollbar.
+   One overflow axis makes BOTH axes clip (CSS Overflow 3), so the block
+   padding is shadow/hover-lift headroom for the cards inside, pulled back
+   with a negative block margin so the section rhythm is unchanged. */
+.wire-gallery__stream {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  padding-block: 0.75rem;
+  margin-block: -0.75rem;
+}
+.wire-gallery--stream .wire-gallery__item,
+.wire-gallery--stream .wire-gallery__pending {
+  flex: 0 0 min(78vw, 20rem);
+  scroll-snap-align: start;
+}
+
+@media (min-width: 640px) {
+  .wire-gallery--stream .wire-gallery__item,
+  .wire-gallery--stream .wire-gallery__pending { flex-basis: 22rem; }
+}
+
+/* testimonials big-quote — the lead quote sits straight on the section
+   surface, larger and in full ink; the remaining quotes keep the card grid. */
+.wire-quote--lead { display: flex; flex-direction: column; gap: 1rem; max-width: 46rem; }
+.wire-quote--lead .wire-quote__body { font-size: 1.375rem; line-height: 1.45; color: inherit; }
+.wire-quote--lead .wire-quote__author { display: flex; flex-direction: column; gap: 0.125rem; }
+
+@media (min-width: 640px) { .wire-quote--lead .wire-quote__body { font-size: 1.625rem; } }
+@media (min-width: 1024px) { .wire-quote--lead .wire-quote__body { font-size: 1.875rem; } }
+
+/* testimonials strip — the quote cards in one horizontal scroll-snap row.
+   Same block padding/negative margin as the gallery stream: the scroll
+   container clips both axes, so card shadows and the level-3 hover lift need
+   headroom inside the padding box. */
+.wire-testimonials__strip {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  padding-block: 0.75rem;
+  margin-block: -0.75rem;
+}
+.wire-testimonials--strip .wire-quote { flex: 0 0 min(84vw, 22rem); scroll-snap-align: start; }
+
+@media (min-width: 640px) { .wire-testimonials__strip { gap: 1.5rem; } }
+
+/* cta centered-card — one centred card (.wire-cta__card) carries the CTA. */
+.wire-cta--centered-card .wire-cta__card {
+  max-width: 38rem;
+  margin-inline: auto;
+  align-items: center;
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+}
+
+@media (min-width: 640px) { .wire-cta--centered-card .wire-cta__card { padding: 3rem 2.5rem; } }
+
+/* cta full-bleed (the WIDTH axis) — the container cap is lifted so the band
+   runs edge to edge; content keeps the page padding, copy left and button
+   right, wrapping to a stack on narrow screens. */
+.wire-cta--full-bleed .wire-container { max-width: none; }
+.wire-cta--full-bleed .wire-cta__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem 3rem;
+}
+.wire-cta--full-bleed .wire-cta__copy { flex: 1 1 24rem; }
+
+/* process numbered-cards — the steps sit in the shared grid (the list carries
+   .wire-grid-3 in the markup); the index grows into the card's big number. */
+.wire-process--numbered-cards .wire-timeline__index {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-transform: none;
+  font-family: var(--font-heading, inherit);
+}
+
 /* ── Footer ────────────────────────────────────────────────────────────── */
 
 .wire-footer { border-top: 1px solid var(--wire-line); }
@@ -227,6 +402,14 @@
 
 @media (min-width: 640px) { .wire-footer__inner { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { .wire-footer__inner { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Footer column variants (silhouette axis; seeded per site in the wrapper).
+   Mobile always stacks — the variants only change what ≥640px looks like. */
+.wire-footer--single .wire-footer__inner { grid-template-columns: 1fr; }
+
+@media (min-width: 640px) {
+  .wire-footer--2col .wire-footer__inner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* ── Form ──────────────────────────────────────────────────────────────── */
 
@@ -269,23 +452,35 @@
 .wire-faq__q { font-weight: 600; cursor: pointer; }
 .wire-faq__a { margin-top: 0.5rem; color: var(--wire-ink-soft); }
 
-/* ── Motion — CSS only, zero JS (plan §4, wave D) ──────────────────────────
+/* ── Motion — CSS only, zero JS (pipeline v2 §1) ───────────────────────────
  *
- * Two layers:
- *  1. base TRANSITIONS on the interactive primitives. Hover states are the
- *     generated sheet's business, but a colour that snaps reads cheap — with a
- *     base duration here every hover it writes eases, even when it forgot to
- *     say so. It may override the timing like any other surface property.
- *  2. a scroll-linked REVEAL through `animation-timeline: view()` — no observer,
- *     no hydration. Behind @supports on purpose: where the timeline is missing
- *     the declaration is simply never applied, so nothing is hidden by default
- *     and there is no fallback to write. The HERO is excluded — its heading is
- *     the LCP element and must paint opaque on the first frame.
+ * Levels ride on `data-motion` (0–3) set by the wrapper from the designSpec;
+ * no attribute behaves as level 1. Layers:
  *
- * The reduce-motion block is the ONE place this file uses !important: it also
- * has to neutralise animations the GENERATED sheet wrote. That sheet cannot
- * honour the preference itself — css-lint keeps its @keyframes but strips every
- * @media it writes, so the switch has to live in the base layer.
+ *  1. base TRANSITIONS on the interactive primitives (levels 1–3). Hover
+ *     states are the generated sheet's business, but a colour that snaps reads
+ *     cheap — with a base duration here every hover it writes eases, even when
+ *     it forgot to say so. It may override the timing like any other surface.
+ *  2. levels 2–3: a support-INDEPENDENT load entrance (@keyframes, no
+ *     animation-timeline needed) for non-hero sections, with an
+ *     animation-delay stagger across grid/list children. Content is never
+ *     hidden without animation support: no support → the declaration is
+ *     ignored and everything renders opaque.
+ *  3. a scroll-linked REVEAL through `animation-timeline: view()` — no
+ *     observer, no hydration. Behind @supports on purpose: where the timeline
+ *     is missing nothing is hidden and there is no fallback to write. On
+ *     levels 2–3 it wins back over the load entrance (later + more specific)
+ *     and the stagger moves into animation-range offsets, because time delays
+ *     do not tick on a scroll timeline.
+ *  4. level 3 only: hover lift choreography and slower, deeper reveals.
+ *  5. level 0: the same neutralisation as reduced-motion, keyed on the
+ *     owner's choice instead of the OS preference.
+ *
+ * The HERO is excluded from every reveal — its heading is the LCP element and
+ * must paint opaque on the first frame. The reduce-motion block stays the LAST
+ * rule of this file and uses !important: it also has to neutralise animations
+ * the GENERATED sheet wrote (css-lint keeps its @keyframes but strips every
+ * @media it writes, so the switch has to live here).
  */
 
 @media (prefers-reduced-motion: no-preference) {
@@ -303,19 +498,91 @@
   .wire-contact__link,
   .wire-faq__q { transition: color 160ms ease, opacity 160ms ease; }
 
+  /* Levels 2–3: load entrance + stagger (support-independent). `backwards`
+     fill on purpose — after the animation the element releases to its natural
+     styles, so hover transforms (ours or the sheet's) keep working. */
+  @keyframes wire-enter {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  .tpl-salonwire[data-motion="2"] { --wire-enter-ms: 480ms; --wire-stagger-ms: 70ms; }
+  .tpl-salonwire[data-motion="3"] { --wire-enter-ms: 760ms; --wire-stagger-ms: 110ms; }
+  .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) .wire-section:not(.wire-hero) > .wire-container > *,
+  .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) :is(.wire-grid-2, .wire-grid-3, .wire-grid-4, .wire-services__list, .wire-timeline__list) > * {
+    animation: wire-enter var(--wire-enter-ms, 480ms) ease-out backwards;
+  }
+  .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) :is(.wire-grid-2, .wire-grid-3, .wire-grid-4, .wire-services__list, .wire-timeline__list) > :nth-child(2) { animation-delay: var(--wire-stagger-ms, 70ms); }
+  .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) :is(.wire-grid-2, .wire-grid-3, .wire-grid-4, .wire-services__list, .wire-timeline__list) > :nth-child(3) { animation-delay: calc(var(--wire-stagger-ms, 70ms) * 2); }
+  .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) :is(.wire-grid-2, .wire-grid-3, .wire-grid-4, .wire-services__list, .wire-timeline__list) > :nth-child(4) { animation-delay: calc(var(--wire-stagger-ms, 70ms) * 3); }
+  .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) :is(.wire-grid-2, .wire-grid-3, .wire-grid-4, .wire-services__list, .wire-timeline__list) > :nth-child(5) { animation-delay: calc(var(--wire-stagger-ms, 70ms) * 4); }
+  .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) :is(.wire-grid-2, .wire-grid-3, .wire-grid-4, .wire-services__list, .wire-timeline__list) > :nth-child(n + 6) { animation-delay: calc(var(--wire-stagger-ms, 70ms) * 5); }
+
   @supports (animation-timeline: view()) {
     @keyframes wire-rise {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: none; }
     }
-    .wire-section:not(.wire-hero) > .wire-container > * {
+    /* Baseline (level 1 / no attribute): section children rise as they enter.
+       Level 0 must opt out IN THE SELECTOR: a progress-based (view()) timeline
+       is driven by scroll position, not the clock, so the duration/delay
+       neutralisation in the level-0 block below cannot stop it — and `both`
+       fill would keep content at opacity:0 before its range. */
+    .tpl-salonwire:not([data-motion="0"]) .wire-section:not(.wire-hero) > .wire-container > * {
       animation: wire-rise linear both;
       animation-timeline: view();
       animation-range: entry 6% cover 20%;
     }
+    /* Levels 2–3: the scroll-driven reveal wins back over the load entrance
+       (same targets, later and more specific); the stagger becomes range
+       offsets. The time delays are re-zeroed PER INDEX below — the nth-child
+       delay rules outside this block are (0,4,0), so the blanket
+       `animation-delay: 0s` in this shared (0,3,0) rule alone would lose to
+       them. `backwards` fill again, for the same hover reason. */
+    .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) .wire-section:not(.wire-hero) > .wire-container > *,
+    .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) :is(.wire-grid-2, .wire-grid-3, .wire-grid-4, .wire-services__list, .wire-timeline__list) > * {
+      animation: wire-rise linear backwards;
+      animation-timeline: view();
+      animation-delay: 0s;
+      animation-range: entry 4% cover 22%;
+    }
+    .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) :is(.wire-grid-2, .wire-grid-3, .wire-grid-4, .wire-services__list, .wire-timeline__list) > :nth-child(2) { animation-delay: 0s; animation-range: entry 8% cover 26%; }
+    .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) :is(.wire-grid-2, .wire-grid-3, .wire-grid-4, .wire-services__list, .wire-timeline__list) > :nth-child(3) { animation-delay: 0s; animation-range: entry 12% cover 30%; }
+    .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) :is(.wire-grid-2, .wire-grid-3, .wire-grid-4, .wire-services__list, .wire-timeline__list) > :nth-child(4) { animation-delay: 0s; animation-range: entry 16% cover 34%; }
+    .tpl-salonwire:is([data-motion="2"], [data-motion="3"]) :is(.wire-grid-2, .wire-grid-3, .wire-grid-4, .wire-services__list, .wire-timeline__list) > :nth-child(n + 5) { animation-delay: 0s; animation-range: entry 20% cover 38%; }
+    /* Level 3: a slower, deeper section reveal. */
+    .tpl-salonwire[data-motion="3"] .wire-section:not(.wire-hero) > .wire-container > * { animation-range: entry 4% cover 34%; }
   }
+
+  /* Level 3: hover lift choreography + relaxed transition timing. The sheet
+     may still restyle any of it — these are late, but not important. */
+  .tpl-salonwire[data-motion="3"] .wire-btn,
+  .tpl-salonwire[data-motion="3"] .wire-card,
+  .tpl-salonwire[data-motion="3"] .wire-gallery__item { transition-duration: 240ms; }
+  .tpl-salonwire[data-motion="3"] .wire-card:hover,
+  .tpl-salonwire[data-motion="3"] .wire-gallery__item:hover { transform: translateY(-4px); }
+  .tpl-salonwire[data-motion="3"] .wire-btn:hover { transform: translateY(-2px); }
 }
 
+/* Motion level 0 — «вимкнено»: the reduced-motion neutralisation, keyed on the
+   owner's choice. Must also kill animations the GENERATED sheet wrote, hence
+   the !important. `animation-name/animation-timeline: none` are the ones that
+   actually stop SCROLL-DRIVEN animations — a view() timeline is driven by
+   scroll progress, so zeroing durations/delays alone is inert against it. */
+.tpl-salonwire[data-motion="0"] *,
+.tpl-salonwire[data-motion="0"] *::before,
+.tpl-salonwire[data-motion="0"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+  animation-name: none !important;
+  animation-timeline: none !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* The OS preference outranks every level — keep this block LAST in the file.
+   Our own reveals already live inside (prefers-reduced-motion: no-preference);
+   the name/timeline kills below are for scroll-driven animations the GENERATED
+   sheet may have written, which time-based resets cannot stop. */
 @media (prefers-reduced-motion: reduce) {
   .tpl-salonwire *,
   .tpl-salonwire *::before,
@@ -323,6 +590,8 @@
     animation-duration: 0.01ms !important;
     animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
+    animation-name: none !important;
+    animation-timeline: none !important;
     transition-duration: 0.01ms !important;
   }
 }
