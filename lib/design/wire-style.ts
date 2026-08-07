@@ -168,8 +168,11 @@ ${tsx}
     ],
     // Retries disabled (pipeline v2 §6): one attempt IS the S2а/S4-regen stage
     // budget — a failed call degrades (prev sheet / grey) instead of retrying
-    // past the deadline.
-  }, { signal: opts.signal, maxRetries: 0 });
+    // past the deadline. The per-request timeout must exceed the S2а stage
+    // budget (150s): the client default of 120s was firing FIRST and starved
+    // the widened stage budget (measured live: "Request timed out" at 120.0s
+    // on the post-V3 prompt, which crosses 120s routinely).
+  }, { signal: opts.signal, maxRetries: 0, timeout: 145_000 });
 
   const text = res.content
     .map((b) => (b.type === "text" ? b.text : ""))
