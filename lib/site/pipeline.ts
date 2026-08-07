@@ -113,7 +113,11 @@ export interface PipelineResult {
 // deadline caps the whole synchronous model part with headroom for DB writes.
 const CHAIN_BUDGET_MS = 240_000;
 const S0_BUDGET_MS = 5_000;
-const S1_BUDGET_MS = 40_000;
+/** Measured live: adaptive thinking alone can spend 20-30s before the tool
+ *  call; a 40s budget aborted S1 on a real regen (v1 fallback = no designSpec,
+ *  no fonts/motion — the headline feature silently off). 60s keeps the chain
+ *  at 5+60+150+~5 ≈ 220s ≤ 240s. */
+const S1_BUDGET_MS = 60_000;
 /** Content leg (composition) — measured 44–79s pre-v2, unchanged inputs. */
 const S2B_BUDGET_MS = 120_000;
 /** Style leg: the V3 wireframe grew the prompt (wire.css + sections.tsx are
@@ -345,6 +349,7 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
 
     // ── S1: design brief (fail-open → v1 path) ──────────────────────────────
     await emit({ stage: "s1_brief", status: "start" });
+    const s1At = Date.now();
     const capabilities = buildWireframeCapabilities();
     const brief = await generateDesignBrief({
       dossier,
@@ -363,12 +368,15 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
       stage: "s1_brief",
       status: "done",
       detail: brief
-        ? { briefed: true, repairs: brief.repairs }
-        : { briefed: false, fallback: "v1" },
+        ? { briefed: true, repairs: brief.repairs, elapsedMs: Date.now() - s1At }
+        : { briefed: false, fallback: "v1", elapsedMs: Date.now() - s1At },
     });
+    // Budget tuning is data-driven from here on — every stage logs elapsed.
+    log.info("s1 elapsed", { host, ms: Date.now() - s1At, briefed: Boolean(brief) });
 
     // ── S2а ∥ S2б: stylesheet ∥ composition ─────────────────────────────────
     await emit({ stage: "s2_generate", status: "start" });
+    const s2At = Date.now();
     // The style brief's section line comes from the PLAN now (the legs run in
     // parallel, the composition doesn't exist yet); no brief → the line drops
     // (v1 degradation) instead of serializing the legs.
@@ -421,8 +429,9 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
     await emit({
       stage: "s2_generate",
       status: "done",
-      detail: { styled: rawCss !== undefined },
+      detail: { styled: rawCss !== undefined, elapsedMs: Date.now() - s2At },
     });
+    log.info("s2 elapsed", { host, ms: Date.now() - s2At, styled: rawCss !== undefined });
 
     // ── S3: deterministic compile + THE draft write ─────────────────────────
     await emit({ stage: "s3_compile", status: "start" });
