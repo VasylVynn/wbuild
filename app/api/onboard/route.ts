@@ -5,17 +5,20 @@ import { stripLoneSurrogates, safeSlice, sanitizeMessages } from "@/lib/ai/sanit
 import {
   onboardTools,
   applySaveFacts,
-  enforceReadyGate,
   buildOnboardSystem,
   computeProgress,
-  fallbackQuestion,
   buildFactsSummary,
   sanitize,
+  sanitizeInboundMessage,
   historyToMessages,
   scrapeInstagramInput,
   analyzeImageInput,
   setMediaRoleInput,
   DATA_TOOL_NAMES,
+  START_GENERATION_TOOL_NAME,
+  hasContactChannel,
+  COLLECTING_FLOOR_MSG,
+  CONFIRMED_FLOOR_MSG,
   type ChatMsg,
   type OnboardAccum,
 } from "@/lib/ai/onboard";
@@ -40,14 +43,19 @@ import { analyzePhoto } from "@/lib/media/analyze-photo";
 import { isApifyConfigured } from "@/lib/ig/apify";
 
 /**
- * Agentic onboarding turn (refactor 04 §2). Per user turn the model loops until
- * it stops calling data tools: it can scrape Instagram, analyze photos, sort
- * photo roles, fetch URLs (Anthropic server tool) and save facts. Modeled on the
- * editor-chat loop; Sonnet 5 API surface (adaptive thinking, output_config.effort,
- * task_budget beta) fixes the old budget_tokens 400.
+ * Agentic onboarding turn (refactor 04 §2; W0 «вільний агент», plan 2026-08-07
+ * §0). Per user turn the model loops until it stops calling data tools: it can
+ * scrape Instagram, analyze photos, sort photo roles, fetch URLs (Anthropic
+ * server tool) and save facts. `start_generation` is TERMINAL: the owner
+ * explicitly agreed to generate, the loop ends and the client starts the
+ * existing generate flow. Modeled on the editor-chat loop; Sonnet 5 API surface
+ * (adaptive thinking, output_config.effort, task_budget beta) fixes the old
+ * budget_tokens 400.
  *
  * SSE events: {t:"think"} thinking started · {t:"tool",name,label} a tool began ·
- * {t:"d",text} text delta · {t:"final",message,facts,verticalId,ready,confirmed,
+ * {t:"d",text} text delta · {t:"generate"} the model called start_generation —
+ * the client must invoke the runGenerate flow (auth gate included); ALWAYS
+ * followed by {t:"final"} · {t:"final",message,facts,verticalId,ready,confirmed,
  * quickReplies,progress,media} · {t:"error",message}.
  * Refusals (rate limit / over-long chat) come back as plain JSON, not a stream.
  */
@@ -56,7 +64,6 @@ export const maxDuration = 300;
 
 const MAX_ROUNDS = 4; // real tool rounds (task_budget paces within them)
 const MAX_ITERATIONS = 10; // hard cap incl. pause_turn (web_fetch) resumes
-const MAX_MSG_CHARS = 4000;
 const MAX_BODY_BYTES = 128 * 1024;
 const ANALYZE_CONCURRENCY = 4;
 
@@ -73,6 +80,7 @@ const TOOL_LABELS: Record<string, string> = {
   web_fetch: "Читаю сторінку…",
   set_media_role: "Сортую фото…",
   save_facts: "Занотовую…",
+  [START_GENERATION_TOOL_NAME]: "Запускаю створення сайту…",
 };
 
 function parseBody(body: unknown): {
@@ -90,10 +98,13 @@ function parseBody(body: unknown): {
     if (!m || typeof m !== "object") return null;
     const { role, content } = m as Record<string, unknown>;
     if ((role !== "user" && role !== "assistant") || typeof content !== "string") return null;
-    // safeSlice + strip: a 4000-char cut landing inside an emoji left a lone
-    // surrogate in the resent history → the WHOLE next Anthropic call 400'd
-    // («no low surrogate in string», seen in prod).
-    history.push({ role, content: stripLoneSurrogates(safeSlice(content, MAX_MSG_CHARS)) });
+    // C1 (plan 2026-08-07 §8а): user text is capped + surrogate-stripped;
+    // assistant text passes through byte-identical (it is our own model's
+    // output — slicing it made the model's view diverge from the persisted
+    // transcript and the model echoed the truncated text back). The old
+    // 4000-char cut landing inside an emoji also left a lone surrogate that
+    // 400'd the WHOLE next Anthropic call — stripping stays for both roles.
+    history.push({ role, content: sanitizeInboundMessage(role, content) });
   }
   const factsParsed = businessFactsSchema.partial().safeParse(b.facts ?? {});
   if (!factsParsed.success) return null;
@@ -145,16 +156,14 @@ export async function POST(req: Request): Promise<Response> {
   if (history.length > maxChatMessages()) {
     return Response.json({
       t: "refusal",
-      message: "Ця розмова вже дуже довга. Натисніть «Все вірно, генеруємо» — або почніть нову розмову.",
+      message:
+        "Ця розмова вже дуже довга. Якщо кнопка «Створити сайт» вже зʼявилась — тисніть її, або почніть нову розмову.",
     });
   }
 
   const transcript = historyToMessages(history);
   if (transcript.length === 0) {
-    return Response.json({
-      t: "refusal",
-      message: "Розкажіть трохи про ваш бізнес — що це за справа, у якому місті, і який телефон?",
-    });
+    return Response.json({ t: "refusal", message: COLLECTING_FLOOR_MSG });
   }
 
   // Request-scoped mutable state — tools mutate it; the final event ships it back.
@@ -321,6 +330,9 @@ export async function POST(req: Request): Promise<Response> {
       }));
       let finalText = "";
       let sawText = false;
+      // The model called start_generation (terminal, plan C2/C7): emit
+      // {t:"generate"} before {t:"final"} so the client starts runGenerate.
+      let generateRequested = false;
       // Last-built system prompt — reused by the no-tools "speak up" call below.
       let lastSystem = "";
 
@@ -401,9 +413,23 @@ export async function POST(req: Request): Promise<Response> {
             (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use",
           );
           const dataUses = toolUses.filter((b) => (DATA_TOOL_NAMES as readonly string[]).includes(b.name));
+          const generateNow = toolUses.some((b) => b.name === START_GENERATION_TOOL_NAME);
+          // C7 backstop where the signal is minted: start_generation without a
+          // business name + contact channel must NOT become {t:"generate"} —
+          // the client's runGenerate gate would reject it one render later and
+          // the UI would contradict itself. The model gets a corrective
+          // tool_result and another round to ASK for the missing requisite.
+          const canGenerate =
+            Boolean(accum.facts.businessName?.trim()) && hasContactChannel(accum.facts);
+          if (generateNow && canGenerate) generateRequested = true;
+          const startGenerationResult = canGenerate
+            ? "OK: запуск підтверджено"
+            : "НЕ запущено: бракує назви бізнесу або контакт-каналу (телефон / Instagram / Telegram / Viber). Збережи відоме через save_facts і попроси, чого бракує, одним коротким питанням.";
+
           // No data tools this round → the turn is done (save_facts already folded).
-          // Close the tool loop first (save_facts still needs its tool_result) so
-          // the "speak up" continuation below can extend this conversation.
+          // Close the tool loop first (save_facts/start_generation still need
+          // their tool_result) so the "speak up" continuation below can extend
+          // this conversation.
           if (dataUses.length === 0) {
             if (toolUses.length) {
               apiMessages.push({ role: "assistant", content: final.content });
@@ -413,11 +439,15 @@ export async function POST(req: Request): Promise<Response> {
                   (tu): Anthropic.Beta.BetaToolResultBlockParam => ({
                     type: "tool_result",
                     tool_use_id: tu.id,
-                    content: "OK: збережено",
+                    content:
+                      tu.name === START_GENERATION_TOOL_NAME ? startGenerationResult : "OK: збережено",
                   }),
                 ),
               });
             }
+            // A rejected start_generation gets one more round (bounded by
+            // MAX_ROUNDS) so the model can ask instead of the UI flapping.
+            if (generateNow && !canGenerate) continue;
             break;
           }
 
@@ -428,19 +458,34 @@ export async function POST(req: Request): Promise<Response> {
             dataUses.map(async (tu) => ({ id: tu.id, text: await runDataTool(tu.name, tu.input) })),
           );
           const results: Anthropic.Beta.BetaToolResultBlockParam[] = toolUses.map((tu) =>
-            tu.name === "save_facts"
-              ? { type: "tool_result", tool_use_id: tu.id, content: "OK: збережено" }
-              : {
+            (DATA_TOOL_NAMES as readonly string[]).includes(tu.name)
+              ? {
                   type: "tool_result",
                   tool_use_id: tu.id,
                   content: dataResults.find((r) => r.id === tu.id)?.text ?? "Нема даних.",
+                }
+              : {
+                  type: "tool_result",
+                  tool_use_id: tu.id,
+                  content:
+                    tu.name === START_GENERATION_TOOL_NAME ? startGenerationResult : "OK: збережено",
                 },
           );
           apiMessages.push({ role: "user", content: results });
+
+          // start_generation on a round that ALSO ran data tools is NOT
+          // terminal: `media` is mutated in-place by the handlers, but
+          // `accum.facts` only changes through save_facts — breaking here
+          // would generate from facts the model never got to commit. Keep
+          // generateRequested latched and give the model the next round to
+          // fold the scrape/analyze results; a tool-free round breaks above.
         }
 
-        // Hard ready-gate first (product invariant, not conversation scripting).
-        Object.assign(accum, enforceReadyGate(accum));
+        // W0: enforceReadyGate is DELETED (plan C7 — the phone-required gate
+        // silently reset ready→collecting and deadlocked the CTA). The model's
+        // status + start_generation ARE the readiness signal; the server-side
+        // backstop lives in generateDraftAction (name + contact channel).
+        if (generateRequested && accum.status !== "confirmed") accum.status = "confirmed";
         let message = sanitize(finalText);
 
         // Model-always-speaks (owner decision): a tool-only turn gets ONE extra
@@ -481,15 +526,26 @@ export async function POST(req: Request): Promise<Response> {
         // second ask reads as two conflicting requests. The prompt owns the
         // one-ask-per-turn rule; code only floors total silence below.
         // Deterministic floor — only reachable when the speak-up call itself
-        // failed. Status-aware: a confirmed turn must never end with a question.
+        // failed. Status-aware, and HONEST (plan C2): the confirmed floor must
+        // never claim generation started — only the {t:"generate"} signal (the
+        // client auto-starts on it) or the owner's button starts it.
         if (!message) {
-          message =
-            accum.status === "confirmed"
-              ? "Чудово! Генерую чернетку сайту — за мить покажу превʼю, і ви самі вирішите, коли публікувати."
+          // «Запускаю…», not «Починаю збирати…»: the route is auth-blind — an
+          // anonymous visitor hits the login gate next, so the copy may only
+          // claim the SIGNAL was sent (the client owns the honest gate line).
+          message = generateRequested
+            ? "Запускаю створення сайту."
+            : accum.status === "confirmed"
+              ? CONFIRMED_FLOOR_MSG
               : accum.status === "ready"
                 ? buildFactsSummary(accum.facts)
-                : fallbackQuestion(accum.facts);
+                : COLLECTING_FLOOR_MSG;
         }
+
+        // The terminal start_generation signal — BEFORE final so the client can
+        // flip into the generating state, while final still delivers the
+        // authoritative facts/media it generates from.
+        if (generateRequested) send({ t: "generate" });
 
         send({
           t: "final",
@@ -498,6 +554,10 @@ export async function POST(req: Request): Promise<Response> {
           verticalId: accum.verticalId,
           ready: accum.status !== "collecting",
           confirmed: accum.status === "confirmed",
+          // Mirrors the {t:"generate"} event (same field as the non-stream
+          // fallback's OnboardTurnResult) so a client that missed the event can
+          // still see the signal on final.
+          generate: generateRequested,
           quickReplies: accum.quickReplies,
           progress: computeProgress(accum.facts),
           media: {

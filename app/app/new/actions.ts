@@ -48,13 +48,14 @@ export async function onboardAction(
     verticalId: verticalId ?? "generic",
     ready: current?.ready ?? false,
     confirmed: current?.confirmed ?? false,
+    generate: false,
     quickReplies: [],
     progress: [],
   });
 
   if (history.length > maxChatMessages()) {
     return refuse(
-      "Ця розмова вже дуже довга. Натисніть «Все вірно, генеруємо» — або почніть нову розмову.",
+      "Ця розмова вже дуже довга. Якщо кнопка «Створити сайт» вже зʼявилась — тисніть її, або почніть нову розмову.",
     );
   }
 
@@ -91,23 +92,38 @@ export type GenerateDraftResult =
  * ownership + re-links the conversation now (both were at finalize before).
  */
 export async function generateDraftAction(
-  facts: BusinessFacts,
+  // Partial since W0 (plan C7): city/phone are no longer required inputs — the
+  // backstop below checks name + contact channel and bridges the rest.
+  facts: Partial<BusinessFacts>,
   verticalId?: string,
   media?: SiteMedia,
   conversationId?: string,
 ): Promise<GenerateDraftResult> {
   // Server-side backstop (adversarial review): a bypassed client must not reach
-  // generation with a hollow facts object.
-  const parsedFacts = businessFactsSchema.safeParse(facts);
-  if (
-    !parsedFacts.success ||
-    !parsedFacts.data.businessName.trim() ||
-    !parsedFacts.data.city.trim() ||
-    !parsedFacts.data.phone.trim()
-  ) {
+  // generation with a hollow facts object. W0 (plan C7): the requirement is
+  // businessName + ANY contact channel (phone / telegram / instagram / viber) —
+  // a phone-less site with IG-direct as the contact is legitimate (lead_form is
+  // force-injected regardless, invariant 8).
+  //
+  // TODO(V2): businessFactsSchema still requires city/phone as z.string() and
+  // generateSite parses dossier.facts strictly. Bridge until the V2 relax:
+  // absent city/phone enter as "" — an empty string parses, and every renderer
+  // simply omits the row (WireContacts `if (d.phone)`, footer `contact?.phone &&`,
+  // groundHrefs routes tel: to #lead_form on empty digits).
+  const parsedFacts = businessFactsSchema.safeParse({ city: "", phone: "", ...(facts ?? {}) });
+  const contactChannel =
+    parsedFacts.success &&
+    [
+      parsedFacts.data.phone,
+      parsedFacts.data.telegram,
+      parsedFacts.data.instagram,
+      parsedFacts.data.viber,
+    ].some((v) => typeof v === "string" && v.trim().length > 0);
+  if (!parsedFacts.success || !parsedFacts.data.businessName.trim() || !contactChannel) {
     return {
       ok: false,
-      error: "Бракує обовʼязкових даних — назви, міста або телефону. Поверніться до розмови й додайте їх.",
+      error:
+        "Бракує назви бізнесу або хоча б одного контакту (телефон, Instagram, Telegram чи Viber). Поверніться до розмови й додайте їх.",
     };
   }
 
@@ -155,7 +171,23 @@ export async function generateDraftAction(
     }
     host = existingHost ?? (await uniqueSubdomain(bizFacts.businessName));
 
-    const dossier = conversationId ? await buildDossierForConversation(conversationId) : null;
+    const rawDossier = conversationId ? await buildDossierForConversation(conversationId) : null;
+    // TODO(V2): same bridge as the backstop above — generateSite strict-parses
+    // dossier.facts as full BusinessFacts (lib/ai/generate.ts), so absent
+    // city/phone/businessName from the persisted facts_state must enter as the
+    // confirmed value or "". Empty strings render nothing (verified: contacts
+    // row, footer link and tel: grounding all skip falsy values).
+    const dossier = rawDossier
+      ? {
+          ...rawDossier,
+          facts: {
+            businessName: bizFacts.businessName,
+            city: "",
+            phone: "",
+            ...(rawDossier.facts ?? {}),
+          },
+        }
+      : null;
 
     const res = await generateDraft({
       host,

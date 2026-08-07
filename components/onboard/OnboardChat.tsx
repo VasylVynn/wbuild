@@ -19,7 +19,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useSmoothText } from "@/components/useSmoothText";
-import type { ChatMsg, ProgressItem } from "@/lib/ai/onboard";
+import type { ChatMsg } from "@/lib/ai/onboard";
+import { hasContactChannel } from "@/lib/onboard/contact-channel";
 import {
   onboardAction,
   generateDraftAction,
@@ -38,7 +39,7 @@ import {
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import { MAX_PHOTOS, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
 import { processImage } from "@/lib/media/client-image";
-import { Button, Chip, Card, ConfirmDialog } from "@/components/ui";
+import { Button, Card, ConfirmDialog } from "@/components/ui";
 import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 import DomainStep from "@/components/onboard/DomainStep";
 import { pixelTrack } from "@/lib/analytics/pixel";
@@ -50,10 +51,12 @@ import { phCapture } from "@/components/analytics/PostHogProvider";
 
 type Phase = "chat" | "gate" | "generating" | "preview" | "done" | "error";
 
+// Generate-first greetings (W0, plan §0): no questionnaire — the agent infers
+// what it can and asks at most 1–2 things itself. Genderless, ≤1 emoji (C4/C5).
 const GREETING: ChatMsg = {
   role: "assistant",
   content:
-    "Вітаю! 👋 Я допоможу створити сайт для вашого бізнесу. Розкажіть трохи — що це за бізнес, у якому місті, і який телефон для звʼязку?",
+    "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові. Розкажіть, що у вас за бізнес — для початку досить назви.",
 };
 
 // Instagram-first greeting (wave E) — shown only when the Apify scrape is
@@ -62,25 +65,22 @@ const GREETING: ChatMsg = {
 const IG_GREETING: ChatMsg = {
   role: "assistant",
   content:
-    "Вітаю! 👋 Я допоможу створити сайт для вашого бізнесу. Розкажіть трохи — що це за бізнес і в якому місті? А якщо у вас є Instagram-сторінка бізнесу — просто надішліть посилання, і я витягну все звідти сам 😉",
+    "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові. Надішліть посилання на Instagram-сторінку — і я витягну все звідти. Або просто розкажіть, що у вас за бізнес.",
 };
 
-// Progress chips mirror the server's computeProgress (lib/ai/onboard.ts): a pure
-// function of `facts`, so we derive them client-side too — this keeps the header
-// correct for the fresh greeting and for resumed conversations, where no server
-// `result.progress` exists yet. After each turn it equals result.progress.
-const PROGRESS_FIELDS: { key: keyof BusinessFacts; label: string }[] = [
-  { key: "businessName", label: "Бізнес" },
-  { key: "city", label: "Місто" },
-  { key: "phone", label: "Телефон" },
-  { key: "address", label: "Адреса" },
-  { key: "hours", label: "Години" },
+// The questionnaire progress chips are GONE (W0, plan §0.5) — the agent-status
+// tool card is the visible-work signal. This tiny label model survives only to
+// feed the «✓ Записано: …» diff note (an honest per-turn diff, not a checklist).
+// «Контакт» counts ANY channel (C3/C7): phone / telegram / instagram / viber.
+const FACT_NOTES: { label: string; has: (f: Partial<BusinessFacts>) => boolean }[] = [
+  { label: "Бізнес", has: (f) => Boolean(f.businessName?.trim()) },
+  { label: "Місто", has: (f) => Boolean(f.city?.trim()) },
+  { label: "Контакт", has: hasContactChannel },
+  { label: "Адреса", has: (f) => Boolean(f.address?.trim()) },
+  { label: "Години", has: (f) => Boolean(f.hours?.trim()) },
 ];
-function deriveProgress(facts: Partial<BusinessFacts>): ProgressItem[] {
-  return PROGRESS_FIELDS.map(({ key, label }) => {
-    const v = facts[key];
-    return { key, label, done: v != null && String(v).trim().length > 0 };
-  });
+function doneLabels(facts: Partial<BusinessFacts>): string[] {
+  return FACT_NOTES.filter((n) => n.has(facts)).map((n) => n.label);
 }
 
 // Lowercase the first character so a vision `reason` reads naturally after a
@@ -307,6 +307,15 @@ const GEN_MESSAGES = [
   "Майже готово — фінальні перевірки перед показом.",
 ];
 
+// Shared pacing math for BOTH generation renders (full-screen phase and the
+// inline chat card, W0): step list index, rotating sub-message, bar width.
+function genProgress(elapsed: number): { stepIndex: number; msgIndex: number; barPct: number } {
+  const stepIndex = GEN_STEP_SECONDS.reduce((acc, at, i) => (elapsed >= at ? i : acc), 0);
+  const msgIndex = Math.min(GEN_MESSAGES.length - 1, Math.floor(elapsed / 40));
+  const barPct = 15 + (stepIndex / (GEN_STEPS.length - 1)) * 75; // 15% → 90%, never 100%
+  return { stepIndex, msgIndex, barPct };
+}
+
 // Design animations (design/D). Kept in-file so this component owns everything;
 // prefixed `ob-` to avoid colliding with any global keyframes.
 const KEYFRAMES = `
@@ -364,9 +373,19 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
 
   // --- Phase ---
   const [phase, setPhase] = useState<Phase>("chat");
-  // Generating-screen clock (seconds since entering "generating") — paces
-  // the step list / progress bar / sub-message; see the effect below.
+  // Generation clock (seconds since generation started) — paces the step
+  // list / progress bar / sub-message; see the effect below. Shared by the
+  // full-screen "generating" phase and the inline chat card.
   const [genElapsed, setGenElapsed] = useState(0);
+  // W0 (plan C2/C6): generation triggered by the agent's start_generation
+  // signal runs INLINE — phase stays "chat" and a compact progress card sits
+  // in the message column instead of the full-screen takeover.
+  const [inlineGen, setInlineGen] = useState(false);
+  // Set when the stream delivers {t:"generate"} (or final carries
+  // generate:true). An EFFECT consumes it: by then React has flushed the
+  // facts/media applyResult just set, so runGenerate reads fresh state — a
+  // direct call from send()'s closure would generate from the pre-turn facts.
+  const [autoGenerate, setAutoGenerate] = useState(false);
 
   // --- Media (logo + photos) — optional step before generation ---
   const [media, setMedia] = useState<SiteMedia>({ photos: [] });
@@ -408,13 +427,6 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Holds the persisted conversation id after first user send; null = not yet created
   const convIdRef = useRef<string | null>(null);
-
-  // Progress chips — derived, always in sync with the collected facts.
-  const progress = deriveProgress(facts);
-  // Same model, read as a bar: purely presentational, no extra state.
-  const progressPct = Math.round(
-    (progress.filter((p) => p.done).length / progress.length) * 100,
-  );
 
   // Revoke still-attached (unsent) thumbnail blob URLs on unmount — they
   // otherwise live for the whole tab. Ref keeps the cleanup closure current.
@@ -483,11 +495,11 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // it. Resets on every entry (so a retry restarts the sequence) and is cleared
   // on exit, so it never keeps running once the phase moves on.
   useEffect(() => {
-    if (phase !== "generating") return;
+    if (phase !== "generating" && !inlineGen) return;
     setGenElapsed(0);
     const id = setInterval(() => setGenElapsed((s) => s + 1), 1000);
     return () => clearInterval(id);
-  }, [phase]);
+  }, [phase, inlineGen]);
 
   // ---------------------------------------------------------------------------
   // Chat handlers
@@ -502,6 +514,9 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     verticalId: string;
     ready: boolean;
     confirmed: boolean;
+    // W0: the model called start_generation this turn — the client must start
+    // the same flow as the «Створити сайт» button (auth gate included).
+    generate?: boolean;
     quickReplies: string[];
     // Media the agent's tools added this turn (scrape/analyze/set_media_role).
     media?: { photos: string[]; logoUrl?: string; photoMeta?: PhotoMeta[] };
@@ -539,6 +554,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
           verticalId: verticalId ?? "generic",
           ready,
           confirmed,
+          generate: false,
           quickReplies: [],
         };
       }
@@ -551,6 +567,9 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     let buf = "";
     let acc = "";
     let final: TurnPayload | null = null;
+    // {t:"generate"} arrives BEFORE {t:"final"} (which mirrors it as a field) —
+    // remember it so a final that raced/omitted the flag still triggers.
+    let generateSignal = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -579,15 +598,20 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
           setActiveTools([]);
           acc += obj.text;
           setMessages([...uiBase, { role: "assistant", content: acc }]);
+        } else if (obj.t === "generate") {
+          // The agent called start_generation — the caller starts the same
+          // flow as the «Створити сайт» button once the final state lands.
+          generateSignal = true;
         } else if (obj.t === "final") {
           final = obj as TurnPayload;
         } else if (obj.t === "error") {
           throw new Error(obj.message || "stream error");
         }
+        // Unknown event types are ignored on purpose — forward-compatible.
       }
     }
     if (!final) throw new Error("stream ended without final event");
-    return final;
+    return { ...final, generate: Boolean(final.generate) || generateSignal };
   };
 
   // Instagram is no longer a separate client pipeline: a pasted IG link is a
@@ -615,6 +639,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     setPendingReviews([]);
     setUploadError(null);
     setActiveTools([]);
+    setAutoGenerate(false);
     setDraft(null);
     setResetOpen(false);
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -651,9 +676,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       return;
     }
 
-    const progressBefore = new Set(
-      deriveProgress(facts).filter((p) => p.done).map((p) => p.label),
-    );
+    const notedBefore = new Set(doneLabels(facts));
 
     // Optimistic user bubble: local object-URL thumbnails until the upload
     // swaps them for storage URLs.
@@ -766,12 +789,14 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
           setMedia(effectiveMedia);
         }
 
-        // Agentic feedback: which facts the agent just recorded — a real diff of
-        // the same progress model as the header chips, not decoration.
-        const newly = deriveProgress(result.facts)
-          .filter((p) => p.done && !progressBefore.has(p.label))
-          .map((p) => p.label);
+        // Agentic feedback: which facts the agent just recorded — a real diff,
+        // not decoration (the questionnaire header chips are gone, W0 §0.5).
+        const newly = doneLabels(result.facts).filter((l) => !notedBefore.has(l));
         setSavedNote(newly.length ? newly.join(", ") : null);
+
+        // The agent called start_generation (C2: chat DOES, not promises) —
+        // hand off to the button flow via the effect below, after state flushes.
+        if (result.generate) setAutoGenerate(true);
 
         // Persist turn fire-and-forget — never blocks the UI. Media rides along
         // explicitly (loading gate = it can't be mid-change), so this write never
@@ -900,13 +925,23 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
   // Confirm → straight to generation (owner decision: no media step — IG photos
   // are already in; with none we generate images in the background and the site
   // shows shimmer placeholders). Login-gated: the draft preview is authed.
-  const handleCreateSite = async () => {
+  // `inline` = triggered by the agent's start_generation signal: same auth
+  // gate, same runGenerate, but the progress card renders in the chat column.
+  const handleCreateSite = async (opts?: { inline?: boolean }) => {
     if (loading) return;
     setLoading(true);
     try {
       const s = await sessionStateAction();
       // Auth on + not signed in → warm gate (save the site), not generation.
+      // Honesty (C2): the stream may have just said «Запускаю створення
+      // сайту…», but nothing generates for an anonymous visitor — and
+      // autoGenerate does not survive the login redirect, so say what will
+      // ACTUALLY happen. Persisted via appendAssistant, so the restored
+      // conversation after sign-in still points at the button.
       if (s.authOn && !s.loggedIn) {
+        appendAssistant(
+          "Щоб зберегти сайт за вами, спершу увійдіть. Після входу натисніть «Створити сайт» — і я зберу чернетку.",
+        );
         setPhase("gate");
         return;
       }
@@ -919,47 +954,60 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     } finally {
       setLoading(false);
     }
-    await runGenerate();
+    await runGenerate(opts);
   };
+
+  // Consume the {t:"generate"} signal ONE render after applyResult set it —
+  // by now facts/media/verticalId are flushed, so generation reads this
+  // turn's saved facts, not the stale send() closure. Guarded exactly like
+  // the button: not mid-request, chat phase only.
+  useEffect(() => {
+    if (!autoGenerate || loading || phase !== "chat") return;
+    setAutoGenerate(false);
+    void handleCreateSite({ inline: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoGenerate, loading, phase]);
 
   // ---------------------------------------------------------------------------
   // Generation moved earlier (04 §2/§4): confirmed facts → a real DRAFT the
-  // owner previews, then publishes by hand (invariant 6). The chat summary IS
-  // the confirmation; the code-enforced ready-gate guarantees name/city/phone.
+  // owner previews, then publishes by hand (invariant 6). W0 (plan C7): the
+  // only client requirement is a business name + ANY contact channel — the
+  // server backstop in generateDraftAction mirrors exactly this.
   // ---------------------------------------------------------------------------
 
-  const runGenerate = async () => {
+  const runGenerate = async (opts?: { inline?: boolean }) => {
     const businessName = (facts.businessName ?? "").trim();
-    const city = (facts.city ?? "").trim();
-    const phone = (facts.phone ?? "").trim();
-    // Defense in depth — should be unreachable behind the ready-gate. If it ever
-    // fires, say WHAT is missing and drop confirmed so the CTA hides.
-    if (!businessName || !city || !phone) {
-      const missing = [!businessName && "назва бізнесу", !city && "місто", !phone && "телефон"]
+    // Defense in depth — mirrors the server backstop (name + phone/telegram/
+    // instagram/viber). If it fires, say WHAT is missing and drop confirmed
+    // so the CTA hides.
+    if (!businessName || !hasContactChannel(facts)) {
+      const missing = [
+        !businessName && "назва бізнесу",
+        !hasContactChannel(facts) && "хоч один контакт (телефон, Instagram, Telegram або Viber)",
+      ]
         .filter(Boolean)
-        .join(", ");
+        .join(" і ");
       setConfirmed(false);
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: `Щоб створити сайт, мені ще потрібно: ${missing}. Напишіть, будь ласка?`,
+          content: `Для сайту ще бракує: ${missing}. Напишіть — і продовжимо.`,
         },
       ]);
       setPhase("chat");
       return;
     }
 
-    const fullFacts: BusinessFacts = {
+    const fullFacts: Partial<BusinessFacts> = {
       ...facts,
       businessName,
-      city,
-      phone,
       ...(facts.services && { services: facts.services.filter((s) => s.name.trim()) }),
     };
 
     setLoading(true);
-    setPhase("generating");
+    if (opts?.inline) setInlineGen(true);
+    else setPhase("generating");
 
     try {
       const result = await generateDraftAction(
@@ -983,6 +1031,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
       setPhase("error");
     } finally {
       setLoading(false);
+      setInlineGen(false);
     }
   };
 
@@ -1109,36 +1158,24 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
               </button>
             )}
           </div>
-          {/* Progress: the same derived model twice — a honey bar for the feel
-              of momentum, chips for what exactly is already collected. */}
-          <div className="mx-auto w-full max-w-2xl px-4 pb-3">
-            <div className="flex items-center justify-between text-[12px] font-bold text-ink-muted">
-              <span>Збираємо ваш сайт</span>
-              <span className="tabular-nums">{progressPct}%</span>
-            </div>
-            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-sunken">
-              <div
-                className="h-full rounded-full bg-honey transition-all duration-700 ease-out"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-            <div className="no-scrollbar mt-2.5 flex items-center gap-2 overflow-x-auto">
-              {progress.map((p) => (
-                <Chip key={p.key} tone={p.done ? "ok" : "neutral"} className="shrink-0 whitespace-nowrap">
-                  {p.done ? `✓ ${p.label}` : p.label}
-                </Chip>
-              ))}
-            </div>
-          </div>
+          {/* The questionnaire progress bar + chips are GONE (W0, plan §0.5):
+              they read as a form and dictated the question script. The
+              agent-status tool card in the message column is the sole
+              «видима робота» signal now. */}
         </header>
 
         {/* Messages */}
         <div ref={chatScrollRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-3.5 px-4 py-6">
-            <div className="flex items-center gap-1.5 self-center rounded-full bg-honey/15 px-3.5 py-1.5 text-[13px] font-bold text-honey-text">
-              <Sparkles size={14} />
-              Сайт буде готовий за ~3 хвилини
-            </div>
+            {/* Promise chip only while the conversation is still warming up
+                (C3): once the agent is ready to generate, the CTA/signal is
+                the promise. */}
+            {!ready && (
+              <div className="flex items-center gap-1.5 self-center rounded-full bg-honey/15 px-3.5 py-1.5 text-[13px] font-bold text-honey-text">
+                <Sparkles size={14} />
+                Сайт буде готовий за ~3 хвилини
+              </div>
+            )}
 
             {messages.map((msg, i) => (
               <ChatBubble
@@ -1150,7 +1187,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
 
             {savedNote && !typing && (
               <span className="ml-[42px] self-start rounded-full bg-ok-soft px-3 py-1 text-[13px] font-bold text-ok">
-                ✓ Записав: {savedNote}
+                ✓ Записано: {savedNote}
               </span>
             )}
 
@@ -1210,6 +1247,48 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
             ) : (
               typing && <AgentTyping />
             )}
+
+            {/* Inline generation card (W0, C2/C6-мінімум): the agent called
+                start_generation, so the work happens right here in the chat —
+                the same paced steps as the full-screen phase, as a card.
+                Full Lovable-style cards land in wave V4. */}
+            {inlineGen &&
+              (() => {
+                const gp = genProgress(genElapsed);
+                return (
+                  <div className="flex items-start gap-2.5">
+                    <AgentAvatar busy />
+                    <div className="min-w-0 max-w-[85%] flex-1 rounded-[22px] rounded-tl-[8px] border border-line bg-surface px-[18px] py-4 shadow-[0_1px_2px_rgba(51,41,28,0.05)] sm:max-w-[75%]">
+                      <p className="text-[16px] font-bold text-ink">Генеруємо ваш сайт…</p>
+                      <p className="mt-1 text-[14px] leading-relaxed text-ink-muted">
+                        {GEN_MESSAGES[gp.msgIndex]}
+                      </p>
+                      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-sunken">
+                        <div
+                          className="relative h-2 overflow-hidden rounded-full bg-honey transition-all duration-1000 ease-out"
+                          style={{ width: `${gp.barPct}%` }}
+                        >
+                          <span
+                            className="absolute inset-y-0 left-0 w-1/3 bg-white/50"
+                            style={{ animation: "ob-shimmer 1.6s ease-in-out infinite" }}
+                            aria-hidden
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-col gap-2">
+                        {GEN_STEPS.map((label, i) => (
+                          <GenStep
+                            key={label}
+                            state={i < gp.stepIndex ? "done" : i === gp.stepIndex ? "active" : "pending"}
+                          >
+                            {label}
+                          </GenStep>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
           </div>
         </div>
@@ -1500,12 +1579,7 @@ export function OnboardChat({ igImportEnabled = false }: { igImportEnabled?: boo
     // Derived from the plain elapsed-seconds clock (effect above) — no real
     // per-step signal exists, so this only has to feel like steady progress
     // across the real ~3-minute budget, never finish early, and never freeze.
-    const stepIndex = GEN_STEP_SECONDS.reduce(
-      (acc, at, i) => (genElapsed >= at ? i : acc),
-      0,
-    );
-    const msgIndex = Math.min(GEN_MESSAGES.length - 1, Math.floor(genElapsed / 40));
-    const barPct = 15 + (stepIndex / (GEN_STEPS.length - 1)) * 75; // 15% → 90%, never 100%
+    const { stepIndex, msgIndex, barPct } = genProgress(genElapsed);
 
     return (
       <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-8 ${rootBase}`}>
