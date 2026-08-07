@@ -467,8 +467,11 @@ ${briefDoc}${formatDossierForPrompt(dossier)}
     messages: [{ role: "user", content: stripLoneSurrogates(userPrompt) }],
     // Retries disabled (pipeline v2 §6): one attempt IS the 120s S2б stage
     // budget — a second full composition can't fit, so a 429/transient goes
-    // straight to the caller's honest-error path.
-  }, { signal, maxRetries: 0 });
+    // straight to the caller's honest-error path. The per-request timeout must
+    // EXCEED the stage budget so the caller's AbortSignal stays the single
+    // authority over the deadline (the client's 120s default tied the stage
+    // budget exactly and could fire first — same trap as the S2а leg).
+  }, { signal, maxRetries: 0, timeout: 130_000 });
 
   const toolUse = res.content.find((b) => b.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {
