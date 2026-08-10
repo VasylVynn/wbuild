@@ -51,6 +51,7 @@ import { appUrl, AUTH_RESUME_KEY, shouldRestoreConversation } from "@/components
 import { GoogleIcon } from "@/components/auth/AuthShell";
 import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 import DomainStep from "@/components/onboard/DomainStep";
+import { getTelegramConnectLinkForHost } from "@/app/app/(protected)/(shell)/sites/actions";
 import { pixelTrack } from "@/lib/analytics/pixel";
 import { phCapture } from "@/components/analytics/PostHogProvider";
 
@@ -743,6 +744,13 @@ export function OnboardChat({
   const [siteUrl, setSiteUrl] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [copied, setCopied] = useState(false);
+  // The t.me deep link for THIS site, resolved as soon as the site is live.
+  // Resolved ahead of the press on purpose: a link fetched inside the click
+  // handler opens a window the browser did not attribute to a user gesture,
+  // and pop-up blockers eat it. `null` = not resolved yet, "" = unavailable
+  // (no bot configured / not the owner) and the row says so instead of
+  // pretending.
+  const [tgLink, setTgLink] = useState<string | null>(null);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1439,6 +1447,26 @@ export function OnboardChat({
     }
     await runGenerate(opts);
   };
+
+  // The publish moment's ONE job after «your site is live» is the funnel:
+  // leads reach the owner through Telegram or they reach nobody. Resolve the
+  // deep link the moment the site goes live, so the button IS the connection
+  // instead of a trip to the sites list to press a differently-named button
+  // there (owner report: «too many actions»).
+  useEffect(() => {
+    if (phase !== "done" || !draft?.host || tgLink !== null) return;
+    let cancelled = false;
+    void getTelegramConnectLinkForHost(draft.host)
+      .then((res) => {
+        if (!cancelled) setTgLink(res.ok ? res.link : "");
+      })
+      .catch(() => {
+        if (!cancelled) setTgLink("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, draft?.host, tgLink]);
 
   // Consume the {t:"generate"} signal ONE render after applyResult set it —
   // by now facts/media/verticalId are flushed, so generation reads this
@@ -2527,12 +2555,30 @@ export function OnboardChat({
                 Підключіть Telegram, щоб заявки від клієнтів приходили прямо вам
               </div>
             </div>
-            <a
-              href={appUrl("/sites")}
-              className="flex min-h-11 shrink-0 items-center justify-center rounded-full bg-tg px-5 text-[15px] font-bold text-white transition-colors hover:bg-tg-dark"
-            >
-              Підключити
-            </a>
+            {tgLink ? (
+              <a
+                href={tgLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-11 shrink-0 items-center justify-center rounded-full bg-tg px-5 text-[15px] font-bold text-white transition-colors hover:bg-tg-dark"
+              >
+                Відкрити Telegram
+              </a>
+            ) : tgLink === null ? (
+              <span className="flex min-h-11 shrink-0 items-center justify-center rounded-full bg-tg/60 px-5 text-[15px] font-bold text-white">
+                Готуємо…
+              </span>
+            ) : (
+              // Honest fallback: the link could not be minted (bot unset, or the
+              // membership read failed). The sites list still carries the
+              // connect button, so the owner is never stranded.
+              <a
+                href={appUrl("/sites")}
+                className="flex min-h-11 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface px-5 text-[15px] font-bold text-ink transition-colors hover:bg-sunken"
+              >
+                Мої сайти
+              </a>
+            )}
           </div>
 
           {/* Exits: the success screen must never be a dead end. */}
