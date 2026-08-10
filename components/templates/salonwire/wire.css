@@ -20,6 +20,12 @@
  * specificity: single-class selectors, no !important, no Tailwind colour
  * utilities anywhere in the components.
  *
+ * ── CUSTOM PROPERTIES ───────────────────────────────────────────────────────
+ * Yours to set (surface): --wire-scrim, --wire-banner-ink, --wire-split-order,
+ *   --wire-hero-media-order, --wire-form-max, --wire-solo-max.
+ * CODE's, never write them: --wire-hero-focus (the photo's crop anchor — it
+ *   depends on the actual image, not on taste) and --font-heading/--font-body.
+ *
  * ── VARIANTS (pipeline v2 §5) ───────────────────────────────────────────────
  * A section may ship alternate LOCKED layouts; each is one modifier class on
  * the section element (see sections.tsx for the markup):
@@ -146,6 +152,41 @@
   .wire-grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
+/* ONE-ITEM DEGRADATION — LOCKED. A card grid holding exactly ONE card must
+   never render it as a lonely third of a row: a single coach under «Наша
+   команда», stranded left with two empty columns beside them, reads as a
+   broken page rather than as a small team (owner feedback 2026-08-10). The
+   card takes the whole row and a readable measure instead, centred.
+   `:only-child` on the CARD, not `:has()` on the grid, so the repair works on
+   every engine. --wire-solo-max is the cap the generated sheet may retune —
+   it must not put the single card back into a fractional column.
+   .tpl-salonwire prefix for the same reason as the hero scrim block: an
+   everyday generated `.tpl-salonwire .wire-card { margin: 0; max-width: 22rem }`
+   is (0,2,0) and lands AFTER wire.css, so an unprefixed guard would merely TIE
+   and lose — putting the lone card back at the left edge of a 4-up grid. The
+   two properties that carry this repair (max-width, margin-inline) are exactly
+   the ones the stylist prompt invites and the linter preserves, so the guard
+   must WIN, at (0,3,0).
+   (The composition side — do not PLAN a card section for one item — belongs
+   to the generator; this is the render-side floor that holds regardless.) */
+.tpl-salonwire .wire-grid-2 > :only-child,
+.tpl-salonwire .wire-grid-3 > :only-child,
+.tpl-salonwire .wire-grid-4 > :only-child {
+  grid-column: 1 / -1;
+  max-width: var(--wire-solo-max, 30rem);
+  margin-inline: auto;
+}
+/* The column and scroll layouts cannot be repaired from the child (a child
+   cannot un-column its container), so they use :has() and degrade to the plain
+   single-item rendering where it is unsupported — readable either way. */
+.tpl-salonwire .wire-gallery__masonry:has(> :only-child) {
+  columns: 1;
+  max-width: var(--wire-solo-max, 30rem);
+  margin-inline: auto;
+}
+.tpl-salonwire .wire-gallery__stream:has(> :only-child),
+.tpl-salonwire .wire-testimonials__strip:has(> :only-child) { justify-content: center; }
+
 /* Split: stacked on mobile, two columns from lg. `--wire-split-order` lets the
    generated sheet flip which side the media sits on WITHOUT touching
    flex-direction — the one alignment freedom that cannot break the layout. */
@@ -225,7 +266,7 @@
 .wire-hero--banner { position: relative; overflow: hidden; }
 .wire-hero--banner .wire-hero__inner {
   grid-template-columns: 1fr;
-  min-height: 20rem;
+  min-height: 22rem;
   align-content: center;
   position: relative;
   z-index: 1;
@@ -235,14 +276,58 @@
 .wire-hero--banner .wire-subtitle { max-width: 52ch; }
 .wire-hero__backdrop { position: absolute; inset: 0; }
 .wire-hero__bg { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* CROP ANCHOR — LOCKED contract, set by CODE, never by the stylesheet.
+   A banner is a wide, short box, so `cover` throws away most of a portrait
+   photo's height: at the 50% 50% default the kept band lands on the torso and
+   a person's face is cut off (owner feedback 2026-08-10). Two parts to the
+   repair — a taller box below, and this anchor:
+
+     --wire-hero-focus   any object-position value ("62% 24%", "left top").
+                         Code sets it INLINE on the hero <section> from the
+                         hero photo's own vetting metadata (person → biased up,
+                         subject-centred → dead centre; nothing known → unset);
+                         it inherits down to the backdrop image and to the
+                         split/mirror photo.
+                         Default 50% 38% — biased ABOVE centre, because faces
+                         and product subjects sit in the upper half far more
+                         often than in the lower one.
+
+   The generated sheet must NOT write object-position or object-fit here: this
+   is composition, not surface, and the value depends on the actual photo. */
+.wire-hero__bg,
+.wire-hero__media .wire-media { object-position: var(--wire-hero-focus, 50% 38%); }
+
 .wire-hero__scrim {
   position: absolute;
   inset: 0;
-  background: var(--wire-scrim, linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.72)));
+  /* Default scrim: a middle stop, not a plain two-stop ramp — on the taller
+     banner below, the copy sits where a linear ramp is still light, and the
+     title was the first thing to lose contrast. */
+  background: var(
+    --wire-scrim,
+    linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.62) 52%, rgba(0, 0, 0, 0.76))
+  );
+}
+
+/* Room for a person. The photo box is the whole SECTION (the backdrop is
+   inset:0 on it), so its height is this min-height PLUS the section's own
+   padding-block — a wide, short box is what chops a portrait photo, and the
+   fix is to stop being short. The vh term is what shrinks it back on a short
+   laptop instead of eating the fold; the rem cap stops a huge monitor from
+   scaling it into a poster. Nothing here animates — the hero paints opaque on
+   the first frame (LCP invariant). */
+@media (min-width: 640px) {
+  .wire-hero--banner .wire-hero__inner { min-height: 26rem; }
 }
 
 @media (min-width: 1024px) {
-  .wire-hero--banner .wire-hero__inner { min-height: 28rem; }
+  /* max() first: the vh term may only ADD height, never subtract it. A bare
+     `min(56vh, 34rem)` breaks even at an 800px-tall viewport — on a 1366×768
+     laptop (inner ≈640px) it computes to 358px, SHORTER than both the 28rem
+     desktop floor and the 26rem tablet step above, so widening the window
+     would shrink the hero. Floor 28rem, grow to 34rem on a tall screen. */
+  .wire-hero--banner .wire-hero__inner { min-height: clamp(28rem, 56vh, 34rem); }
 }
 
 /* Legibility over the scrim — the only rules in this file carrying the
@@ -411,9 +496,62 @@
   .wire-footer--2col .wire-footer__inner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* ── Form ──────────────────────────────────────────────────────────────── */
+/* ── Form — LOCKED layout ──────────────────────────────────────────────────
+ *
+ * The lead form is the entire product funnel (invariant 8), so it does NOT
+ * inherit whatever width the section happens to give it. It used to: the form
+ * was a plain `.wire-stack` child, and any sheet that centred the section
+ * (align-items: center on a column flex) shrank it to its inputs' intrinsic
+ * width — a ~300px ribbon of fields floating in a 72rem section, with the
+ * labels reading as loose chips (owner feedback 2026-08-10).
+ *
+ * It now owns a measure and a grid of its own:
+ *   - a comfortable max-width (--wire-form-max), centred, at any section width;
+ *   - one column on phones; from 640px NAME and PHONE share a row and every
+ *     other row (message, submit, error) spans the full width;
+ *   - field text stays start-aligned even inside a centred section — centred
+ *     labels over left-aligned input text is the chip look. A sheet that
+ *     really wants centred fields overrides `.wire-leadform__form` by name.
+ *
+ * Surface is still yours: field borders, focus rings, label colour, radii,
+ * the button. Do not re-flow the fields into more columns.
+ */
+
+.wire-leadform__form {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  width: 100%;
+  max-width: var(--wire-form-max, 34rem);
+  margin-inline: auto;
+  text-align: start;
+}
+
+@media (min-width: 640px) {
+  .wire-leadform__form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Full width is the default; only the name/phone pair shares a row. The
+     fields carry .wire-field--name / --phone / --message as surface hooks. */
+  .wire-leadform__form > * { grid-column: 1 / -1; }
+  .wire-leadform__form > .wire-field--name,
+  .wire-leadform__form > .wire-field--phone { grid-column: auto; }
+}
 
 .wire-field { display: flex; flex-direction: column; gap: 0.375rem; }
+/* The label keeps .wire-eyebrow so it is styled with the rest of the small
+   caps — but a form label must not read like a pill: normal case, tight
+   tracking, one notch larger than a section eyebrow.
+   Prefixed for the same measured reason as the hero scrim block above: the
+   generated sheet is injected AFTER wire.css and every one of its selectors
+   starts with .tpl-salonwire, so an ordinary `.tpl-salonwire .wire-eyebrow
+   { text-transform: uppercase; letter-spacing: 0.18em }` (0,2,0) would beat a
+   bare `.wire-field__label` (0,1,0) and put the caps pills back on «Імʼя» /
+   «Телефон». (0,3,0) wins; a sheet that deliberately restyles form labels
+   still beats it by naming .wire-field__label itself. */
+.tpl-salonwire .wire-leadform .wire-field__label {
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
 .wire-input,
 .wire-textarea {
   width: 100%;

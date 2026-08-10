@@ -24,6 +24,7 @@ import {
 } from "@/lib/ai/onboard";
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
 import { validateFacts } from "@/lib/onboard/validate";
+import { selectGaps } from "@/lib/onboard/gaps";
 import { getVertical } from "@/lib/verticals/registry";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
 import {
@@ -352,6 +353,19 @@ export async function POST(req: Request): Promise<Response> {
             snapshot,
             transcript,
           });
+          // Data-shaped gaps, recomputed each round for the same reason: a
+          // scrape that just landed 12 photos and a bio can close a gap (or
+          // open one) mid-turn. The detector is pure and budget-aware — it
+          // returns [] once the owner has been asked twice, said «just do it»,
+          // or agreed to generate, so a gap can never turn into an interrogation
+          // and never gates start_generation.
+          const gaps = selectGaps({
+            facts: accum.facts,
+            media,
+            dossier,
+            transcript,
+            status: accum.status,
+          });
           // System is rebuilt each round so the model sees its own scrape/analyze
           // results (mutated media + fresh snapshot flow into the dossier).
           const system = buildOnboardSystem({
@@ -360,6 +374,7 @@ export async function POST(req: Request): Promise<Response> {
             dossier,
             issues: validateFacts(accum.facts, vertical).map((i) => i.note),
             apifyEnabled,
+            gaps,
           });
           lastSystem = system;
 

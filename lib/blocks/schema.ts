@@ -40,6 +40,18 @@ export const heroSchema = z.object({
   // model-written photo description would be fabrication); the owner can edit
   // it in the form, and wave G's vision analysis will propose better ones.
   imageAlt: z.string().optional().describe("Alt-текст hero-зображення (заповнюється кодом, не вигадуй опис фото)"),
+  // CROP ANCHOR — a CSS `object-position` value the wireframe writes into
+  // `--wire-hero-focus` on the hero <section>. CODE-owned exactly like
+  // imageAlt: assemble() derives it from the chosen photo's PhotoMeta and
+  // OVERWRITES whatever arrives here, because the model never sees the photo
+  // (§4.8) and so cannot know where its subject sits. The regex is the same
+  // one the renderer re-validates with — a value that is not a plain position
+  // never reaches the stylesheet.
+  imageFocus: z
+    .string()
+    .regex(/^[a-z0-9%.\s-]{1,32}$/i)
+    .optional()
+    .describe("Точка кадрування hero-фото (заповнює код — не заповнюй)"),
   ctaLabel: z.string().optional(),
   ctaHref: z.string().optional(), // usually an in-page anchor like "#contacts"
   // Optional second (outline) CTA — template-mining wave 2.
@@ -160,8 +172,11 @@ export const switchbackSchema = z.object({
 // stats — short number/label accents (ONLY when grounded; never invent numbers)
 // ---------------------------------------------------------------------------
 export const statItemSchema = z.object({
-  value: z.string().min(1),
-  label: z.string().min(1),
+  value: z
+    .string()
+    .min(1)
+    .describe("Число, яке ПРЯМО є у підтверджених фактах. Немає числа — немає пункту (і немає секції)"),
+  label: z.string().min(1).describe("Підпис до числа, без перебільшень"),
 });
 export const statsSchema = z.object({
   title: z.string().optional(),
@@ -182,8 +197,18 @@ export const ctaSchema = z.object({
 // faq — question / answer list
 // ---------------------------------------------------------------------------
 export const faqItemSchema = z.object({
-  question: z.string().min(1),
-  answer: z.string().min(1),
+  question: z
+    .string()
+    .min(1)
+    .describe(
+      "СПРАВЖНЄ запитання клієнта перед покупкою (як записатися, скільки триває, що взяти з собою, чи підходить новачкам, як оплатити). Не питання-пустушка на кшталт «Чи якісні ваші послуги?».",
+    ),
+  answer: z
+    .string()
+    .min(1)
+    .describe(
+      "Відповідь по суті, 2–4 речення. Без цифр, цін, термінів і гарантій, яких немає у підтверджених фактах — загальне, але правдиве.",
+    ),
 });
 export const faqSchema = z.object({
   title: z.string().optional(),
@@ -206,10 +231,18 @@ export const leadFormSchema = z.object({
 // section content. Photos are model-invented → grounded/stripped like gallery.
 // ---------------------------------------------------------------------------
 export const teamMemberSchema = z.object({
-  name: z.string().min(1),
-  role: z.string().optional(),
+  name: z.string().min(1).describe("Реальне ім'я людини з фактів — НІКОЛИ не вигадане"),
+  role: z
+    .string()
+    .optional()
+    .describe("Роль людини, як її називає бізнес. Без вигаданих регалій, сертифікатів і років досвіду"),
   photo: assetUrl.optional(),
-  bio: z.string().optional(),
+  bio: z
+    .string()
+    .optional()
+    .describe(
+      "1–2 речення про підхід людини до роботи. Загальне, але правдиве; без вигаданих цифр, звань і досягнень",
+    ),
 });
 export const teamSchema = z.object({
   title: z.string().optional(),
@@ -231,11 +264,33 @@ export const timelineSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// marquee — a scrolling strip of short keywords (skills / tech / directions).
+// marquee — a strip of short BENEFIT phrases (the wireframe's `values` section,
+// «Переваги»). Redefined 2026-08-10 (owner feedback): it used to be documented
+// as a keyword strip and duly shipped visible SEO keyword chips. The floor
+// (min 3) and the item type stay as they are — stored content of existing
+// tenants must keep parsing — and blockLibrary.marquee.minItems is held at the
+// SAME 3, so a strip cannot be born schema-legal and already condemned. The
+// CONTRACT is carried by these descriptions plus the deterministic post-check
+// in lib/blocks/hygiene.ts (cleanBenefitStrip), which drops keyword-shaped
+// items wherever block props are persisted or rendered.
 // ---------------------------------------------------------------------------
 export const marqueeSchema = z.object({
-  title: z.string().optional(),
-  items: z.array(z.string().min(1)).min(3),
+  title: z
+    .string()
+    .optional()
+    .describe(
+      "Заголовок секції переваг, зрозумілий людині: «Чому обирають нас», «Що ви отримуєте». Не абстракція («Наш світ»).",
+    ),
+  items: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .describe(
+          "Одна теза-перевага: жива фраза з 2–5 слів українською («Тренування під ваш рівень»). НЕ ключове слово, не хештег, не назва міста, не англійський дубль.",
+        ),
+    )
+    .min(3),
 });
 
 // ---------------------------------------------------------------------------

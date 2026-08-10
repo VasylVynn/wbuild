@@ -679,6 +679,13 @@ export function OnboardChat({
   // signal runs INLINE — phase stays "chat" and a compact progress card sits
   // in the message column instead of the full-screen takeover.
   const [inlineGen, setInlineGen] = useState(false);
+  // Generation ARMED but not yet visible: handleCreateSite first awaits the
+  // session check, and only then does inlineGen / phase flip. Without this flag
+  // the «Створити сайт» CTA stayed live through that window and invited a
+  // second run. Set at the entry of every create/generate path, cleared on
+  // every exit; `generating` (below the render helpers) is the single flag the
+  // chat footer reads.
+  const [genPending, setGenPending] = useState(false);
   // Real stage data from the /api/generate SSE stream (V4, spec §7) — the
   // progress cards resolve from THIS; empty on the fallback (non-stream) path
   // and before the first stage event, where the paced clock drives the cards.
@@ -1389,8 +1396,11 @@ export function OnboardChat({
   // `inline` = triggered by the agent's start_generation signal: same auth
   // gate, same runGenerate, but the progress card renders in the chat column.
   const handleCreateSite = async (opts?: { inline?: boolean }) => {
-    if (loading) return;
+    if (loading || genPending) return;
     setLoading(true);
+    // Armed from HERE, not from runGenerate: the session check below is an
+    // await, and the footer must stop offering the action immediately.
+    setGenPending(true);
     try {
       const s = await sessionStateAction();
       // Auth on + not signed in → warm gate (save the site), not generation.
@@ -1408,12 +1418,14 @@ export function OnboardChat({
             ? "Щоб зберегти сайт за вами, спершу увійдіть. Після входу натисніть «Створити сайт» — і я зберу чернетку."
             : "Щоб створити сайт, спершу увійдіть. Цю розмову не вдалося зберегти, тож після входу я поставлю кілька коротких питань ще раз.",
         );
+        setGenPending(false);
         setPhase("gate");
         return;
       }
     } catch (err) {
       // Without this catch a failed action (e.g. deployment skew 404) escaped
       // and the CTA just looked dead — no state change, no message.
+      setGenPending(false);
       setErrorMsg(actionErrorMessage(err));
       setPhase("error");
       return;
@@ -1428,11 +1440,11 @@ export function OnboardChat({
   // turn's saved facts, not the stale send() closure. Guarded exactly like
   // the button: not mid-request, chat phase only.
   useEffect(() => {
-    if (!autoGenerate || loading || phase !== "chat") return;
+    if (!autoGenerate || loading || genPending || phase !== "chat") return;
     setAutoGenerate(false);
     void handleCreateSite({ inline: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoGenerate, loading, phase]);
+  }, [autoGenerate, loading, genPending, phase]);
 
   // ---------------------------------------------------------------------------
   // Generation moved earlier (04 §2/§4): confirmed facts → a real DRAFT the
@@ -1596,6 +1608,7 @@ export function OnboardChat({
           content: `Для сайту ще бракує: ${missing}. Напишіть — і продовжимо.`,
         },
       ]);
+      setGenPending(false);
       setPhase("chat");
       return;
     }
@@ -1607,6 +1620,9 @@ export function OnboardChat({
     };
 
     setLoading(true);
+    // Also armed for the DIRECT callers (preview «Згенерувати ще раз», the
+    // error screen) that never went through handleCreateSite.
+    setGenPending(true);
     genRunRef.current += 1;
     const runId = genRunRef.current;
     setGenStages({});
@@ -1663,6 +1679,7 @@ export function OnboardChat({
     } finally {
       setLoading(false);
       setInlineGen(false);
+      setGenPending(false);
       // Cards reset for the next run; genQa deliberately survives — the QA
       // tail note keeps updating (run-id-guarded) after the preview is up.
       setGenStages({});
@@ -1737,6 +1754,17 @@ export function OnboardChat({
   const visibleQuickReplies = confirmed
     ? quickReplies.filter((q) => q.trim().toLowerCase() !== "створити сайт")
     : quickReplies;
+
+  // Generation in flight (owner feedback 2026-08-10): the progress card is the
+  // ONE affordance while it runs — a live «Створити сайт» button under a
+  // running card reads as a second, competing action for work already started.
+  // THREE states can carry a run and all three must hide the footer controls:
+  // `genPending` (armed, session check still awaiting), `inlineGen` (the chat
+  // card, phase stays "chat") and phase "generating" (the full-screen path,
+  // which does not render this footer at all but is included so the flag means
+  // one thing everywhere). `loading` alone is NOT it — an ordinary chat turn
+  // also sets it, and the composer must stay put for that.
+  const generating = genPending || inlineGen || phase === "generating";
 
   // Outside the chat phase, every EMBEDDED screen renders inside the same
   // fullscreen same-origin overlay (M10): the landing never navigates (that
@@ -1984,10 +2012,14 @@ export function OnboardChat({
             only AFTER the user explicitly confirmed the chat summary (A6).
             The model sometimes suggests «Створити сайт» as a quick reply too —
             next to the real CTA that chip is a confusing duplicate, so it is
-            filtered out while the CTA is visible. */}
+            filtered out while the CTA is visible.
+            While `generating` the footer offers NOTHING — every control below
+            is gated on it and the composer is replaced by one honest status
+            line, so the progress card in the message column is the only thing
+            on screen asking for (or reporting) work. */}
         <footer className="border-t border-line bg-surface/70 backdrop-blur">
           <div className="mx-auto w-full max-w-2xl px-4 pb-5 pt-3.5">
-          {confirmed && (
+          {confirmed && !generating && (
             <button
               onClick={() => void handleCreateSite()}
               disabled={loading}
@@ -1998,7 +2030,7 @@ export function OnboardChat({
             </button>
           )}
 
-          {visibleQuickReplies.length > 0 && !loading && (
+          {visibleQuickReplies.length > 0 && !loading && !generating && (
             <div className="mb-3">
               <p className="mb-2 flex items-center gap-1.5 text-[12px] font-bold text-ink-muted">
                 <Sparkles size={14} className="text-honey" />
@@ -2019,8 +2051,10 @@ export function OnboardChat({
           )}
 
           {/* Reviews OCR'd from screenshots — the owner confirms each before it
-              becomes a fact (invariant №5). One card at a time. */}
-          {pendingReviews.length > 0 && (
+              becomes a fact (invariant №5). One card at a time. Hidden while a
+              generation runs: its facts are already sealed into that run, so
+              «Зберегти відгук» there would be a promise we cannot keep. */}
+          {pendingReviews.length > 0 && !generating && (
             <div className="animate-pop mb-3 flex flex-col gap-3 rounded-[20px] border border-line bg-surface p-4 shadow-card">
               <span className="flex items-center gap-1.5 text-[15px] font-bold text-ink">
                 <Sparkles size={15} className="shrink-0 text-honey" />
@@ -2056,7 +2090,13 @@ export function OnboardChat({
             </div>
           )}
 
-          {/* Pending attachments — local previews, removable until sent. */}
+          {/* Pending attachments — local previews, removable until sent.
+              They stay VISIBLE while generating (only the composer goes away):
+              these files are local-only object URLs that were never uploaded
+              and are not part of the run, so hiding them made the owner's
+              attachments disappear silently at the exact moment the phase flips
+              to «preview». Rendered non-interactive instead, with an honest
+              line saying they did not go in. */}
           {pending.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
               {pending.map((p) => (
@@ -2069,7 +2109,7 @@ export function OnboardChat({
                   />
                   <button
                     onClick={() => removePending(p.id)}
-                    disabled={loading}
+                    disabled={loading || generating}
                     aria-label="Прибрати фото"
                     className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-[12px] font-bold leading-none text-white transition-colors hover:bg-brand-hover"
                   >
@@ -2080,6 +2120,21 @@ export function OnboardChat({
             </div>
           )}
 
+          {generating ? (
+            // Composer OUT while the site is being built: a disabled input row
+            // still looks like something to do. One honest line instead — the
+            // tab has to stay open for the stream to land on the preview.
+            <div className="py-2 text-center">
+              <p className="text-[14px] font-semibold text-ink-muted">
+                Створюю сайт — це до 3 хвилин. Не закривайте вкладку.
+              </p>
+              {pending.length > 0 && (
+                <p className="mt-1 text-[13px] text-ink-muted">
+                  Фото вище ще не надіслані — додасте їх у редакторі після створення.
+                </p>
+              )}
+            </div>
+          ) : (
           <div className="flex items-center gap-2.5">
             <input
               ref={fileInputRef}
@@ -2123,6 +2178,7 @@ export function OnboardChat({
               <SendArrow />
             </button>
           </div>
+          )}
 
           {uploadError && (
             <p className="mt-2 pl-1 text-[14px] font-semibold text-danger">{uploadError}</p>

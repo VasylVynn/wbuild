@@ -164,7 +164,49 @@ describe("buildOnboardSystem", () => {
     for (const id of VERTICAL_IDS) {
       const sys = buildOnboardSystem({ ...base, vertical: getVertical(id) });
       for (const phrase of banned) expect(sys).not.toContain(phrase);
+      // the gap block is data-driven, not a script — it must not smuggle the
+      // interrogation phrasing back in either
+      const withGaps = buildOnboardSystem({
+        ...base,
+        vertical: getVertical(id),
+        gaps: [{ rule: "singleton_set", subject: "services", weight: 82, note: "Одна послуга." }],
+      });
+      for (const phrase of banned) expect(withGaps).not.toContain(phrase);
     }
+  });
+
+  it("carries the data-gap block only when the detector found something", () => {
+    expect(buildOnboardSystem(base)).not.toContain("ПРОГАЛИНИ В ДАНИХ");
+    const sys = buildOnboardSystem({
+      ...base,
+      gaps: [
+        { rule: "singleton_set", subject: "testimonials", weight: 46, note: "Зібрано лише один відгук." },
+      ],
+    });
+    expect(sys).toContain("ПРОГАЛИНИ В ДАНИХ");
+    expect(sys).toContain("Зібрано лише один відгук.");
+  });
+
+  it("gap questions stay capped, skippable and non-blocking", () => {
+    const sys = buildOnboardSystem({
+      ...base,
+      gaps: [{ rule: "empty_set", subject: "photos", weight: 80, note: "Жодного фото." }],
+    });
+    expect(sys).toContain("ЩОНАЙБІЛЬШЕ ОДНЕ коротке питання за хід");
+    expect(sys).toContain("Пропустити");
+    expect(sys).toContain("не блокуй створення сайту");
+    // generate-first survives: readiness is still the tool call
+    expect(sys).toContain("start_generation");
+  });
+
+  it("keeps the dossier LAST even with a gap block (prompt-cache ordering)", () => {
+    const dossier = buildDossier({ facts: { businessName: "Лапусі" } });
+    const sys = buildOnboardSystem({
+      ...base,
+      dossier,
+      gaps: [{ rule: "empty_set", subject: "photos", weight: 80, note: "Жодного фото." }],
+    });
+    expect(sys.indexOf("ПРАВИЛО ПРО ДАНІ")).toBeGreaterThan(sys.indexOf("ПРОГАЛИНИ В ДАНИХ"));
   });
 
   it("keeps the dossier LAST (prompt-cache ordering)", () => {

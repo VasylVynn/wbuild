@@ -77,17 +77,51 @@ export function faviconDataUri(
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
+/** Word-boundary trim to a meta-description length (search engines cut ~155). */
+function clampMeta(s: string, max = 150): string {
+  const flat = s.replace(/\s+/g, " ").trim();
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:—–-]+$/u, "")}…`;
+}
+
+/**
+ * Last-resort description ASSEMBLED from confirmed facts — never written.
+ * A page with no meta description is a page search results render from
+ * whatever they scrape; a truthful «{name} — {service}, {service}. {city}» is
+ * strictly better and invents nothing: every token is copied from
+ * `tenants.facts` (invariant 5). Emitted only when there is at least one real
+ * service to name — a bare business name would be noise, not a description.
+ */
+function descriptionFromFacts(tenant: Tenant): string | undefined {
+  const facts = tenant.facts as {
+    businessName?: string;
+    city?: string;
+    services?: { name?: string }[];
+  };
+  const name = (tenant.brand.businessName || facts.businessName || "").trim();
+  if (!name) return undefined;
+  const services = (facts.services ?? [])
+    .map((s) => (s.name ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  if (services.length === 0) return undefined;
+  const city = facts.city?.trim();
+  return clampMeta(`${name} — ${services.join(", ")}.${city ? ` ${city}.` : ""}`);
+}
+
 /** Meta description: the page's model-written SEO description (wave D1) when
  *  present, else the tenant tagline, else the first ~150 chars of the freeform
- *  "about" fact. Undefined when none exists (no invented copy). */
+ *  "about" fact, else a factual assembly of name + services + city. Undefined
+ *  only when the facts hold nothing to say (no invented copy). */
 export function siteDescription(tenant: Tenant, seo?: PageSeo): string | undefined {
   const fromSeo = seo?.description?.trim();
   if (fromSeo) return fromSeo;
   if (tenant.brand.tagline) return tenant.brand.tagline;
   const about = (tenant.facts as { about?: unknown }).about;
-  if (typeof about !== "string" || !about.trim()) return undefined;
-  const trimmed = about.trim();
-  return trimmed.length > 150 ? `${trimmed.slice(0, 150).trimEnd()}…` : trimmed;
+  if (typeof about === "string" && about.trim()) return clampMeta(about);
+  return descriptionFromFacts(tenant);
 }
 
 // ── openingHours parsing (wave D2) ──────────────────────────────────────────
@@ -131,7 +165,10 @@ function parseTimeRange(seg: string): string | null {
   const m1 = Number(m[2] ?? "0");
   let h2 = Number(m[3]);
   let m2 = Number(m[4] ?? "0");
-  if (h2 === 24 && m2 === 0) (h2 = 23), (m2 = 59);
+  if (h2 === 24 && m2 === 0) {
+    h2 = 23;
+    m2 = 59;
+  }
   if (h1 > 23 || h2 > 23 || m1 > 59 || m2 > 59) return null;
   if (h1 * 60 + m1 >= h2 * 60 + m2) return null;
   return `${fmt(h1, m1)}-${fmt(h2, m2)}`;
@@ -283,6 +320,37 @@ function sameAsLinks(facts: {
   return out;
 }
 
+/**
+ * `hasOfferCatalog` from the CONFIRMED services (2026-08-10, SEO depth): the
+ * strongest structured-data signal a small local business can emit is what it
+ * actually sells. Every field is copied 1:1 from `tenants.facts.services` —
+ * name and (when the owner gave one) description; nothing is composed, and the
+ * freeform price string stays out (schema.org wants a number; the numeric
+ * range already ships as `priceRange`). No services → the property is omitted.
+ */
+function offerCatalog(
+  services: { name?: string; description?: string }[] | undefined,
+  businessName: string | undefined,
+): Record<string, unknown> | undefined {
+  const items = (services ?? [])
+    .map((s) => ({ name: (s.name ?? "").trim(), description: (s.description ?? "").trim() }))
+    .filter((s) => s.name)
+    .slice(0, 12);
+  if (items.length === 0) return undefined;
+  return {
+    "@type": "OfferCatalog",
+    name: businessName ? `Послуги — ${businessName}` : "Послуги",
+    itemListElement: items.map((s) => ({
+      "@type": "Offer",
+      itemOffered: {
+        "@type": "Service",
+        name: s.name,
+        ...(s.description && { description: s.description }),
+      },
+    })),
+  };
+}
+
 /** Schema.org LocalBusiness for the HOME page of a published tenant (§10.3).
  *  Emits ONLY fields present in facts/brand — no hallucinated data. Wave D2:
  *  openingHours (when the freeform hours parse confidently), priceRange (from
@@ -297,7 +365,7 @@ export function localBusinessJsonLd(tenant: Tenant, image?: string, seo?: PageSe
     address?: string;
     about?: string;
     hours?: string;
-    services?: { price?: string }[];
+    services?: { name?: string; description?: string; price?: string }[];
     socials?: { href?: string }[];
     instagram?: unknown;
   };
@@ -335,6 +403,8 @@ export function localBusinessJsonLd(tenant: Tenant, image?: string, seo?: PageSe
   if (priceRange) data.priceRange = priceRange;
   const sameAs = sameAsLinks(facts);
   if (sameAs.length) data.sameAs = sameAs;
+  const catalog = offerCatalog(facts.services, name);
+  if (catalog) data.hasOfferCatalog = catalog;
 
   return JSON.stringify(data).replace(/</g, "\\u003c");
 }

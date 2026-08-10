@@ -73,7 +73,7 @@ const IMAGE_KEYS = new Set(["imageUrl", "url"]);
  * in the schema — that is what makes them storable and renderable — but a field
  * whose value is discarded on the next save is worse than no field at all.
  */
-const CODE_OWNED_KEYS = new Set(["mapQuery"]);
+const CODE_OWNED_KEYS = new Set(["mapQuery", "imageFocus"]);
 
 function labelFor(key: string): string {
   return LABELS[key] ?? key;

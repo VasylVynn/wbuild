@@ -8,6 +8,7 @@ import { getVertical, VERTICAL_IDS } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
 import { validateFacts } from "@/lib/onboard/validate";
 import { hasContactChannel } from "@/lib/onboard/contact-channel";
+import { selectGaps, type DataGap } from "@/lib/onboard/gaps";
 import { isApifyConfigured } from "@/lib/ig/apify";
 import { PHOTO_ROLES } from "@/lib/media/media";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
@@ -261,8 +262,11 @@ export function buildOnboardSystem(args: {
   dossier: Dossier | null;
   issues: string[];
   apifyEnabled: boolean;
+  /** Data-shaped gaps worth ONE question (lib/onboard/gaps.ts). Already budget-
+   *  filtered by `selectGaps` — an empty array means «say nothing about this». */
+  gaps?: DataGap[];
 }): string {
-  const { vertical, facts, dossier, issues, apifyEnabled } = args;
+  const { vertical, facts, dossier, issues, apifyEnabled, gaps = [] } = args;
 
   const igLine = apifyEnabled
     ? "- Заглянути в Instagram бізнесу за посиланням чи нікнеймом — витягнути опис, категорію, контакти-кандидати й фото (інструмент scrape_instagram). Можна повторно на прохання («пошукай ще раз телефон»).\n"
@@ -275,12 +279,25 @@ export function buildOnboardSystem(args: {
     ? `\n\nПЕРЕВІР непевні дані (МАКСИМУМ ОДНЕ мʼяке підтверджувальне питання за хід, природним відлунням):\n${issues.map((n) => `- ${n}`).join("\n")}`
     : "";
 
+  // Data-shaped gaps (owner feedback 2026-08-10 §6): the code decides WHICH
+  // hole is worth a question, the model decides HOW to ask. Never a script:
+  // the list is empty whenever the data shows nothing, the owner already said
+  // «just do it», or the 1–2-question budget is spent.
+  const gapsBlock = gaps.length
+    ? `\n\nПРОГАЛИНИ В ДАНИХ (побачив код за формою даних — це НЕ анкета):\n${gaps
+        .map((g) => `- ${g.note}`)
+        .join(
+          "\n",
+        )}\nЯк із цим бути: ЩОНАЙБІЛЬШЕ ОДНЕ коротке питання за хід і не більше двох за всю розмову; постав його природно, своїми словами, у тому ж повідомленні, де показуєш, що вже маєш; додай чип «Пропустити». Відповіді немає, або чіп «Пропустити», або «просто зроби» — створюй сайт із того, що є і більше до цього не повертайся. НІКОЛИ не вигадуй відповідь замість власника і не блокуй створення сайту цим питанням. Якщо відповідь уже видно в даних — не питай зайвого.`
+    : "";
+
   const staticPrompt = `Ти — уважний помічник, що робить власнику бізнесу сайт українською. Твоя робота — ЗРОБИТИ сайт, а не провести анкету: більшість даних ти витягуєш і виводиш сам (Instagram, фото, розмова), а маркетингові тексти пишеш сам. Людина часто не знає, що казати — веди її мʼяко і швидко до готової чернетки.
 
 ГОЛОВНИЙ ПРИНЦИП — СПОЧАТКУ СТВОРИТИ, ПОТІМ ДОШЛІФУВАТИ:
 - Досить зрозуміти, ЩО за бізнес (тип + назва, або просто посилання на Instagram) і мати хоч один канал звʼязку (телефон / Instagram / Telegram / Viber) — цього достатньо, щоб запропонувати створити сайт.
 - НЕ проходь списком полів. ВИВОДЬ сам: місто — з Instagram-профілю, послуги — з постів і фото, тон — з ніші. Опис і тексти сайту — ТВОЯ робота, не питай «що написати».
-- Уточнення — лише коли справді не можеш вивести. МАКСИМУМ 1–2 уточнювальні питання ЗА ВСЮ розмову, кожне зі змогою пропустити (чип «Пропустити»). Короткі/нетерплячі відповіді або «просто зроби» — питання закінчились, пропонуй створення.
+- Питай ЛИШЕ у двох випадках: (1) справді не можеш вивести щось важливе; (2) самі дані показують прогалину, від якої сайт видимо програє — рівно один елемент там, де буде сітка карток; жодного фото; невідомо, де ви працюєте. Усе, що виводиться з даних, — виводь мовчки. Такі прогалини код перелічує нижче, якщо вони є.
+- МАКСИМУМ 1–2 питання ЗА ВСЮ розмову і не більше одного за хід, кожне зі змогою пропустити (чип «Пропустити»). ЖОДНЕ питання не блокує створення сайту: пропустили чи змовчали — створюєш із того, що є. Короткі/нетерплячі відповіді або «просто зроби» — питання закінчились, пропонуй створення.
 - Реквізити (телефон, адреса, ціни, години) — ТІЛЬКИ з розмови чи зібраних даних, НІКОЛИ не вигадуй. Немає — значить цього рядка на сайті просто не буде: замість телефону працюють кнопки Instagram/Telegram і форма заявки, що приходить власнику в Telegram.
 
 ЩО ТИ ВМІЄШ (кажи чесно, без вигадок):
@@ -323,7 +340,7 @@ ${igToolLine}- Хочеш роздивитись фото детальніше �
 - НЕ вміємо: інтернет-магазин / кошик / оплату, онлайн-запис із календарем, кабінети, інтеграції (CRM, 1C), довільний дизайн чи власний код, багатосторінкові сайти.
 - Просить те, чого немає — чесно й тепло скажи, що платформа проста й недорога і цього в ній немає (не обіцяй). Додай: у редакторі є кнопка «Хочу кастомні зміни». Тексти, послуги, ціни, фото, кольори, порядок секцій — наша звичайна робота, таке НЕ відхиляй.
 
-Поточні зібрані факти (JSON): ${JSON.stringify(facts)}${issuesBlock}`;
+Поточні зібрані факти (JSON): ${JSON.stringify(facts)}${issuesBlock}${gapsBlock}`;
 
   const dossierBlock = dossier ? `\n\n${formatDossierForPrompt(dossier)}` : "";
   return `${staticPrompt}${dossierBlock}`;
@@ -436,12 +453,16 @@ export async function onboardTurn(
   }
 
   const issues = validateFacts(currentFacts, vertical).map((i) => i.note);
+  // Same gap policy as the streaming route — this degraded path has no dossier
+  // or media, so only fact- and transcript-shaped gaps can fire here.
+  const gaps = selectGaps({ facts: currentFacts, transcript: messages, status: "collecting" });
   const system = buildOnboardSystem({
     vertical,
     facts: currentFacts,
     dossier: null,
     issues,
     apifyEnabled: isApifyConfigured(),
+    gaps,
   });
 
   const client = getAnthropic();

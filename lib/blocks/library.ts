@@ -24,6 +24,27 @@ export interface BlockLibraryEntry {
   /** Nav label used when inNav (Ukrainian). */
   navLabel?: string;
   /**
+   * Item floor for a block that renders a repeating LIST or CARD GRID (owner
+   * feedback 2026-08-10: «Наша тренерка» shipped as a card grid holding exactly
+   * one card — a grid of one always reads as a bug, never as a design).
+   *
+   * ONE table, two consumers: `buildLibraryDoc` advertises it to the model, and
+   * assemble() enforces it deterministically after generation — so the floor
+   * can never be a suggestion the model quietly ignores.
+   */
+  minItems?: number;
+  /**
+   * What happens when the block lands below `minItems`:
+   *  - "drop" — the section is removed (its content isn't worth a broken grid);
+   *  - "keep" — the content IS valuable and genuine (the business really does
+   *    have one master / one review / one service), so the DATA survives and the
+   *    LAYOUT is what adapts: assemble picks a registered single-friendly
+   *    variant where the wireframe offers one, and the wireframe's single-item
+   *    render guard handles the rest. Never pad a grid with invented items —
+   *    that would break invariant 5 to fix a CSS problem.
+   */
+  belowMin?: "drop" | "keep";
+  /**
    * Force-injected by code into every page — NEVER offered to the model
    * (carries server-side wiring; presence is an invariant, not a creative
    * choice — §4.2/§5.6).
@@ -59,46 +80,74 @@ export const blockLibrary: Record<BlockType, BlockLibraryEntry> = {
   services: {
     label: "Послуги",
     description:
-      "Список послуг/товарів з назвами, описами й цінами. Ядро сайту локального бізнесу. " +
+      "Список послуг/товарів: назва + опис (+ ціна, якщо вона є у фактах). Ядро сайту локального бізнесу. " +
+      "Стільки позицій, скільки послуг/напрямків Є У ФАКТАХ (до 6) — НЕ додавай позицій, щоб було «повніше»: " +
+      "вигадана послуга приводить заявку на те, чого бізнес не робить. Опис кожної — 2–3 речення про те, " +
+      "як це відбувається і для кого. " +
+      "Односкладові підписи («Тренування») не продають; ціни й тривалості — лише з фактів. " +
       "Можна двічі, коли позицій справді багато (основні + додаткові) — тоді з РІЗНИМИ заголовками.",
     role: "middle",
     maxPerPage: 2,
     inNav: true,
     navLabel: "Послуги",
+    // A one-card services grid still reads as a bug, but services are the
+    // funnel's core: the page must never lose the only description of what the
+    // business sells → layout adapts (see belowMin: "keep").
+    minItems: 2,
+    belowMin: "keep",
   },
   gallery: {
     label: "Галерея",
-    description: "Сітка фото реальних робіт. Візуальний доказ якості.",
+    description: "Сітка фото реальних робіт. Візуальний доказ якості. Мінімум 2 фото.",
     role: "middle",
     maxPerPage: 1,
     inNav: true,
     navLabel: "Галерея",
+    // Declared for the prompt only — deliberately no `belowMin`: assemble's own
+    // gallery rule owns enforcement because it must also honour the
+    // `pendingImages` shimmer placeholders of background image generation.
+    minItems: 2,
   },
   stats: {
     label: "Цифри",
     description:
-      "Кілька коротких акцентів-цифр (роки досвіду, к-сть замовлень тощо). ВИКОРИСТОВУВАТИ лише якщо число реально є у фактах; НІКОЛИ не вигадувати числа.",
+      "Кілька коротких акцентів-цифр (роки досвіду, к-сть замовлень тощо). ВИКОРИСТОВУВАТИ лише якщо числа " +
+      "реально є у фактах; НІКОЛИ не вигадувати числа. Немає щонайменше двох справжніх чисел — не бери цю секцію.",
     role: "middle",
     maxPerPage: 1,
     inNav: false,
+    minItems: 2,
+    belowMin: "drop",
   },
   testimonials: {
     label: "Відгуки",
     description:
-      "Реальні відгуки клієнтів (цитата + автор). Лише зі списку фактів; не вигадувати.",
+      "Реальні відгуки клієнтів (цитата + автор). Лише зі списку фактів; не вигадувати — ані тексту, ані автора. " +
+      "Один справжній відгук — це нормально (код подасть його як велику цитату); двох вигаданих бути не може.",
     role: "middle",
     maxPerPage: 1,
     inNav: true,
     navLabel: "Відгуки",
+    minItems: 2,
+    belowMin: "keep",
   },
   faq: {
     label: "Питання-відповіді",
     description:
-      "Поширені запитання й відповіді (доставка, оплата, терміни). Знімає заперечення клієнта.",
+      "СПРАВЖНІ запитання клієнта перед покупкою. Два різні набори — не плутай їх. " +
+      "МОЖНА завжди (відповідь — чесна проза про процес): як залишити заявку, що буде після заявки, " +
+      "як проходить перше звернення, кому це підходить, як до вас дістатися своїми словами. " +
+      "ЛИШЕ ЯКЩО ФАКТ Є: скільки коштує, скільки триває, як оплатити, чи можна перенести, де саме ви розташовані, " +
+      "які години роботи. Немає факту — НЕ став це питання: краще 3 чесні питання, ніж 6 із вигаданими відповідями " +
+      "(«заняття триває 60 хвилин», «перенести можна за добу» — це вигадана політика, і Google підтягне її у видачу). " +
+      "Орієнтир 4–6 питань, коли фактів вистачає. Відповідь — 2–4 речення по суті. " +
+      "НЕ пиши питань-пустушок («Чи якісна ваша робота?», «Чому саме ви?») — це наповнювач, який читається як спам.",
     role: "middle",
     maxPerPage: 1,
     inNav: true,
     navLabel: "Питання",
+    minItems: 2,
+    belowMin: "drop",
   },
   cta: {
     label: "Заклик до дії",
@@ -136,36 +185,75 @@ export const blockLibrary: Record<BlockType, BlockLibraryEntry> = {
   team: {
     label: "Команда",
     description:
-      "Картки людей команди: ім'я + роль (+ опис/фото). ЛИШЕ реальні люди бізнесу; не вигадувати імена.",
+      "Картки людей команди: ім'я + роль (+ короткий опис). ЛИШЕ реальні люди бізнесу; НІКОЛИ не вигадувати " +
+      "імена, посади чи «колег» заради красивої сітки. Якщо людина одна — бери секцію з ОДНІЄЮ карткою " +
+      "(код подасть її як портрет, а не як сітку з одного); це чесно й нормально.",
     role: "middle",
     maxPerPage: 1,
     inNav: true,
     navLabel: "Команда",
+    minItems: 2,
+    belowMin: "keep",
   },
   timeline: {
-    label: "Досвід / шлях",
+    label: "Як усе відбувається / шлях",
     description:
-      "Хронологія: період + етап/роль + опис. Для досвіду, кар'єри, процесу. ЛИШЕ реальні дати й етапи.",
+      "Кроки: етап + короткий опис (період — ЛИШЕ якщо реальна дата є у фактах). Найкраще працює як «як відбувається " +
+      "візит/замовлення»: 3–5 кроків від першого контакту до результату. Кроки описуй по суті процесу, без вигаданих " +
+      "тривалостей і дат.",
     role: "middle",
     maxPerPage: 1,
     inNav: false,
+    minItems: 3,
+    belowMin: "drop",
   },
+  // ── DECISION 2026-08-10 (owner feedback, «Наш світ»): REDEFINED, not removed.
+  // The block shipped a visible SEO keyword strip — «Теніс · Tennis · Тенісльвів
+  // · Львів · Тренер з тенісу» — under a vague title. Two options were on the
+  // table: delete it from the generation surface (the richText route), or
+  // redefine it so it can only carry human-meaningful phrases.
+  //
+  // Redefinition wins for a SMALL-BUSINESS site: the wireframe already registers
+  // this block as the `values` section labelled «Переваги» («ряд коротких тез»),
+  // and a benefits strip — «Тренування під ваш рівень», «Зручний час занять» —
+  // is genuinely useful above the lead form, especially for a business whose
+  // source data is thin. Deleting the type would leave that section permanently
+  // unreachable and remove a cheap way to add honest substance. What actually
+  // failed was the CONTRACT (this description said «стрічка ключових слів»,
+  // literally inviting keywords) — so the contract is what changed, backed by a
+  // deterministic post-check in assemble() (cleanBenefitStrip) that drops
+  // keyword-shaped items and the whole section when what's left is a tag cloud.
+  // SEO belongs in prose, headings and metadata — never in visible chips.
   marquee: {
-    label: "Стрічка ключових слів",
+    label: "Переваги (короткі тези)",
     description:
-      "Рухома стрічка коротких слів (навички, технології, напрямки). 6–15 РЕАЛЬНИХ пунктів; не вигадувати.",
+      "Ряд коротких ТЕЗ про користь для клієнта — що людина отримує: «Тренування під ваш рівень», " +
+      "«Зручний час занять», «Підтримка новачків». 4–8 пунктів, кожен — жива фраза з 2–5 слів українською. " +
+      "ЗАБОРОНЕНО (код видаляє такі секції цілком): ключові слова й теги, хештеги, назви міст, англійські чи " +
+      "транслітеровані дублі («Tennis», «Тенісльвів»), перелік послуг одним словом. Заголовок секції — зрозумілий " +
+      "людині («Чому обирають нас», «Що ви отримуєте»), а не абстракція («Наш світ»).",
     role: "middle",
     maxPerPage: 1,
     inNav: false,
+    // ONE number with marqueeSchema (`.min(3)`): the floor used to be 4 while
+    // the schema admitted 3, so a clean, keyword-free three-thesis strip passed
+    // tool validation and was then deleted by meetsItemFloor with no trace. The
+    // schema keeps `.min(3)` because it also parses ALREADY STORED content
+    // (editor saves) — so the floor comes down to meet it instead.
+    minItems: 3,
+    belowMin: "drop",
   },
   publications: {
-    label: "Праці / публікації",
+    label: "Преса / публікації",
     description:
-      "Список праць/книг/статей/кейсів: назва + рік + джерело. ЛИШЕ реальні; не вигадувати назви.",
+      "Список згадок у пресі, праць, статей чи кейсів: назва + рік + джерело. ЛИШЕ реальні, з фактів — " +
+      "не вигадувати ані назв, ані видань, ані років. Немає щонайменше двох справжніх — не бери цю секцію.",
     role: "middle",
     maxPerPage: 1,
     inNav: true,
-    navLabel: "Праці",
+    navLabel: "Преса",
+    minItems: 2,
+    belowMin: "drop",
   },
   map: {
     label: "Карта",
@@ -193,7 +281,13 @@ export const COMPOSITION_RULES = {
   /** hero at index 0, contacts last. */
   opener: "hero" as BlockType,
   closer: "contacts" as BlockType,
-  /** number of MIDDLE blocks (between hero and contacts). */
-  minMiddle: 3,
+  /**
+   * Number of MIDDLE blocks (between hero and contacts). The floor moved 3 → 4
+   * on owner feedback 2026-08-10: with sparse source data the model was landing
+   * on the minimum and shipping a thin page. Thin input is not a licence for a
+   * thin site — the substance it must add is honest generic prose (how it
+   * works, what to expect, who it suits, FAQ), never invented specifics.
+   */
+  minMiddle: 4,
   maxMiddle: 8,
 } as const;

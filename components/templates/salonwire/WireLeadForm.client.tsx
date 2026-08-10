@@ -9,6 +9,16 @@ import type { BlockProps } from "@/lib/blocks/schema";
  * the SAME tenant host (the API resolves the tenant from the Host header) and
  * carries the "website" honeypot. Styling stays within the wire-* class
  * contract: structure here, surface in the generated stylesheet.
+ *
+ * Layout hooks (see the Form section of wire.css, which owns the rules):
+ *   .wire-leadform__form   the locked measure + grid — the form is NOT sized
+ *                          by the section it sits in
+ *   .wire-field--name      \ the pair that shares one row from 640px; every
+ *   .wire-field--phone     / other child spans the full width
+ *   .wire-field__label     a form label, not a section eyebrow
+ * This file is NOT part of the stylist prompt (only wire.css and sections.tsx
+ * are), so any class introduced here has to be documented in wire.css to be
+ * styleable at all.
  */
 export default function WireLeadFormClient({ data }: { data: BlockProps["lead_form"] }) {
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -44,8 +54,8 @@ export default function WireLeadFormClient({ data }: { data: BlockProps["lead_fo
 
   return (
     <form className="wire-stack wire-leadform__form" onSubmit={submit}>
-      <div className="wire-field">
-        <label className="wire-eyebrow" htmlFor="wire-name">
+      <div className="wire-field wire-field--name">
+        <label className="wire-eyebrow wire-field__label" htmlFor="wire-name">
           Імʼя
         </label>
         <input
@@ -57,8 +67,8 @@ export default function WireLeadFormClient({ data }: { data: BlockProps["lead_fo
           autoComplete="name"
         />
       </div>
-      <div className="wire-field">
-        <label className="wire-eyebrow" htmlFor="wire-phone">
+      <div className="wire-field wire-field--phone">
+        <label className="wire-eyebrow wire-field__label" htmlFor="wire-phone">
           Телефон
         </label>
         <input
@@ -73,8 +83,8 @@ export default function WireLeadFormClient({ data }: { data: BlockProps["lead_fo
           autoComplete="tel"
         />
       </div>
-      <div className="wire-field">
-        <label className="wire-eyebrow" htmlFor="wire-msg">
+      <div className="wire-field wire-field--message">
+        <label className="wire-eyebrow wire-field__label" htmlFor="wire-msg">
           Повідомлення
         </label>
         <textarea

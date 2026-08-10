@@ -4,6 +4,12 @@ import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, GEN_MODEL } from "@/lib/ai/anthropic";
 import { blockSchemas, parseBlockProps, type StoredBlock } from "@/lib/blocks/schema";
+import {
+  cleanBenefitStrip,
+  BENEFITS_TITLE,
+  itemCountOf,
+  meetsItemFloor,
+} from "@/lib/blocks/hygiene";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import type { SiteMedia } from "@/lib/media/media";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
@@ -330,9 +336,25 @@ function overlayDeterministicFields(
         ...newProps,
         imageUrl: old.imageUrl,
         imageAlt: old.imageAlt,
+        // Crop anchor is derived from photo metadata at assemble — the fixer
+        // never sees the photo, so it may not re-guess the anchor either.
+        imageFocus: old.imageFocus,
         ctaHref: old.ctaHref,
         secondaryCtaHref: old.secondaryCtaHref,
       };
+    case "marquee": {
+      // Same hygiene as assemble(): the QA fixer is the stage MOST likely to be
+      // told «rewrite this section», and without this it could re-persist the
+      // exact keyword chips the owner complained about (its only validation is
+      // marqueeSchema, which happily accepts «Теніс», «Tennis», «Львів»). The
+      // floor is enforced by the caller: an empty result drops the section.
+      const items = cleanBenefitStrip(
+        (newProps.items as string[] | undefined) ?? [],
+        facts.city ?? undefined,
+      );
+      const title = (newProps.title as string | undefined)?.trim() || BENEFITS_TITLE;
+      return { ...newProps, title, items };
+    }
     case "gallery":
       // Images are cast deterministically at assemble — the fixer may only
       // retitle the section, never touch the image set.
@@ -566,7 +588,16 @@ export async function runDraftQualityLoop(opts: {
 
         const newProps = await rebuildSectionProps(block, v.instruction, facts, dossier, opts.signal);
         if (newProps) {
-          blocks[entry.index] = { ...block, props: newProps } as StoredBlock;
+          const rebuilt = { ...block, props: newProps } as StoredBlock;
+          // Item floor, applied where the props are PERSISTED — not only in
+          // assemble(). A rebuilt list/grid section that cleaned or shrank
+          // below its floor is the same «grid of one» defect the generation
+          // path drops, so drop it here too rather than ship it.
+          if (!PROTECTED_TYPES.has(rebuilt.type) && !meetsItemFloor(rebuilt.type, itemCountOf(rebuilt))) {
+            dropIndexes.add(entry.index);
+          } else {
+            blocks[entry.index] = rebuilt;
+          }
           dirty = true;
         } else if (opts.signal?.aborted) {
           // Deadline, not a bad section: the rebuild was cut short, so the

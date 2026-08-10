@@ -34,6 +34,12 @@ import {
 } from "@/lib/blocks/schema";
 import { blockLibrary, COMPOSITION_RULES } from "@/lib/blocks/library";
 import {
+  cleanBenefitStrip,
+  BENEFITS_TITLE,
+  itemCountOf,
+  meetsItemFloor,
+} from "@/lib/blocks/hygiene";
+import {
   getTemplate,
   type SiteTemplate,
   type TemplateSectionDef,
@@ -251,7 +257,20 @@ function buildLibraryDoc(): string {
     .filter((t) => !UNREACHABLE_TYPES.has(t))
     .map((t) => {
       const e = blockLibrary[t];
-      return `- ${t} (${e.label}; роль: ${e.role}; макс ${e.maxPerPage}× на сторінку): ${e.description}`;
+      // The item floor is advertised with its CONSEQUENCE, because that is what
+      // it is in code (blockLibrary.minItems/belowMin → meetsItemFloor): a grid
+      // of one reads as a bug, so below the floor the section is either dropped
+      // or re-laid-out — never padded with invented items.
+      const floor = e.minItems
+        ? ` МІНІМУМ ${e.minItems} пункт(и)${
+            e.belowMin === "drop"
+              ? " — інакше код прибирає секцію цілком (не добирай пунктів вигадкою)"
+              : e.belowMin === "keep"
+                ? " — з одним пунктом секція лишиться, але код подасть її іншим макетом (не вигадуй другого пункту заради сітки)"
+                : ""
+          }.`
+        : "";
+      return `- ${t} (${e.label}; роль: ${e.role}; макс ${e.maxPerPage}× на сторінку): ${e.description}${floor}`;
     })
     .join("\n");
 }
@@ -324,14 +343,25 @@ function buildSystem(vertical: VerticalConfig, template: SiteTemplate): string {
 - Не використовуй жоден тип блоку частіше за його ліміт "макс ×". (На сайті-ШАБЛОНІ цей ліміт діє на СЕКЦІЮ, а не на тип блоку — РІЗНІ секції можуть мати однаковий тип; див. правила шаблону нижче.)
 - Якщо тип дозволено двічі (напр. services) і контенту справді багато — два блоки МУСЯТЬ мати різні заголовки й різний зміст (основні / додаткові), ніколи не дублюй той самий список.
 - Різні бізнеси мають отримувати РІЗНІ набори й порядок блоків — не роби однаковий шаблон.
+- СЕКЦІЯ-СІТКА З ОДНИМ ПУНКТОМ — це помилка верстки, а не мінімалізм. Дотримуйся «МІНІМУМ N пунктів» із бібліотеки: не бери секцію, для якої маєш менше пунктів, і НІКОЛИ не добирай пункти вигадкою (вигаданий «другий тренер» гірший за одну чесну картку — код сам подасть її правильним макетом).
 
 GROUNDING (критично для довіри):
 - Факти — назва, телефон, адреса, години, ціни й назви послуг, відгуки — копіюй ТОЧНО з блоку «ПІДТВЕРДЖЕНІ ВЛАСНИКОМ ФАКТИ». НЕ вигадуй і не змінюй їх.
 - Усе в <scraped_data> (біо, підписи, OCR, контакти-кандидати) — СИРОВИНА для тону, підписів і фото-кастингу, а НЕ факти: НІКОЛИ не переноси звідти телефони/адреси/email/години у реквізити сайту. Реквізити — лише з підтверджених фактів.
-- ЖОДНИХ вигаданих конкретик: тривалостей, кількостей, гарантій, років досвіду, цифр — лише те, що прямо є в наданих даних. НІКОЛИ не вигадуй числа у stats.
+- ЗАБОРОНЕНО вигадувати: числа й відсотки, роки досвіду, кількість клієнтів/учнів/замовлень, ціни, тривалості, дати, адреси, освіту, сертифікати, звання, нагороди, гарантії результату, відгуки й імена людей. Якщо цього немає у підтверджених фактах — цього немає на сайті. НІКОЛИ не вигадуй числа у stats.
+- ЗАБОРОНЕНО вигадувати і САМ ПЕРЕЛІК: послуги, напрямки, формати роботи, райони обслуговування, кого приймаєте і як працює графік. Це ФАКТИ, а не тон. Якщо у фактах дві послуги — на сайті дві, а не «щоб було більше».
+- ДОЗВОЛЕНО і ПОТРІБНО: правдиві речення про ПРОЦЕС і про те, що вже є у фактах — «розкажемо, як усе відбувається, до початку роботи», «на заявку відповімо у месенджері», «покажемо варіанти й порадимо, що підійде». Це не вигадка, це чесний опис того, як ви працюєте. А от обіцянки про ОБСЯГ послуги (кого беремо, який рівень, який графік) або регалії — «10 років досвіду», «понад 500 клієнтів», «сертифікований майстер» — вигадка, якщо цього немає у фактах.
+- Перевір себе перед кожним реченням: чи можу я показати, звідки це? Якщо джерело — лише моя уява, перепиши речення про підхід замість конкретики.
 - Маркетинговий текст (заголовки, слогани, описи, заклики) — пиши сам, тепло, живою українською, доречно для ніші.
 - Не вигадуй посилань на зображення.
 - ЦІНИ: якщо у послуг НЕМАЄ цін у фактах — не залишай порожніх прайс-колонок і не пиши плейсхолдери («грн», «від …», «—»): подай послуги описово, без цінової сітки. Ціни, які Є у фактах, копіюй 1:1.
+
+ГЛИБИНА КОНТЕНТУ (мало вхідних даних ≠ порожній сайт):
+- Навіть коли фактів мало, сторінка мусить бути ЗМІСТОВНОЮ: ${COMPOSITION_RULES.minMiddle}–${COMPOSITION_RULES.maxMiddle} середніх секцій, кожна з реальною користю для відвідувача. Три сухі секції — це не «мінімалізм», це недороблений сайт.
+- Коли даних обмаль, бери секції, які живуть із ЧЕСНОЇ ПРОЗИ (послуги з розгорнутими описами, як усе відбувається, питання-відповіді, переваги, заклик до дії), а не ті, що вимагають фактів, яких немає (цифри, преса, відгуки).
+- Обсяг: послуги — РІВНО стільки позицій, скільки послуг/напрямків є у фактах (не більше; максимум 6, якщо їх справді більше). Глибина йде в ОПИС кожної — 2–3 речення про те, як це відбувається і для кого, — а НЕ в кількість позицій. Питання-відповіді — стільки справжніх запитань, на які факти дають відповідь (орієнтир 4–6, але 3 чесних краще за 6 вигаданих); кроки — 3–5; переваги — 4–8 тез.
+- Hero-підзаголовок — 1–2 повні речення про суть і користь, а не три слова. Заклик до дії пояснює, ЩО станеться після заявки.
+- Пиши для людини, яка вперше чує про цей бізнес: що це, для кого, як почати, чого очікувати.
 
 БРЕНД-ГОЛОС (пиши як ЦЕЙ бізнес, не «як усі»):
 - Виведи тон із блоку БРЕНД-ГОЛОС, реальних підписів постів і дослівних слів власника: переймай їхню лексику, улюблені слова, міру теплоти чи стриманості.
@@ -355,12 +385,15 @@ ${templateRule}
 - Кожну секцію зазвичай один раз. Якщо контенту СПРАВДІ багато — секцію можна використати ДВІЧІ (напр. послуги: основні + додаткові), але ЛИШЕ секцію з позначкою [можна двічі], і повтори МУСЯТЬ мати РІЗНІ variant і РІЗНІ заголовки — сусідні однакові макети виглядають як помилка верстки. РІЗНІ секції можуть живитись ОДНИМ типом блоку (ліміт «макс ×» діє на секцію, не на тип).
 
 SEO-МЕТА (обов'язково заповни seo):
-- seo.title — за формулою «{головна послуга} у {місто} — {назва}», до 60 символів. Головну послугу бери з фактів, місто — з фактів.
-- seo.description — 1–2 продаючі речення до 150 символів: що робить бізнес, для кого, у якому місті. Природною мовою, без лапок і переліку через кому всіх послуг.
+- seo.title — за формулою «{головна послуга} у {місто} — {назва}», до 60 символів. Головну послугу бери з фактів, місто — з фактів. Без міста у фактах — «{головна послуга} — {назва}».
+- seo.description — 1–2 продаючі речення до 150 символів: що робить бізнес, для кого, у якому місті, і що зробити далі. Природною мовою, без лапок, без переліку через кому всіх послуг і без CAPS.
 
-SEO В ТЕКСТАХ СТОРІНКИ:
-- Частину заголовків секцій пиши з ключовими словами ніші, за якими шукають у Google («Весільні букети», «Ремонт ходової»), а НЕ лише образними («Наша магія»). Образність — у підзаголовки й описи.
-- Місто згадай природно у 1–2 місцях сторінки (напр. hero-підзаголовок або «про нас») — НЕ в кожному заголовку і НЕ списком міст. Переспам ключовими словами читається як спам і шкодить довірі.
+SEO В ТЕКСТАХ СТОРІНКИ (де він живе — і де його НЕ буває):
+- SEO живе у ЗВ'ЯЗНОМУ ТЕКСТІ: у заголовках секцій, у перших реченнях описів, у формулюваннях питань FAQ і в seo-меті. Ключове слово має стояти всередині нормального речення, яке людина прочитає без відрази.
+- Структура заголовків: hero — єдиний головний заголовок сторінки (H1) з головною послугою; заголовки секцій — це H2, і частина з них має нести ключову суть ніші («Тренування з тенісу для дорослих і дітей», «Ремонт ходової»), а не лише образ («Наша магія»). Образність — у підзаголовки й описи.
+- ЗАБОРОНЕНО виносити ключові слова окремою секцією-«чіпами»: рядок на кшталт «Теніс · Tennis · Тенісльвів · Львів · Тренер з тенісу» — це видимий keyword stuffing. Він відлякує людей і шкодить пошуковим позиціям; код такі секції видаляє цілком. Секція переваг — це користь для клієнта фразами, а не хмара тегів.
+- Місто згадай природно у 2–3 місцях сторінки (hero-підзаголовок, опис послуг, одна відповідь у FAQ) — НЕ в кожному заголовку, НЕ списком міст і НЕ склейками («Львівтеніс»).
+- Жодних латинських чи транслітерованих дублів українських слів «для пошуку» — сторінка українською, і пошук це розуміє.
 
 HERO-ЗОБРАЖЕННЯ: заповни imageSubject — короткий опис АНГЛІЙСЬКОЮ (до 15 слів) атмосферного ФОНОВОГО зображення, що асоціюється саме з цим бізнесом: текстури, матеріали, гра світла, природа. ЗАБОРОНЕНО: приміщення/фасади/вітрини, впізнавані товари як «наші», люди, будь-який текст. Приклад для хімчистки: "soft folded fresh linen textures in airy light".`;
 }
@@ -573,7 +606,36 @@ export function heroVariantForSeed(roll: number, allowBanner: boolean): string {
 /** Is this hero photo strong enough to carry a full-bleed banner? */
 function bannerWorthy(meta: PhotoMeta | undefined): boolean {
   if (meta?.burnedText === true) return false;
+  // A photo OF A PERSON that the vetting pass did not mark as banner-capable is
+  // the exact shape that broke on the live site (owner feedback 2026-08-10): a
+  // portrait cast full-bleed into the widest, shortest box on the page gets
+  // `cover`-cropped through the face. `heroCandidate` is the vision layer's own
+  // «survives a full-width banner» verdict, so an unrated portrait keeps the
+  // benefit of the doubt only when nothing says otherwise.
+  if (meta?.kind === "person" && meta.heroCandidate !== true) return false;
   return photoScore(meta) >= USABLE_SITE_QUALITY;
+}
+
+/**
+ * Crop anchor for the hero photo — `hero.imageFocus`, a CSS `object-position`
+ * value the wireframe puts on `--wire-hero-focus`. Derived HERE, from the
+ * vetting metadata the vision pass already writes, because the model never sees
+ * the photo and the renderer has nothing but the URL.
+ *
+ * Only two signals are honest enough to act on:
+ *  - `kind: "person"` → faces sit in the upper third far more often than not,
+ *    so bias the kept band up;
+ *  - `subjectCentered` → the vision pass says the subject reads clearly and is
+ *    not cropped at the edges, i.e. dead centre IS the right anchor.
+ * Anything else returns undefined and the wireframe's own 50% 38% default (also
+ * biased up, but gently) applies. No saliency box exists yet — when one does,
+ * it replaces this function and nothing else changes.
+ */
+export function heroFocusFor(meta: PhotoMeta | undefined): string | undefined {
+  if (!meta) return undefined;
+  if (meta.kind === "person") return "50% 30%";
+  if (meta.subjectCentered === true) return "50% 50%";
+  return undefined;
 }
 
 /**
@@ -955,6 +1017,66 @@ export function applyCharBudgets(
 }
 
 // ---------------------------------------------------------------------------
+// Benefit strip hygiene — the rule itself now lives in lib/blocks/hygiene.ts,
+// a dependency-free module, so the S4 QA rebuild and the wireframe's render
+// guard can apply the SAME function (owner feedback 2026-08-10, item 4: the
+// cleanup used to be assemble()-only, which left every already-generated site
+// stuffed and let one QA round put the chips straight back). Re-exported here
+// because this module is where the pipeline and its vitest suite import it.
+// ---------------------------------------------------------------------------
+export { cleanBenefitStrip, BENEFITS_TITLE };
+
+// ---------------------------------------------------------------------------
+// Item floors for list/grid sections (owner feedback 2026-08-10, item 5: «Наша
+// тренерка» rendered a card GRID holding exactly ONE card). The numbers and the
+// below-floor policy live in blockLibrary (one table, read by the prompt doc
+// AND by this enforcement); the split of responsibility is:
+//   - DATA rule (here): does the section ship at all, and with what item count.
+//   - LAYOUT rule (wireframe): how a surviving single item is rendered —
+//     the wireframe session owns the single-item render guard.
+// Padding a short grid with invented items is never an option (invariant 5).
+// ---------------------------------------------------------------------------
+
+/** Item count of a block that renders a repeating list/grid; undefined for
+ *  blocks that have no item array (hero, cta, contacts…). */
+// itemCountOf + meetsItemFloor now live in lib/blocks/hygiene.ts (one module
+// for every persist-time content rule); re-exported for the pipeline's vitest.
+export { meetsItemFloor };
+
+/**
+ * Registered layouts that read correctly with a SINGLE item — the data-side
+ * half of the single-item contract (the wireframe owns the render-side half).
+ * Applied only when the section actually registers the id, so a wireframe
+ * rename degrades to «keep the current layout», never to a broken variant.
+ *
+ * It overrides a model/seeded choice on purpose: a lone testimonial in a
+ * three-card grid is a layout bug regardless of who picked the grid.
+ */
+const SINGLE_ITEM_VARIANTS: Partial<Record<BlockType, string>> = {
+  testimonials: "big-quote",
+  services: "list-rows",
+};
+
+/** Give every single-item block its single-friendly registered layout. Pure,
+ *  runs last in the variant chain (after the repeat-layout safety net) so it is
+ *  the final authority for these blocks. Exported for vitest. */
+export function applySingleItemLayouts(
+  blocks: StoredBlock[],
+  template: SiteTemplate | undefined,
+): StoredBlock[] {
+  if (!template) return blocks;
+  return blocks.map((b) => {
+    const wanted = SINGLE_ITEM_VARIANTS[b.type];
+    if (!wanted || b.variant === wanted || itemCountOf(b) !== 1) return b;
+    if (!b.section || !template.sections[b.section]?.variants?.[wanted]) return b;
+    // A single service that DID get a real photo cast is better served by the
+    // photo layout it was cast for than by a bare price row.
+    if (b.type === "services" && b.props.items.some((it) => it.imageUrl)) return b;
+    return { ...b, variant: wanted };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Post-generation: cast photos id→URL, enforce composition, ground facts,
 // project nav placement.
 // ---------------------------------------------------------------------------
@@ -1061,8 +1183,10 @@ function assemble(
   // reach an image field. All other arms are structurally identical.
   const converted: BlockInstance[] = raw.map((b): BlockInstance => {
     if (b.type === "hero") {
+      // imageFocus is CODE-owned (schema comment): drop whatever arrived and
+      // derive it from the chosen photo's own metadata below.
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { photoId: _photoId, ...props } = b.props;
+      const { photoId: _photoId, imageFocus: _imageFocus, ...props } = b.props;
       const imageUrl = heroPhoto ?? generatedHero;
       const imageAlt = heroPhoto
         ? photoAlt(heroPhoto, altBase)
@@ -1074,7 +1198,9 @@ function assemble(
       // model (and the brief) are briefed on photo quality but must not be
       // trusted with it: a blurry or text-covered shot blown up full-bleed is
       // worse than any other layout. groundAndPlace re-validates either way.
-      const allowBanner = bannerWorthy(heroPhoto ? metaByUrl.get(heroPhoto) : undefined);
+      const heroMeta = heroPhoto ? metaByUrl.get(heroPhoto) : undefined;
+      const imageFocus = heroPhoto ? heroFocusFor(heroMeta) : undefined;
+      const allowBanner = bannerWorthy(heroMeta);
       const chosen = resolvedVariant(template, resolvedSection(template, b), b.variant);
       const planned = resolvedVariant(
         template,
@@ -1084,7 +1210,12 @@ function assemble(
       const vetoed = (v: string | undefined) => (v === "banner" && !allowBanner ? undefined : v);
       const variant =
         vetoed(chosen) ?? vetoed(planned) ?? heroVariantForSeed(variantSeed, allowBanner);
-      return { type: "hero", props: { ...props, imageUrl, imageAlt }, section: b.section, variant };
+      return {
+        type: "hero",
+        props: { ...props, imageUrl, imageAlt, ...(imageFocus ? { imageFocus } : {}) },
+        section: b.section,
+        variant,
+      };
     }
     if (b.type === "gallery") {
       // Background image generation (owner decision): a gallery too thin to
@@ -1144,6 +1275,19 @@ function assemble(
       });
       return { type: "switchback", props: { ...b.props, items }, section: b.section, variant: b.variant };
     }
+    if (b.type === "marquee") {
+      // Benefits strip, not a keyword strip (see cleanBenefitStrip): drop the
+      // keyword-shaped items here, and let the item floor below drop the whole
+      // section when too little honest content is left. The title fallback
+      // keeps a surviving strip from rendering as an unlabelled band.
+      const items = cleanBenefitStrip(b.props.items, facts.city);
+      return {
+        type: "marquee",
+        props: { ...b.props, title: b.props.title?.trim() || BENEFITS_TITLE, items },
+        section: b.section,
+        variant: b.variant,
+      };
+    }
     return b;
   });
 
@@ -1175,6 +1319,17 @@ function assemble(
         b.props.images.length >= 2 ||
         (b.props.pendingImages ?? 0) > 0,
     )
+    // Item floors for the list/grid sections (blockLibrary.minItems +
+    // belowMin): a stats row with one number, a two-step «process», a press
+    // wall with a single mention or a benefits strip that cleaned down to
+    // nothing all read as unfinished — drop them rather than ship a grid of
+    // one. Only `belowMin: "drop"` types can fail here: gallery declares its
+    // floor for the prompt but leaves enforcement to its own rule above (which
+    // also honours the pendingImages shimmer), and the `keep` types
+    // (services/team/testimonials) ship their single genuine item while the
+    // LAYOUT adapts (applySingleItemLayouts + the wireframe's single-item
+    // render guard).
+    .filter((b) => meetsItemFloor(b.type, itemCountOf(b)))
     .filter((b) => b.type !== "map" || hasAddress)
     .filter((b) => b.type !== "instagram_cta" || hasIgHandle)
     // On a template site, drop middle blocks whose type maps to no section — they
@@ -1200,6 +1355,19 @@ function assemble(
       return seenCount <= blockLibrary[b.type].maxPerPage;
     })
     .slice(0, COMPOSITION_RULES.maxMiddle);
+
+  // COMPOSITION FLOOR — assert it where the DROPS happen, not only in the
+  // prompt. `minMiddle` was raised 3 → 4 to stop thin pages, but it is prompt
+  // text everywhere else: the filter chain above can remove a benefits strip, a
+  // one-number stats row, a thin gallery and a map with no address, so a model
+  // that shipped exactly four middles can land on two with no event and no log.
+  // Nothing is invented to repair it (that is what the whole grounding contract
+  // forbids) — but a thin page must at least be VISIBLE in the pipeline logs.
+  if (middle.length < COMPOSITION_RULES.minMiddle) {
+    console.warn(
+      `[assemble] thin page: ${middle.length} middle block(s) after the deterministic drops, floor is ${COMPOSITION_RULES.minMiddle} (model proposed ${raw.filter((b) => blockLibrary[b.type].role === "middle").length}) — kept: ${middle.map((b) => b.type).join(", ") || "none"}`,
+    );
+  }
 
   const modelChoseGallery = middle.some((b) => b.type === "gallery");
 
@@ -1307,6 +1475,11 @@ function assemble(
   if (template) {
     placed = reassignRepeatedLayouts(placed, template);
   }
+
+  // Single-item layouts LAST in the variant chain (owner feedback 2026-08-10):
+  // one genuine coach / one real review must not render as a card grid of one.
+  // The data survives untouched — only the layout changes.
+  placed = applySingleItemLayouts(placed, template);
 
   // Second href pass, AFTER placement: only now are the real in-page targets
   // known. Template sites use section ids as DOM ids, classic sites use the

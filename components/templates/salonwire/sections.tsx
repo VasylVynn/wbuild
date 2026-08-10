@@ -1,4 +1,6 @@
+import type { CSSProperties } from "react";
 import type { BlockProps } from "@/lib/blocks/schema";
+import { cleanBenefitStrip, meetsItemFloor } from "@/lib/blocks/hygiene";
 import {
   instagramHref,
   normalizeIgHandle,
@@ -32,7 +34,15 @@ import WireLeadFormClient from "./WireLeadForm.client";
  *
  * Every layout rule for a modifier lives in wire.css (LOCKED); the generated
  * stylesheet styles a modifier like any other surface hook and never
- * re-arranges its grid. The nav/footer silhouette modifiers
+ * re-arranges its grid.
+ *
+ * ONE-ITEM SECTIONS: any of these grids can legitimately receive a single item
+ * (one coach, one service, one review). wire.css degrades that case — the lone
+ * card spans the row at a readable measure instead of sitting at 1/3 width —
+ * so a section never LOOKS broken for having little content. Style the single
+ * card exactly like the others; do not write a special case for it.
+ *
+ * The nav/footer silhouette modifiers
  * (wire-nav--centered-brand, wire-footer--2col, wire-footer--single) live in
  * SalonWireWrapper.tsx — they are seeded per site, not model-chosen.
  */
@@ -56,6 +66,37 @@ import WireLeadFormClient from "./WireLeadForm.client";
  * The generated stylesheet still owns surface only — it sees this file verbatim
  * (lib/design/wire-style.ts), which is why the modifiers are named, not inline.
  */
+
+/**
+ * CROP ANCHOR for the hero photo (owner feedback 2026-08-10: a portrait photo
+ * of a person was cover-cropped through the face on the desktop banner).
+ *
+ * Contract — `--wire-hero-focus`, consumed by wire.css on BOTH the banner
+ * backdrop and the split/mirror photo:
+ *   - value: any CSS `object-position` (e.g. "62% 24%", "left top"); default
+ *     50% 38% when absent,
+ *   - carrier: an inline custom property on the hero <section>, so it inherits
+ *     to whichever <img> the layout renders,
+ *   - source: `hero.imageFocus` — a registry field (heroSchema) written by CODE
+ *     in assemble() from the chosen photo's PhotoMeta (`kind: "person"` →
+ *     biased up, `subjectCentered` → dead centre; see heroFocusFor in
+ *     lib/ai/generate.ts), NEVER a model choice and never a URL. The model's
+ *     value is discarded at conversion, and the editor never shows the field
+ *     (CODE_OWNED_KEYS in lib/blocks/fields.ts).
+ * Re-validated here rather than trusted: anything that is not a plain position
+ * value falls back to the default instead of reaching the stylesheet. There is
+ * no saliency box yet — the two metadata signals above are all that is honest,
+ * and a hero whose photo carries neither simply uses the default anchor.
+ */
+const HERO_FOCUS_RE = /^[a-z0-9%.\s-]{1,32}$/i;
+
+function heroFocusStyle(d: BlockProps["hero"]): CSSProperties | undefined {
+  const raw = d.imageFocus;
+  if (typeof raw !== "string") return undefined;
+  const focus = raw.trim();
+  if (!focus || !HERO_FOCUS_RE.test(focus)) return undefined;
+  return { ["--wire-hero-focus" as string]: focus };
+}
 
 function WireHeroContent({ d }: { d: BlockProps["hero"] }) {
   return (
@@ -83,7 +124,7 @@ function WireHeroContent({ d }: { d: BlockProps["hero"] }) {
 export function WireHero({ data }: { data: unknown }) {
   const d = data as BlockProps["hero"];
   return (
-    <section className="wire-section wire-hero">
+    <section className="wire-section wire-hero" style={heroFocusStyle(d)}>
       <div className="wire-container wire-hero__inner">
         <div className="wire-stack wire-hero__body">
           <WireHeroContent d={d} />
@@ -103,7 +144,7 @@ export function WireHero({ data }: { data: unknown }) {
 export function WireHeroMirror({ data }: { data: unknown }) {
   const d = data as BlockProps["hero"];
   return (
-    <section className="wire-section wire-hero wire-hero--mirror">
+    <section className="wire-section wire-hero wire-hero--mirror" style={heroFocusStyle(d)}>
       <div className="wire-container wire-hero__inner">
         <div className="wire-stack wire-hero__body">
           <WireHeroContent d={d} />
@@ -126,6 +167,9 @@ export function WireHeroBanner({ data }: { data: unknown }) {
   return (
     <section
       className={`wire-section wire-hero wire-hero--banner${d.imageUrl ? " wire-hero--scrim" : ""}`}
+      // The crop anchor matters most here: the backdrop is the widest, shortest
+      // box on the page, so it is where `cover` throws away the most photo.
+      style={heroFocusStyle(d)}
     >
       {d.imageUrl && (
         <div className="wire-hero__backdrop">
@@ -375,6 +419,9 @@ export function WireGalleryStream({ data }: { data: unknown }) {
 
 /* ── Team ──────────────────────────────────────────────────────────────── */
 
+/** The team card grid. A ONE-person team is a normal case for a small
+ *  business, and wire.css makes that single card span the row at a readable
+ *  measure rather than stand at a quarter width beside three empty columns. */
 export function WireTeam({ data }: { data: unknown }) {
   const d = data as BlockProps["team"];
   return (
@@ -513,7 +560,12 @@ export function WireLeadForm({ data }: { data: unknown }) {
         {d.title && <h2 className="wire-title">{d.title}</h2>}
         {d.subtitle && <p className="wire-subtitle">{d.subtitle}</p>}
         {/* Interactive half lives in the client component — the wireframe's only
-            one; it posts to /api/leads (invariant #8: the form must WORK). */}
+            one; it posts to /api/leads (invariant #8: the form must WORK).
+            Its markup is NOT in this file, so style it through the classes the
+            Form section of wire.css documents: .wire-leadform__form (locked
+            measure + grid — never re-flow it), .wire-field, .wire-field__label,
+            .wire-input, .wire-textarea. The submit button is a plain
+            .wire-btn.wire-btn--primary. */}
         <WireLeadFormClient data={d} />
       </div>
     </section>
@@ -600,14 +652,28 @@ export function WireCtaFullBleed({ data }: { data: unknown }) {
 
 /* ── Marquee (values) ──────────────────────────────────────────────────── */
 
+/**
+ * RENDER-SIDE keyword guard. The generation-time cleanup (assemble → S3) only
+ * ever runs on a NEW page, so every tenant generated before it — including the
+ * live site the owner complained about — still stores «Теніс · Tennis ·
+ * Тенісльвів · Львів …» in published_content. There is no migrate script in
+ * this repo (migrations are applied by hand), so the honest fix for existing
+ * sites is to apply the SAME pure function at read time and render nothing when
+ * what survives is not a benefits row. The city is not available here, so the
+ * city-chip rule sits out; the hashtag / latin-duplicate / concatenation /
+ * all-bare-words rules do the work. A regeneration cleans the DATA; this keeps
+ * the PAGE clean in the meantime.
+ */
 export function WireMarquee({ data }: { data: unknown }) {
   const d = data as BlockProps["marquee"];
+  const items = cleanBenefitStrip(d.items);
+  if (!meetsItemFloor("marquee", items.length)) return null;
   return (
     <section className="wire-section wire-marquee">
       <div className="wire-container wire-stack">
         {d.title && <h2 className="wire-title">{d.title}</h2>}
         <ul className="wire-row wire-marquee__list">
-          {d.items.map((item, i) => (
+          {items.map((item, i) => (
             <li className="wire-marquee__item" key={i}>
               {item}
             </li>
