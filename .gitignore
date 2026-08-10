@@ -56,3 +56,6 @@ roxybo*
 
 # v0 design reference (not part of the app)
 /3minsite/
+
+# Playwright/audit screenshots taken at the repo root during live verification
+/*.png
