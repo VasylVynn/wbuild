@@ -4,6 +4,7 @@ import { getServiceClient } from "@/lib/supabase/server";
 import { requireMember } from "@/lib/tenant/membership";
 import { revalidateTenant } from "@/lib/cache";
 import { isStorageUrl } from "@/lib/media/media";
+import { measureLogoPlateFromUrl } from "@/lib/media/palette";
 
 /**
  * Logo control for the editor (§4.8 + H1). The logo lives on the UNVERSIONED
@@ -15,7 +16,11 @@ import { isStorageUrl } from "@/lib/media/media";
 
 type LogoResult = { ok: true; logoUrl?: string } | { ok: false; error: string };
 
-type BrandRow = { logoUrl?: string } & Record<string, unknown>;
+type BrandRow = { logoUrl?: string; logoPlate?: string } & Record<string, unknown>;
+
+/** A hex plate is a MEASUREMENT of the asset (lib/media/palette). "none", an
+ *  unmeasurable asset and a removed logo all mean: store no plate at all. */
+const PLATE_HEX = /^#[0-9a-f]{6}$/i;
 
 export async function getLogoAction(host: string): Promise<LogoResult> {
   const gate = await requireMember({ host });
@@ -44,8 +49,18 @@ export async function setLogoAction(host: string, url: string | null): Promise<L
   if (!t) return { ok: false, error: "tenant not found" };
 
   const brand = { ...((t.brand ?? {}) as BrandRow) };
+  delete brand.logoPlate;
   if (url === null) delete brand.logoUrl;
-  else brand.logoUrl = url;
+  else {
+    brand.logoUrl = url;
+    // O1: a mark that ships on an opaque square gets a deliberate chip in the
+    // asset's own backdrop colour instead of a black rectangle on both the
+    // light nav and the dark footer. Measured here, at the one place the logo
+    // is persisted — never guessed at render time. Fail-open: no measurement
+    // (sharp absent, slow fetch) → no plate, which is today's rendering.
+    const plate = await measureLogoPlateFromUrl(url);
+    if (plate && PLATE_HEX.test(plate)) brand.logoPlate = plate;
+  }
 
   const { error } = await sb.from("tenants").update({ brand }).eq("id", t.id);
   if (error) return { ok: false, error: error.message };

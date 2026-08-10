@@ -41,6 +41,9 @@ export interface EditorData {
   // its OWN section components + wrapper, matching the published site.
   templateId?: string;
   displayLogoUrl?: string;
+  // Opaque-logo backdrop measured at import (Tenant.brand.logoPlate) — the
+  // editor preview must render the brand mark exactly like the public site.
+  displayLogoPlate?: string;
   // The model-written stylesheet for this draft. The frame preview must read the
   // DRAFT's design, or it shows a bare grey wireframe while the site is styled.
   wireCss?: string;
@@ -82,6 +85,7 @@ export async function getEditorData(host: string): Promise<EditorData | null> {
     wireCss: (p?.draft_content as { wireCss?: string } | null)?.wireCss,
     designSpec: (p?.draft_content as { designSpec?: DesignSpec } | null)?.designSpec,
     displayLogoUrl: (t.brand as { logoUrl?: string } | null)?.logoUrl,
+    displayLogoPlate: (t.brand as { logoPlate?: string } | null)?.logoPlate,
     seo: (p?.draft_content as { seo?: PageSeo } | null)?.seo,
   };
 }

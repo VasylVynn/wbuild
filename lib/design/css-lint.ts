@@ -13,7 +13,10 @@ import postcss, { type AtRule, type Declaration, type Rule } from "postcss";
  *   by definition (invariant §7); font-family declarations stripped too;
  * - rules whose EVERY selector targets ::before/::after are the decor layer —
  *   display/position/float are legitimate there and stay;
- * - on ordinary selectors display/float are stripped; position is stripped
+ * - on ordinary selectors every FLOW property is stripped (see
+ *   STRIP_ON_REAL_ELEMENTS: display, float, the flex and grid placement
+ *   properties, order, align-self, aspect-ratio, columns — wire.css owns flow,
+ *   the sheet owns surface); position is stripped
  *   only when it's absolute/fixed/sticky — the wireframe provides no
  *   containing blocks, so `position: relative` is a legitimate anchor for a
  *   rule's own ::before/::after decor and stays; and
@@ -21,6 +24,10 @@ import postcss, { type AtRule, type Declaration, type Rule } from "postcss";
  *   (auto/percentage/fit-content/...); max-width stays (allowed on text);
  * - overflow is stripped only on `.wire-section` selectors (sections must never
  *   clip content); card-level overflow (border-radius clipping) is benign;
+ * - on the GEOMETRY_OWNED selectors (nav bar, brand mark, badge, lead form,
+ *   gallery mosaic) size/overflow/position are stripped even when the value is
+ *   "fluid" — `min-width: auto` and `width: 100%` are how a live sheet defeated
+ *   the badge and the nav bar;
  * - url() to any http(s) or protocol-relative origin is stripped (§4.8: no foreign URLs; the sheet
  *   never needs remote assets — data: URIs and gradients stay);
  * - selectors not scoped under .tpl-salonwire are re-scoped (prefixed), so a
@@ -38,7 +45,53 @@ const STRIP_ALWAYS = new Set(["font-family"]);
  *  over inline style) or leak globally through an unscoped `:root`, so every
  *  such declaration is stripped, not just the two known names. */
 const FONT_VAR_PREFIX = "--font-";
-const STRIP_ON_REAL_ELEMENTS = new Set(["display", "float"]);
+/** Layout PROPERTIES the wireframe owns everywhere (design decision 8.3, owner
+ *  audit 2026-08-10). `display`/`float` alone were not enough: a sheet's
+ *  `.tpl-salonwire .wire-nav__inner { flex-wrap: wrap }` is (0,2,0), lands after
+ *  wire.css and put the CTA back on its own row; `grid-template-columns:
+ *  repeat(4, …)` re-opened the empty grid columns at every width the `:has()`
+ *  repair does not cover. None of these decide SURFACE — they decide flow, and
+ *  flow is wire.css's. Decor rules (::before/::after) keep them all. */
+const STRIP_ON_REAL_ELEMENTS = new Set([
+  "display",
+  "float",
+  "flex",
+  "flex-wrap",
+  "flex-direction",
+  "flex-flow",
+  "order",
+  "align-self",
+  "justify-self",
+  "aspect-ratio",
+  "grid-template-columns",
+  "grid-template-areas",
+  "grid-auto-flow",
+  "grid-column",
+  "grid-row",
+  "columns",
+  "column-count",
+]);
+
+/** Selectors whose GEOMETRY is code's, not the stylist's: the chrome bar, the
+ *  brand mark, the funnel form, the gallery mosaic. On these, size and overflow
+ *  are stripped even when the value passes the fluid allowance — `min-width:
+ *  auto` and `width: 100%` are exactly how a live sheet defeated the badge and
+ *  the nav. Surface (colour, border, radius, shadow, spacing) is untouched. */
+const GEOMETRY_OWNED = [
+  ".wire-nav", // the whole bar: __inner, __brandlock, __links, __link, __cta
+  ".wire-badge",
+  ".wire-brandmark",
+  ".wire-footer__logo",
+  ".wire-leadform__form",
+  ".wire-gallery__masonry",
+  ".wire-gallery__col",
+];
+const GEOMETRY_PROPS =
+  /^(width|height|min-width|min-height|inline-size|block-size|min-inline-size|min-block-size|overflow(-x|-y|-inline|-block)?|position|white-space|align-items|align-content)$/i;
+
+function isGeometryOwned(selector: string): boolean {
+  return GEOMETRY_OWNED.some((s) => selector.includes(s));
+}
 /** `position: relative` is a legitimate anchor for a rule's own ::before/::after
  *  decor (the wireframe provides no containing blocks) — only the values that
  *  actually break layout get stripped. */
@@ -72,9 +125,15 @@ export function lintWireCss(css: string): LintResult {
 
   root.walkRules((rule: Rule) => {
     const decor = isDecorRule(rule);
+    const geometry = !decor && isGeometryOwned(rule.selector);
     rule.walkDecls((decl: Declaration) => {
       const prop = decl.prop.toLowerCase();
       const where = `${rule.selector.slice(0, 80)}`;
+      if (geometry && GEOMETRY_PROPS.test(prop)) {
+        violations.push(`stripped \`${prop}\` from geometry-owned \`${where}\``);
+        decl.remove();
+        return;
+      }
       if (STRIP_ALWAYS.has(prop) || prop.startsWith(FONT_VAR_PREFIX)) {
         violations.push(`stripped \`${prop}\` from \`${where}\``);
         decl.remove();

@@ -326,6 +326,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
         initial.displayLogoUrl,
         initial.wireCss,
         initial.designSpec,
+        initial.displayLogoPlate,
       )
     : undefined;
   const sectionEls = blocks.map((block, index) => (

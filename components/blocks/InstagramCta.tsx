@@ -1,5 +1,6 @@
 import type { BlockProps } from "@/lib/blocks/schema";
-import { normalizeIgHandle } from "@/lib/blocks/contact-links";
+import { igDirectHref, instagramHref, normalizeIgHandle } from "@/lib/blocks/contact-links";
+import { displayFollowers } from "@/lib/blocks/hygiene";
 
 /**
  * InstagramCta — a prominent «Написати в Direct» conversion path for IG-native
@@ -8,15 +9,10 @@ import { normalizeIgHandle } from "@/lib/blocks/contact-links";
  * from the IG snapshot — both grounded deterministically in assemble().
  */
 
-/** «1 підписник / 2 підписники / 5 підписників» — Ukrainian plural forms. */
-export function formatFollowers(n: number): string {
-  const count = n.toLocaleString("uk-UA");
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${count} підписник`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} підписники`;
-  return `${count} підписників`;
-}
+/** Re-exported so the template skins that render a follower count keep one
+ *  implementation; the canonical one (plurals + no-break grouping + the display
+ *  floor) lives in lib/blocks/hygiene.ts. */
+export { formatFollowers } from "@/lib/blocks/hygiene";
 
 export default function InstagramCta({ data }: { data: BlockProps["instagram_cta"] }) {
   const { title, subtitle, handle, followersCount, buttonLabel } = data;
@@ -24,7 +20,10 @@ export default function InstagramCta({ data }: { data: BlockProps["instagram_cta
   // («@name», full URL) — normalize for the deep links, render nothing if the
   // handle is unusable (never a broken Direct link).
   const clean = normalizeIgHandle(handle);
-  if (!clean) return null;
+  const direct = igDirectHref(clean);
+  const profile = instagramHref(clean);
+  if (!clean || !direct || !profile) return null;
+  const followers = displayFollowers(followersCount);
 
   return (
     <section
@@ -51,7 +50,7 @@ export default function InstagramCta({ data }: { data: BlockProps["instagram_cta
 
         <div className="mt-8 flex flex-col items-center gap-4">
           <a
-            href={`https://ig.me/m/${clean}`}
+            href={direct}
             target="_blank"
             rel="noopener"
             className="inline-flex min-h-[44px] items-center justify-center rounded-full px-8 py-3 text-lg font-semibold"
@@ -64,7 +63,7 @@ export default function InstagramCta({ data }: { data: BlockProps["instagram_cta
           </a>
           <p className="text-base" style={{ color: "var(--color-muted-foreground)" }}>
             <a
-              href={`https://www.instagram.com/${clean}`}
+              href={profile}
               target="_blank"
               rel="noopener"
               className="font-semibold"
@@ -72,7 +71,7 @@ export default function InstagramCta({ data }: { data: BlockProps["instagram_cta
             >
               @{clean}
             </a>
-            {followersCount ? ` · ${formatFollowers(followersCount)}` : null}
+            {followers ? ` · ${followers}` : null}
           </p>
         </div>
       </div>

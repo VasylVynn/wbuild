@@ -10,6 +10,7 @@ import {
   itemCountOf,
   meetsItemFloor,
 } from "@/lib/blocks/hygiene";
+import { canonicalizeContactFacts, normalizeIgHandle } from "@/lib/blocks/contact-links";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import type { SiteMedia } from "@/lib/media/media";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
@@ -186,15 +187,22 @@ function requisiteViolations(entries: SectionEntry[], facts: Partial<BusinessFac
     if (block.type === "map" && facts.address && block.props.address !== facts.address) {
       drift(id, "адреса", facts.address);
     }
-    if (block.type === "instagram_cta" && facts.instagram && block.props.handle !== facts.instagram) {
-      drift(id, "Instagram-нік", facts.instagram);
+    // Identity facts are compared in their CANONICAL form: grounding stores a
+    // bare handle, while a legacy `facts.instagram` may still be a full
+    // profile URL. Comparing the raw strings would report drift on every pass
+    // and re-force the URL back into the props (2026-08-10 audit, finding B).
+    if (block.type === "instagram_cta" && facts.instagram) {
+      const want = normalizeIgHandle(facts.instagram) ?? facts.instagram;
+      const have = normalizeIgHandle(block.props.handle) ?? block.props.handle;
+      if (have !== want) drift(id, "Instagram-нік", want);
     }
   }
   return out;
 }
 
 /** Deterministic requisite re-force — the code-side fix for requisite_drift. */
-function forceRequisites(block: StoredBlock, facts: Partial<BusinessFacts>): StoredBlock {
+function forceRequisites(block: StoredBlock, rawFacts: Partial<BusinessFacts>): StoredBlock {
+  const facts = canonicalizeContactFacts(rawFacts);
   if (block.type === "contacts") {
     return {
       ...block,
@@ -204,6 +212,8 @@ function forceRequisites(block: StoredBlock, facts: Partial<BusinessFacts>): Sto
         address: facts.address ?? block.props.address,
         hours: facts.hours ?? block.props.hours,
         viber: facts.viber ?? block.props.viber,
+        // Same canonical form the generator grounds (contact-links.ts) — a raw
+        // t.me/instagram.com URL in the props is what breaks the renderers.
         telegram: facts.telegram ?? block.props.telegram,
         instagram: facts.instagram,
       },

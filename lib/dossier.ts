@@ -358,10 +358,16 @@ export async function buildDossierForConversation(conversationId: string): Promi
     const sb = getServiceClient();
     const { data } = await sb
       .from("conversations")
-      .select("messages, facts_state")
+      .select("messages, facts_state, tenant_id")
       .eq("id", conversationId)
       .maybeSingle();
-    const snapshot = await getLatestSnapshot({ conversationId });
+    // BOTH scopes: a re-scrape made after the first generate is born
+    // tenant-stamped (lib/ig/deep.ts), so a conversation-only lookup would miss
+    // the NEWER snapshot. See the provenance contract in lib/ig/snapshots.ts.
+    const snapshot = await getLatestSnapshot({
+      conversationId,
+      tenantId: (data?.tenant_id as string | null) ?? null,
+    });
     if (!data && !snapshot) return null;
     const fs = (data?.facts_state ?? {}) as { facts?: unknown; media?: SiteMedia };
     const transcript: TranscriptMsg[] = Array.isArray(data?.messages)
@@ -378,11 +384,24 @@ export async function buildDossierForConversation(conversationId: string): Promi
 }
 
 /**
- * Build a dossier for a published tenant (editor chat). Facts come from
- * tenants.facts and the transcript from editor_chats; media is left empty here —
- * the editor's photos live in the draft blocks, enriched by the editor flow.
+ * Build a dossier for a published tenant (editor chat, editor regeneration).
+ * Facts come from tenants.facts and the transcript from editor_chats.
+ *
+ * `opts.media` — the caller's photo inventory. Left empty by the editor CHAT (its
+ * photos live in the draft blocks, enriched by the editor flow); the REGENERATION
+ * path passes the tenant's real media so a regenerated site keeps the same photo
+ * inventory the first generation had. `opts.facts` overrides tenants.facts when
+ * the caller already holds a fresher copy.
+ *
+ * The snapshot is resolved by tenant OR through the tenant's conversations
+ * (lib/ig/snapshots.ts) — without that fan-out this returned a snapshot-less
+ * dossier for every site onboarded before the tenant link existed, which is
+ * exactly how regeneration lost the Instagram evidence for its own content.
  */
-export async function buildDossierForTenant(tenantId: string): Promise<Dossier | null> {
+export async function buildDossierForTenant(
+  tenantId: string,
+  opts?: { media?: SiteMedia | null; facts?: unknown },
+): Promise<Dossier | null> {
   if (!isSupabaseConfigured()) return null;
   try {
     const sb = getServiceClient();
@@ -400,7 +419,12 @@ export async function buildDossierForTenant(tenantId: string): Promise<Dossier |
           .filter((m) => typeof m.role === "string" && typeof m.content === "string")
           .map((m) => ({ role: m.role as string, content: m.content as string }))
       : [];
-    return buildDossier({ facts: tenant?.facts, media: null, snapshot, transcript });
+    return buildDossier({
+      facts: opts?.facts !== undefined ? opts.facts : tenant?.facts,
+      media: opts?.media ?? null,
+      snapshot,
+      transcript,
+    });
   } catch (e) {
     console.warn(`[dossier] tenant build failed: ${e instanceof Error ? e.message : String(e)}`);
     return null;

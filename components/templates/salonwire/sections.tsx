@@ -1,11 +1,14 @@
 import type { CSSProperties } from "react";
 import type { BlockProps } from "@/lib/blocks/schema";
-import { cleanBenefitStrip, meetsItemFloor } from "@/lib/blocks/hygiene";
+import { cleanBenefitStrip, displayFollowers, meetsItemFloor } from "@/lib/blocks/hygiene";
 import {
+  igDirectHref,
   instagramHref,
+  mailtoHref,
   normalizeIgHandle,
   normalizeUaPhoneDigits,
   telegramHref,
+  telegramLabel,
   viberHref,
 } from "@/lib/blocks/contact-links";
 import WireLeadFormClient from "./WireLeadForm.client";
@@ -292,6 +295,22 @@ export function WireSwitchback({ data }: { data: unknown }) {
 
 /* ── Timeline (process) — two layouts (list / numbered-cards) ──────────── */
 
+/** The step index is a BADGE (.wire-badge in wire.css: a fixed round box that
+ *  cannot stretch), so it may only hold a short token — an ordinal, or a
+ *  `period` of at most three characters («1», «01», «24»). Anything longer
+ *  («Крок 1», «2–3 дні», «Січень 2024») is a label, not a counter: it renders
+ *  as its own `.wire-timeline__period` line and the badge falls back to the
+ *  ordinal. Without this split a long period would widen the badge into a
+ *  lozenge across the card — the shape the round-badge geometry exists to
+ *  prevent. */
+const TIMELINE_BADGE_MAX = 3;
+
+function timelineStepLabels(period: string | undefined, i: number) {
+  const trimmed = period?.trim();
+  const short = trimmed && trimmed.length <= TIMELINE_BADGE_MAX ? trimmed : undefined;
+  return { badge: short ?? String(i + 1), period: short ? undefined : trimmed || undefined };
+}
+
 /** list (default) — the vertical numbered list of step cards. */
 export function WireTimeline({ data }: { data: unknown }) {
   const d = data as BlockProps["timeline"];
@@ -300,14 +319,18 @@ export function WireTimeline({ data }: { data: unknown }) {
       <div className="wire-container wire-stack">
         {d.title && <h2 className="wire-title">{d.title}</h2>}
         <ol className="wire-stack wire-timeline__list">
-          {d.items.map((item, i) => (
-            <li className="wire-card wire-timeline__step" key={i}>
-              <span className="wire-eyebrow wire-timeline__index">{item.period ?? String(i + 1)}</span>
-              <h3 className="wire-heading">{item.title}</h3>
-              {item.subtitle && <p className="wire-text">{item.subtitle}</p>}
-              {item.description && <p className="wire-text">{item.description}</p>}
-            </li>
-          ))}
+          {d.items.map((item, i) => {
+            const step = timelineStepLabels(item.period, i);
+            return (
+              <li className="wire-card wire-timeline__step" key={i}>
+                <span className="wire-badge wire-timeline__index">{step.badge}</span>
+                {step.period && <span className="wire-eyebrow wire-timeline__period">{step.period}</span>}
+                <h3 className="wire-heading">{item.title}</h3>
+                {item.subtitle && <p className="wire-text">{item.subtitle}</p>}
+                {item.description && <p className="wire-text">{item.description}</p>}
+              </li>
+            );
+          })}
         </ol>
       </div>
     </section>
@@ -315,7 +338,7 @@ export function WireTimeline({ data }: { data: unknown }) {
 }
 
 /** numbered-cards — the same steps side by side in a grid, each card led by
- *  its large step number (the .wire-timeline__index grows in wire.css). */
+ *  its large step number (the .wire-timeline__index badge grows in wire.css). */
 export function WireTimelineCards({ data }: { data: unknown }) {
   const d = data as BlockProps["timeline"];
   return (
@@ -323,14 +346,18 @@ export function WireTimelineCards({ data }: { data: unknown }) {
       <div className="wire-container wire-stack">
         {d.title && <h2 className="wire-title">{d.title}</h2>}
         <ol className="wire-grid-3 wire-timeline__list">
-          {d.items.map((item, i) => (
-            <li className="wire-card wire-timeline__step" key={i}>
-              <span className="wire-eyebrow wire-timeline__index">{item.period ?? String(i + 1)}</span>
-              <h3 className="wire-heading">{item.title}</h3>
-              {item.subtitle && <p className="wire-text">{item.subtitle}</p>}
-              {item.description && <p className="wire-text">{item.description}</p>}
-            </li>
-          ))}
+          {d.items.map((item, i) => {
+            const step = timelineStepLabels(item.period, i);
+            return (
+              <li className="wire-card wire-timeline__step" key={i}>
+                <span className="wire-badge wire-timeline__index">{step.badge}</span>
+                {step.period && <span className="wire-eyebrow wire-timeline__period">{step.period}</span>}
+                <h3 className="wire-heading">{item.title}</h3>
+                {item.subtitle && <p className="wire-text">{item.subtitle}</p>}
+                {item.description && <p className="wire-text">{item.description}</p>}
+              </li>
+            );
+          })}
         </ol>
       </div>
     </section>
@@ -363,28 +390,48 @@ export function WireGallery({ data }: { data: unknown }) {
   );
 }
 
-/** masonry-2col — two CSS columns; a deterministic per-item aspect-ratio
- *  rotation in wire.css (4:3 base / 3:4 / 1:1) makes the rows interlock like
- *  a mood board while every image keeps a reserved box (the <img> carries no
- *  width/height attributes, so releasing the crop entirely would collapse the
- *  section until photos load). Pending placeholders keep a fixed 4:3. */
+/** masonry-2col — TWO EXPLICIT COLUMNS, not CSS multicol. A deterministic
+ *  per-item aspect-ratio rotation in wire.css (4:3 base / 3:4 / 1:1) makes the
+ *  columns interlock like a mood board while every image keeps a reserved box
+ *  (the <img> carries no width/height attributes, so releasing the crop would
+ *  collapse the section until photos load). Pending placeholders keep 4:3.
+ *
+ *  WHY THE SPLIT IS MARKUP: the closing edge has to be level, and CSS multicol
+ *  cannot address «the last item of each column» — every tail selector there
+ *  lands on the last items of the SAME column. Rendering the columns makes
+ *  `.wire-gallery__col > :last-child` real, and wire.css lets it absorb its own
+ *  column's slack. Split is column-major (first half, second half), which is
+ *  the reading order multicol had.
+ *
+ *  THE RENDER FLOOR: under four items there is no mood board to build, so it
+ *  falls back to the plain grid. An odd count is fine now — the leveling no
+ *  longer depends on ending on a pair. */
+const MASONRY_MIN_ITEMS = 4;
+
 export function WireGalleryMasonry({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
   const pending = d.pendingImages ?? 0;
+  const total = d.images.length + pending;
+  if (total < MASONRY_MIN_ITEMS) return <WireGallery data={data} />;
+  const items = [
+    ...d.images.map((img, i) => (
+      <figure className="wire-gallery__item" key={`i${i}`}>
+        <img className="wire-media" src={img.url} alt={img.alt ?? ""} />
+        {img.title && <figcaption className="wire-text">{img.title}</figcaption>}
+      </figure>
+    )),
+    ...Array.from({ length: pending }).map((_, i) => (
+      <div className="wire-media wire-gallery__pending" key={`p${i}`} aria-hidden="true" />
+    )),
+  ];
+  const half = Math.ceil(items.length / 2);
   return (
     <section className="wire-section wire-gallery wire-gallery--masonry-2col">
       <div className="wire-container wire-stack">
         {d.title && <h2 className="wire-title">{d.title}</h2>}
         <div className="wire-gallery__masonry">
-          {d.images.map((img, i) => (
-            <figure className="wire-gallery__item" key={i}>
-              <img className="wire-media" src={img.url} alt={img.alt ?? ""} />
-              {img.title && <figcaption className="wire-text">{img.title}</figcaption>}
-            </figure>
-          ))}
-          {Array.from({ length: pending }).map((_, i) => (
-            <div className="wire-media wire-gallery__pending" key={`p${i}`} aria-hidden="true" />
-          ))}
+          <div className="wire-gallery__col">{items.slice(0, half)}</div>
+          <div className="wire-gallery__col">{items.slice(half)}</div>
         </div>
       </div>
     </section>
@@ -531,6 +578,47 @@ export function WireTestimonialsStrip({ data }: { data: unknown }) {
 
 /* ── FAQ ───────────────────────────────────────────────────────────────── */
 
+/** The ONE disclosure marker, shipped as markup rather than CSS.
+ *
+ *  It is inline SVG and not a `::before` glyph because the generated sheet
+ *  demonstrably overwrites `content:` (a live site had `content: "\2022"` on
+ *  `.wire-faq__q::before`, printing a bullet next to the browser's own ▶); not
+ *  a CSS mask because a mask needs `url()`, which css-lint polices, for no
+ *  gain. Markup is the only place the stylist cannot reach.
+ *
+ *  It still takes each site's palette for free: `1em` box, `currentColor`
+ *  stroke — the chevron inherits the question's size and colour, so there is
+ *  no icon token to invent and no per-site asset. wire.css hides the native
+ *  ::marker, rotates this on `[open]` and eases that rotation at motion levels
+ *  1–3. `aria-hidden` + `focusable="false"`: the state is already announced by
+ *  the native <summary> (aria-expanded), so a second announcement would be
+ *  noise, and the icon must never take a tab stop. */
+function WireDisclosureIcon() {
+  return (
+    <svg
+      className="wire-faq__icon"
+      width="1em"
+      height="1em"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M4 6l4 4 4-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Native <details>/<summary>: the built-in aria-expanded, Enter/Space toggle
+ *  and in-page find all come free, and the answer stays in the DOM for search
+ *  engines. The first item opens so the section never reads as an empty list
+ *  of headings. */
 export function WireFaq({ data }: { data: unknown }) {
   const d = data as BlockProps["faq"];
   return (
@@ -540,7 +628,10 @@ export function WireFaq({ data }: { data: unknown }) {
         <div className="wire-faq__list">
           {d.items.map((item, i) => (
             <details className="wire-faq__item" key={i} open={i === 0}>
-              <summary className="wire-faq__q">{item.question}</summary>
+              <summary className="wire-faq__q">
+                <span className="wire-faq__qtext">{item.question}</span>
+                <WireDisclosureIcon />
+              </summary>
               <p className="wire-faq__a">{item.answer}</p>
             </details>
           ))}
@@ -739,16 +830,41 @@ export function WireMap({ data }: { data: unknown }) {
 
 export function WireInstagramCta({ data }: { data: unknown }) {
   const d = data as BlockProps["instagram_cta"];
+  // The stored handle is a grounded FACT, but freeform history means it can
+  // arrive as "@name" or as a full profile URL. Normalize before it touches a
+  // template literal — a raw "https://www.instagram.com/x" interpolated into
+  // `https://instagram.com/${…}` shipped a 404 button AND printed a 451px
+  // unbreakable token as body text that scrolled the whole 390px page sideways
+  // (live audit 2026-08-10).
+  //
+  // Nothing usable → NO section at all. A Direct button is a conversion
+  // promise; a broken one is worse than an absent one.
+  const handle = normalizeIgHandle(d.handle);
+  const direct = igDirectHref(handle);
+  if (!handle || !direct) return null;
+  // The count is social proof only above a floor — below it, it argues against
+  // clicking (lib/blocks/hygiene.ts owns the threshold and the plural forms).
+  const followers = displayFollowers(d.followersCount);
   return (
     <section className="wire-section wire-igcta">
       <div className="wire-container wire-stack wire-igcta__inner">
         {d.title && <h2 className="wire-title">{d.title}</h2>}
         {d.subtitle && <p className="wire-subtitle">{d.subtitle}</p>}
-        <span className="wire-heading wire-igcta__handle">@{d.handle}</span>
-        {typeof d.followersCount === "number" && (
-          <span className="wire-eyebrow">{d.followersCount} підписників</span>
-        )}
-        <a className="wire-btn wire-btn--primary" href={`https://instagram.com/${d.handle}`}>
+        {/* Identity, not a link: the handle is who the business IS. Exactly one
+            clickable thing lives in this section and it is the button below —
+            a printed URL is machine output, never copy. */}
+        <p className="wire-igcta__identity">
+          <span className="wire-heading wire-igcta__handle">@{handle}</span>
+          {followers && <span className="wire-text wire-igcta__followers">{followers}</span>}
+        </p>
+        {/* Label is CODE's, never the model's: it names the destination, and the
+            destination is ig.me/m (Direct), not the profile feed. */}
+        <a
+          className="wire-btn wire-btn--primary wire-igcta__btn"
+          href={direct}
+          target="_blank"
+          rel="noopener"
+        >
           Написати в Direct
         </a>
       </div>
@@ -766,9 +882,16 @@ export function WireContacts({ data }: { data: unknown }) {
   if (d.phone) rows.push({ label: "Телефон", value: d.phone, href: phoneDigits ? `tel:+${phoneDigits}` : undefined });
   if (d.address) rows.push({ label: "Адреса", value: d.address });
   if (d.hours) rows.push({ label: "Години", value: d.hours });
-  if (d.email) rows.push({ label: "Email", value: d.email, href: `mailto:${d.email}` });
+  // Value stays the owner's own text (1:1); only the HREF is the extracted
+  // address, so «пошта: hello@example.com» links correctly instead of building
+  // "mailto:пошта: hello@example.com". No address found → plain text, no link.
+  if (d.email) rows.push({ label: "Email", value: d.email, href: mailtoHref(d.email) ?? undefined });
   const tg = telegramHref(d.telegram);
-  if (d.telegram && tg) rows.push({ label: "Telegram", value: d.telegram, href: tg });
+  // Never print the raw fact: it may be a full t.me URL. Display the canonical
+  // "@username" (or the owner's own text when it is a phone-style deep link).
+  if (d.telegram && tg) {
+    rows.push({ label: "Telegram", value: telegramLabel(d.telegram) ?? d.telegram, href: tg });
+  }
   const vb = viberHref(d.viber);
   if (d.viber && vb) rows.push({ label: "Viber", value: d.viber, href: vb });
   if (igHandle) rows.push({ label: "Instagram", value: `@${igHandle}`, href: instagramHref(igHandle) ?? undefined });

@@ -1,5 +1,6 @@
 import type { Tenant, PageSeo } from "@/lib/tenant/types";
 import type { StoredBlock } from "@/lib/blocks/schema";
+import { instagramHref } from "@/lib/blocks/contact-links";
 
 /**
  * Shared SEO primitives (§10). Every absolute URL is built from the tenant's
@@ -296,7 +297,13 @@ function priceRangeFromServices(services?: { price?: string }[]): string | undef
 }
 
 /** sameAs: absolute http(s) social links from the facts, plus the instagram
- *  fact (wave E adds it; read defensively — full URL or bare handle). */
+ *  fact (wave E adds it; read defensively — full URL or bare handle).
+ *
+ *  The instagram fact goes through `instagramHref` like every other consumer:
+ *  it accepted a raw `https://…` string verbatim before, which emitted whatever
+ *  the fact happened to hold — a post permalink, a `t.me` URL pasted into the
+ *  wrong field, a tracking query — as this business's canonical identity to
+ *  Google. One normalizer, one shape (live audit 2026-08-10). */
 function sameAsLinks(facts: {
   socials?: { href?: string }[];
   instagram?: unknown;
@@ -309,13 +316,9 @@ function sameAsLinks(facts: {
     const href = (s.href ?? "").trim();
     if (/^https?:\/\//i.test(href)) push(href);
   }
-  if (typeof facts.instagram === "string" && facts.instagram.trim()) {
-    const v = facts.instagram.trim();
-    if (/^https?:\/\//i.test(v)) push(v);
-    else {
-      const handle = v.replace(/^@/, "");
-      if (/^[a-z0-9._]{1,30}$/i.test(handle)) push(`https://instagram.com/${handle}`);
-    }
+  if (typeof facts.instagram === "string") {
+    const ig = instagramHref(facts.instagram);
+    if (ig) push(ig);
   }
   return out;
 }

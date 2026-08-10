@@ -21,6 +21,25 @@ const template = {
   wrapper: () => null,
 } as unknown as SiteTemplate;
 
+/** salonwire's real section labels, minus the components. */
+const SECTION_IDS = [
+  "hero", "services", "story", "process", "gallery", "team", "testimonials",
+  "faq", "lead_form", "contacts", "stats", "cta", "values", "press", "map",
+  "instagram_cta",
+  // A registered section the rank table has never heard of — the "new section"
+  // case must degrade to "sorts last", not to "sorts first".
+  "newthing",
+];
+const navTemplate = {
+  ...template,
+  sections: Object.fromEntries(SECTION_IDS.map((s) => [s, { block: s, label: s }])),
+} as unknown as SiteTemplate;
+
+const page = (...sections: string[]) =>
+  sections.map((section) => ({ type: section, section, props: {} })) as unknown as Parameters<
+    typeof buildTemplateBrand
+  >[1];
+
 const spec: DesignSpec = {
   positioning: { promise: "", painPoints: [], tone: "тепло" },
   palette: {
@@ -46,5 +65,92 @@ describe("buildTemplateBrand designSpec threading", () => {
   it("omits the key entirely when designSpec is absent (pre-v2 content)", () => {
     const brand = buildTemplateBrand("Квіти Люба", [], template);
     expect("designSpec" in brand).toBe(false);
+  });
+});
+
+/**
+ * NAV BUDGET (owner audit 2026-08-10): a real site rendered NINE nav links and
+ * «Залишити заявку» wrapped onto a second row at 1440px. The bar is one row per
+ * band at every width, so the count is capped HERE — wire.css can only keep the
+ * silhouette from breaking, it cannot invent space. A wrapped CTA is a broken
+ * funnel (invariant 8), so the cap is the contract, not a suggestion.
+ */
+describe("buildTemplateBrand nav budget", () => {
+  const navOf = (...sections: string[]) =>
+    (buildTemplateBrand("Школа тенісу", page(...sections), navTemplate).navLinks ?? []).map(
+      (l) => l.href,
+    );
+
+  it("caps the nav at four links — five plus a wordmark hid 102px at 768px", () => {
+    // The audited page, verbatim.
+    const nav = navOf(
+      "hero", "services", "story", "process", "gallery", "team",
+      "testimonials", "faq", "values", "press", "map", "instagram_cta",
+      "lead_form", "contacts",
+    );
+    expect(nav.length).toBe(4);
+  });
+
+  it("keeps the highest-priority sections and drops the rest, not the tail", () => {
+    const nav = navOf("hero", "process", "faq", "testimonials", "story", "team", "gallery", "services");
+    // services > gallery > team > story > testimonials > process > faq
+    expect(new Set(nav)).toEqual(new Set(["#services", "#gallery", "#team", "#story"]));
+  });
+
+  it("indexes EVERY destination in allSectionLinks — dropped is not lost", () => {
+    // The footer renders this list, which is what makes «dropped, not menued»
+    // honest: a section the nav has no room for is still linked somewhere.
+    const brand = buildTemplateBrand(
+      "Школа тенісу",
+      page("hero", "services", "story", "gallery", "team", "faq", "map", "press", "lead_form", "contacts"),
+      navTemplate,
+    );
+    expect(brand.navLinks?.length).toBe(4);
+    expect((brand.allSectionLinks ?? []).map((l) => l.href)).toEqual([
+      "#services", "#story", "#gallery", "#team", "#faq", "#map", "#press",
+    ]);
+  });
+
+  it("budgets the WIREFRAME only — legacy templates keep the list they always got", () => {
+    // buildTemplateBrand is shared by eleven published templates whose Nav AND
+    // Footer both render navLinks; capping them would silently drop links from
+    // live pages that are never regenerated.
+    const legacy = { ...navTemplate, id: "studio" } as unknown as SiteTemplate;
+    const nav = (
+      buildTemplateBrand("X", page("services", "story", "gallery", "team", "faq", "map"), legacy).navLinks ?? []
+    ).map((l) => l.href);
+    expect(nav).toEqual(["#services", "#story", "#gallery", "#team", "#faq", "#map"]);
+  });
+
+  it("renders the kept links in DOCUMENT order, not in rank order", () => {
+    expect(navOf("hero", "faq", "team", "services")).toEqual(["#faq", "#team", "#services"]);
+  });
+
+  it("never lists a destination the nav has no business pointing at", () => {
+    // hero/stats/cta/lead_form/contacts + the audit's additions.
+    expect(
+      navOf("hero", "stats", "cta", "banner", "lead_form", "contacts", "map", "instagram_cta", "press", "values"),
+    ).toEqual([]);
+  });
+
+  it("ignores hidden sections and de-dupes repeatable ones", () => {
+    const blocks = page("services", "gallery", "services");
+    (blocks[1] as { hidden?: boolean }).hidden = true;
+    const nav = (buildTemplateBrand("X", blocks, navTemplate).navLinks ?? []).map((l) => l.href);
+    expect(nav).toEqual(["#services"]);
+  });
+
+  it("an unranked new section sorts after every named one, never displacing them", () => {
+    const nav = navOf("services", "gallery", "team", "story", "newthing", "testimonials");
+    expect(nav).not.toContain("#newthing");
+  });
+});
+
+describe("buildTemplateBrand logo plate", () => {
+  it("threads the measured plate through; absent stays absent (no plate is safe)", () => {
+    expect(
+      buildTemplateBrand("X", [], template, "/logo.png", undefined, undefined, "#0b0b0b").logoPlate,
+    ).toBe("#0b0b0b");
+    expect("logoPlate" in buildTemplateBrand("X", [], template, "/logo.png")).toBe(false);
   });
 });

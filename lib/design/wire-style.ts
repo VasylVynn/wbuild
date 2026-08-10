@@ -56,7 +56,8 @@ const SYSTEM = `Ти — сильний веб-дизайнер, який пиш
 - --wire-scrim і --wire-banner-ink, якщо hero прийшов у макеті banner (фото на весь екран): затемнення поверх фото і колір тексту на ньому
 
 ЩО КАТЕГОРИЧНО ЗАБОРОНЕНО — усе, що ламає адаптивність:
-- display, flex-direction, grid-template-columns, grid-template-areas, grid-auto-flow
+- display, flex, flex-wrap, flex-direction, order, align-self, aspect-ratio, columns, grid-template-columns, grid-template-areas, grid-auto-flow, grid-column/row — усе це вирізається лінтером
+- геометрія шапки, лого-знака, бейджа, форми заявки і галереї (.wire-nav*, .wire-brandmark, .wire-badge, .wire-leadform__form, .wire-gallery__masonry): розмір, overflow і position там теж вирізаються — фарбуй їх, але не переставляй
 - position: absolute / fixed / sticky (крім того, що вже є; position: relative на контейнері для якоріння власного декору — можна), float
 - фіксовані width / height / min-width на контейнерах і картках (max-width на тексті — можна)
 - overflow, який ховає контент

@@ -7,7 +7,7 @@ import {
   mergeParsedPosts,
   type IgParsedProfile,
 } from "./apify";
-import { persistSnapshot } from "./snapshots";
+import { persistSnapshot, realTenantIdForConversation } from "./snapshots";
 import { importExternalImage } from "@/lib/media/import";
 import { analyzePhoto } from "@/lib/media/analyze-photo";
 import { photoIdFor, type PhotoMeta } from "@/lib/media/media";
@@ -241,9 +241,19 @@ export async function scrapeInstagramDeep(args: {
   // Best-effort snapshot. `raw` keeps the two scrape sources PRE-merge (profile
   // preview + posts scrape) so a future merge change can be re-derived; `parsed`
   // is the merged view the dossier reads.
+  //
+  // Stamp the tenant AT INSERT whenever one already exists (provenance contract,
+  // snapshots.ts): the editor's `refresh_instagram` hands us `tenantId` outright;
+  // an onboarding re-scrape after the first generate can resolve it from the
+  // conversation. `realTenantIdForConversation` returns null while the
+  // conversation still points at the pre-generation anchor tenant, so a
+  // first scrape stays conversation-only and is promoted at generate time.
+  const linkedTenantId =
+    args.tenantId ??
+    (args.conversationId ? await realTenantIdForConversation(args.conversationId) : null);
   await persistSnapshot({
     conversationId: args.conversationId ?? null,
-    tenantId: args.tenantId ?? null,
+    tenantId: linkedTenantId ?? null,
     handle: parsed.handle,
     raw: { profile: profile ?? null, posts: postsScrape ?? null },
     parsed,

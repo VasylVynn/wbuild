@@ -25,6 +25,12 @@ export interface Tenant {
     businessName: string;
     tagline?: string;
     logoUrl?: string;
+    /** Backdrop measured from the logo's own pixels at import: `"none"` (the
+     *  asset has a transparent background) or a hex (it is opaque, so the
+     *  chrome renders a matching chip behind it instead of letting a black
+     *  square read as a rendering accident). A MEASUREMENT, not a design
+     *  choice — see TemplateBrand.logoPlate. Absent → no plate. */
+    logoPlate?: string;
     /** Owner-uploaded photos (§4.8) — the trusted source for hero/gallery imagery. */
     photos?: string[];
     /** Atmospheric hero background generated when the owner has NO photos (§4.8).

@@ -46,6 +46,7 @@ export default async function EditorFramePage({
           data.displayLogoUrl,
           data.wireCss,
           data.designSpec,
+          data.displayLogoPlate,
         )}
       />
     </div>

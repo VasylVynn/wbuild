@@ -20,11 +20,22 @@
  * specificity: single-class selectors, no !important, no Tailwind colour
  * utilities anywhere in the components.
  *
+ * ── INTRINSIC SIZE IS NEVER INHERITED ───────────────────────────────────────
+ * An element with an intrinsic aspect (logo, photo) or a badge shape (counter,
+ * pill) declares its OWN cross size — `align-self: start` + `inline-size: auto
+ * | fit-content` — never inherits one. A column flex parent stretch-aligns its
+ * children, so it otherwise inflates to the full column width while its fixed
+ * height stays: a square logo at 240×40, a step badge as a 1006px ellipse (both
+ * measured, owner audit 2026-08-10). A `width`/`height` pair IS the bug.
+ *
  * ── CUSTOM PROPERTIES ───────────────────────────────────────────────────────
  * Yours to set (surface): --wire-scrim, --wire-banner-ink, --wire-split-order,
- *   --wire-hero-media-order, --wire-form-max, --wire-solo-max.
+ *   --wire-hero-media-order, --wire-form-max, --wire-solo-max,
+ *   --wire-brandmark-size, --wire-brandmark-max.
  * CODE's, never write them: --wire-hero-focus (the photo's crop anchor — it
- *   depends on the actual image, not on taste) and --font-heading/--font-body.
+ *   depends on the actual image, not on taste), --wire-brandmark-plate (a
+ *   colour measured from the owner's own logo pixels) and
+ *   --font-heading/--font-body.
  *
  * ── VARIANTS (pipeline v2 §5) ───────────────────────────────────────────────
  * A section may ship alternate LOCKED layouts; each is one modifier class on
@@ -50,6 +61,11 @@
  * The HERO never animates on first paint (its heading is the LCP element), and
  * the prefers-reduced-motion block at the end of this file neutralises ALL
  * motion — including animations the generated sheet writes.
+ * The reveal is SCROLL-driven, so it only ever runs where there is a scrollport:
+ * print/PDF, `update: none` devices and any `[data-capture]` render switch it
+ * off and show the page opaque. NEVER hide anything at rest (`opacity: 0`,
+ * `visibility: hidden`, a zero-scale transform) hoping a reveal will bring it
+ * back — content that is not legible without motion is content that is lost.
  * ────────────────────────────────────────────────────────────────────────────
  */
 
@@ -180,12 +196,36 @@
    cannot un-column its container), so they use :has() and degrade to the plain
    single-item rendering where it is unsupported — readable either way. */
 .tpl-salonwire .wire-gallery__masonry:has(> :only-child) {
-  columns: 1;
+  grid-template-columns: minmax(0, 1fr);
   max-width: var(--wire-solo-max, 30rem);
   margin-inline: auto;
 }
 .tpl-salonwire .wire-gallery__stream:has(> :only-child),
 .tpl-salonwire .wire-testimonials__strip:has(> :only-child) { justify-content: center; }
+
+/* SHORT-ROW DEGRADATION — LOCKED. The general form of the rule above:
+   A GRID NEVER OPENS MORE TRACKS THAN IT HAS CHILDREN. Measured 2026-08-10: a
+   two-person «Тренери школи» in .wire-grid-4 computed four 246px tracks — two
+   cards and two empty columns, which reads as a page that failed to load.
+   Stated once on the grid classes, so it covers every card section.
+   The cards FILL the shortened row; the group is NOT centred (section titles
+   are left-aligned). N=1 above is the one exception.
+   `:has()` because a child cannot retract its container's track list; where it
+   is unsupported the rendering is exactly today's. Specificity is (0,4,0), so a
+   generated `.tpl-salonwire .wire-grid-4 { … }` at (0,2,0) cannot put the empty
+   columns back. The repair is scoped to ≥1024px because only there does the
+   BASE open more than 2 tracks — and it can stay scoped only because css-lint
+   now strips `grid-template-columns` from the sheet on real elements
+   (GEOMETRY: unwrapping it instead would force 3 tracks onto a 390px phone). */
+@media (min-width: 1024px) {
+  .tpl-salonwire .wire-grid-4:has(> :nth-child(3):last-child) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .tpl-salonwire .wire-grid-3:has(> :nth-child(2):last-child),
+  .tpl-salonwire .wire-grid-4:has(> :nth-child(2):last-child) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
 /* Split: stacked on mobile, two columns from lg. `--wire-split-order` lets the
    generated sheet flip which side the media sits on WITHOUT touching
@@ -197,28 +237,121 @@
   .wire-split { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3rem; }
 }
 
+/* ── Brand mark — LOCKED geometry, both chrome placements ──────────────────
+ *
+ * ONE primitive for the owner's logo in the nav AND the footer. Its aspect is
+ * unknown at authoring time, so the box fixes the HEIGHT only and lets the
+ * width follow the pixels (`inline-size: auto` + `object-fit: contain`);
+ * `align-self: start` stops the footer's column flex from stretching it (see
+ * INTRINSIC SIZE at the top of this file).
+ *
+ * PLATE: an owner's mark often ships on an opaque square. Cutting it out is not
+ * ours to do, so CODE measures the asset's own backdrop colour at import
+ * (lib/media/palette.ts → tenants.brand.logoPlate), sets
+ * `--wire-brandmark-plate` inline and adds `--plated`: a small chip that reads
+ * as deliberate on the light nav and the dark footer alike. Transparent asset →
+ * no plate. No logo → wordmark only; never a placeholder, never a monogram.
+ *
+ * YOURS: `--wire-brandmark-size`/`--wire-brandmark-max`, the chip's radius and
+ * padding. LOCKED: display, object-fit, align-self, inline-size, box-sizing —
+ * and `--wire-brandmark-plate`, which is a measurement, not a taste. Never set
+ * a width/height pair on `.wire-brandmark`/`.wire-nav__logo`/`.wire-footer__logo`.
+ */
+
+.wire-brandmark {
+  display: block;
+  align-self: start;
+  flex: 0 0 auto;
+  block-size: var(--wire-brandmark-size, 2.25rem);
+  inline-size: auto;
+  max-inline-size: var(--wire-brandmark-max, 10rem);
+  object-fit: contain;
+  object-position: left center;
+}
+/* content-box so the chip grows AROUND the mark — with the global border-box
+   the padding would eat the mark's own height instead. */
+.wire-brandmark--plated {
+  box-sizing: content-box;
+  padding: 0.3rem;
+  border-radius: 0.375rem;
+  background: var(--wire-brandmark-plate, transparent);
+}
+
+/* GEOMETRY LOCK at (0,3,0) — the one place this file deliberately outranks the
+   generated sheet. Sheets really do write `.tpl-salonwire .wire-footer__logo`
+   (0,2,0); the audited site's wrote `object-fit: fill` there, and since the
+   sheet is injected AFTER wire.css an equal-specificity rule here would lose.
+   Only the three declarations that decide whether the owner's logo keeps its
+   proportions are locked — size, colour, radius, the chip and everything else
+   remain yours. */
+.tpl-salonwire :is(.wire-nav, .wire-footer) .wire-brandmark {
+  align-self: start;
+  inline-size: auto;
+  object-fit: contain;
+}
+.tpl-salonwire :is(.wire-nav, .wire-footer) .wire-brandmark--plated { box-sizing: content-box; }
+
 /* ── Nav ───────────────────────────────────────────────────────────────── */
 
+/* NAV BUDGET (owner audit 2026-08-10). Nine links pushed «Залишити заявку» onto
+   a second row; a wrapped CTA is a broken funnel (invariant 8).
+   WHAT SHIPS: below 1024px the bar is TWO bands — band 1 is a two-column GRID
+   (identity | CTA) that cannot wrap, band 2 is the full-width link row. From
+   1024px the three sit inline on ONE row; the identity holds and the link row
+   is the only element that shrinks. The count is capped upstream
+   (lib/templates/brand.ts) and the FULL section index lives in the footer's
+   «Розділи», so a dropped link is never a lost destination.
+   LOCKED via css-lint GEOMETRY_OWNED (flow, size, overflow on `.wire-nav*`);
+   surface — colour, border, radius, shadow, type — stays yours. */
 .wire-nav { position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--wire-line); background: var(--wire-surface); }
-.wire-nav__inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; padding-block: 1rem; }
-.wire-nav__brandlock { display: flex; align-items: center; gap: 0.625rem; min-width: 0; }
-.wire-nav__logo { display: block; height: 2.25rem; width: auto; }
-.wire-nav__brand { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Mobile: the link row wraps to a full-width second line — the nav must never
-   simply vanish on phones. Desktop: back inline between brand and CTA. */
-.wire-nav__links { display: flex; flex-wrap: wrap; gap: 0.375rem 1.25rem; width: 100%; order: 3; padding-bottom: 0.75rem; }
-.wire-nav__link { text-decoration: none; color: inherit; white-space: nowrap; }
+/* Grid, not flex-wrap: a flex line breaks on the items' BASE sizes, so the CTA
+   dropped to a band of its own at 390px even though the name can ellipsise.
+   `minmax(0, 1fr)` is what makes the name give first. */
+.wire-nav__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding-block: 0.625rem;
+}
+.wire-nav__brandlock { display: flex; align-items: center; gap: 0.625rem; min-inline-size: 0; }
+.wire-nav__logo { --wire-brandmark-size: 2.25rem; }
+/* Capped so a long name cannot start eating the link row on a tablet. */
+.wire-nav__brand { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-inline-size: 18ch; }
+.wire-nav__links {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.375rem 1.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* A scroll container clips at its PADDING box: these 4px are the focus
+     ring's headroom, given back to the row's start edge by the margin. */
+  padding: 0.25rem;
+  margin-inline: -0.25rem;
+}
+.wire-nav__links::-webkit-scrollbar { display: none; }
+/* The hit area is the link's own box, not the text's 20px line. */
+.wire-nav__link { display: inline-flex; align-items: center; min-block-size: 2.75rem; text-decoration: none; color: inherit; white-space: nowrap; }
+.wire-nav__cta { flex: 0 0 auto; justify-self: end; }
 
-@media (min-width: 768px) {
-  .wire-nav__links { width: auto; order: 0; flex-wrap: nowrap; padding-bottom: 0; gap: 1.5rem; }
+/* One row from 1024px — NOT 768px: at 768–900 the capped link set plus a
+   wordmark plus the CTA did not fit, and the row silently hid its tail behind
+   a scrollbar-less overflow (measured 102px hidden with a 15-character name).
+   A second band is honest; hidden links are not. */
+@media (min-width: 1024px) {
+  .wire-nav__inner { display: flex; flex-wrap: nowrap; justify-content: space-between; padding-block: 0.75rem; }
+  .wire-nav__brandlock { flex: 0 0 auto; }
+  .wire-nav__links { flex: 0 1 auto; min-inline-size: 0; gap: 1.5rem; }
 }
 
 /* Centered-brand nav (silhouette axis; seeded per site in the wrapper, not a
-   model choice). Below 768px it behaves exactly like the base nav — brand and
-   CTA first, links wrapping to a second line. From 768px the brand sits truly
-   centred (1fr | brand | 1fr) with the CTA at the right edge and the link row
-   centred underneath. */
-@media (min-width: 768px) {
+   model choice). Below 1024px it behaves exactly like the base nav — identity
+   and CTA in band 1, links in band 2. From 1024px the brand sits truly centred
+   (1fr | brand | 1fr) with the CTA at the right edge and the link row centred
+   underneath — two bands by design, still one row each. */
+@media (min-width: 1024px) {
   .wire-nav--centered-brand .wire-nav__inner {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
@@ -230,11 +363,17 @@
     grid-column: 1 / -1;
     grid-row: 2;
     width: 100%;
-    flex-wrap: wrap;
-    justify-content: center;
-    padding-bottom: 0.5rem;
+    /* `safe` matters: this row is a scroll container, and plain `center` puts
+       the overflowing start edge out of reach of the scroller. */
+    justify-content: safe center;
   }
 }
+
+/* Keyboard focus must be visible on chrome links too — `currentColor` inherits
+   whatever the sheet painted, so it works on the light nav and the dark footer
+   without either needing a token. */
+.wire-nav__link:focus-visible,
+.wire-footer__link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
 /* ── Hero — three structural layouts (wave B) ──────────────────────────────
  *
@@ -375,22 +514,40 @@
    card WITHOUT a photo renders as the plain text card (the slot collapses). */
 .wire-services--cards-with-photo .wire-service__photo { aspect-ratio: 3 / 2; }
 
-/* gallery masonry-2col — CSS columns. The interlock comes from a DETERMINISTIC
-   per-item ratio rotation (4:3 base / 3:4 / 1:1), NOT from releasing the crop:
-   the gallery <img> ships no width/height attributes, so `aspect-ratio: auto`
-   would render every image 0px tall until it loads and the whole section would
-   collapse, then reflow image-by-image (hard CLS). Every item keeps a reserved
-   box; pending placeholders stay 4:3 so they hold real space. */
-.wire-gallery__masonry { columns: 2; column-gap: 1rem; }
-.wire-gallery--masonry-2col .wire-gallery__item,
-.wire-gallery--masonry-2col .wire-gallery__pending { break-inside: avoid; margin: 0 0 1rem; }
-.wire-gallery--masonry-2col .wire-gallery__item:nth-child(3n + 2) img.wire-media { aspect-ratio: 3 / 4; }
-.wire-gallery--masonry-2col .wire-gallery__item:nth-child(4n + 3) img.wire-media { aspect-ratio: 1 / 1; }
+/* gallery masonry-2col — TWO EXPLICIT COLUMNS (sections.tsx splits the items).
+   NOT `columns: 2`: multicol has no way to address «the last item of a column»,
+   so a tail rule there pins two items of the SAME column and the closing edge
+   stays ragged — measured 430px apart on a live 6-photo gallery.
+   The interlock is a DETERMINISTIC per-item ratio rotation (4:3 base / 3:4 /
+   1:1), never a released crop: the <img> ships no width/height attributes, so
+   `aspect-ratio: auto` renders 0px until load (hard CLS). Every item keeps a
+   reserved box; pending placeholders stay 4:3.
+   THE CLOSING EDGE: the two columns are grid siblings and therefore stretch to
+   the same height; the LAST item of each column takes up whatever slack its own
+   column has (`flex: 1` + cover). Both columns end on one line at every width
+   and at any count — «останні два фото різної висоти» (owner, 2026-08-10). */
+.wire-gallery__masonry { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: stretch; }
+.wire-gallery__col { display: flex; flex-direction: column; gap: 1rem; min-inline-size: 0; }
+.wire-gallery--masonry-2col .wire-gallery__item { display: flex; flex-direction: column; gap: 0.5rem; margin: 0; min-block-size: 0; }
+/* The rotation is PHASE-SHIFTED per column — same sequence in both columns
+   would align them row for row, which is a plain grid, not a mood board. */
+.wire-gallery__col:nth-child(1) > .wire-gallery__item:nth-child(3n + 2) img.wire-media { aspect-ratio: 3 / 4; }
+.wire-gallery__col:nth-child(1) > .wire-gallery__item:nth-child(4n + 3) img.wire-media { aspect-ratio: 1 / 1; }
+.wire-gallery__col:nth-child(2) > .wire-gallery__item:nth-child(3n + 1) img.wire-media { aspect-ratio: 1 / 1; }
+.wire-gallery__col:nth-child(2) > .wire-gallery__item:nth-child(4n + 2) img.wire-media { aspect-ratio: 3 / 4; }
+/* Must stay AFTER the rotation and tie or outrank it — (0,5,1) both, source
+   order decides, so do not move this block above the four rules. */
+.wire-gallery--masonry-2col .wire-gallery__col > :last-child { flex: 1 1 auto; min-block-size: 0; }
+.wire-gallery--masonry-2col .wire-gallery__col > .wire-gallery__item:last-child img.wire-media {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
 
 @media (min-width: 640px) {
-  .wire-gallery__masonry { column-gap: 1.5rem; }
-  .wire-gallery--masonry-2col .wire-gallery__item,
-  .wire-gallery--masonry-2col .wire-gallery__pending { margin-bottom: 1.5rem; }
+  .wire-gallery__masonry,
+  .wire-gallery__col { gap: 1.5rem; }
 }
 
 /* gallery stream — a horizontal scroll-snap strip, pure CSS, touch-first. The
@@ -469,21 +626,73 @@
 .wire-cta--full-bleed .wire-cta__copy { flex: 1 1 24rem; }
 
 /* process numbered-cards — the steps sit in the shared grid (the list carries
-   .wire-grid-3 in the markup); the index grows into the card's big number. */
+   .wire-grid-3 in the markup); the index grows into the card's big number, so
+   the badge box grows with it (--wire-badge-size is the retune knob). */
 .wire-process--numbered-cards .wire-timeline__index {
+  --wire-badge-size: 3.25rem;
   font-size: 1.75rem;
   font-weight: 700;
+  font-family: var(--font-heading, inherit);
+}
+
+/* ── Badge — a counter / pill primitive. GEOMETRY LOCKED, surface yours ────
+ *
+ * A badge inside a column flex parent (`.wire-card`, `.wire-stack` are
+ * `align-items: stretch`) inherits the container's cross size: measured
+ * 2026-08-10, `.wire-timeline__index` computed 1006×26 with `border-radius:
+ * 50%` — a step number as a card-wide ellipse. So it declares its own box.
+ *
+ * LOCKED at (0,3,0): display · align-self · flex · inline-size ·
+ *   min-inline/block-size · padding-inline · line-height · the type reset.
+ * YOURS: background · color · border · border-radius · font-size ·
+ *   font-weight · box-shadow, and `--wire-badge-size` to retune the box.
+ *
+ * The doubled class is deliberate: `min-width: auto` passes css-lint's fluid
+ * allowance, and that live sheet really carried `.tpl-salonwire
+ * .wire-timeline__index { min-width: auto }` at (0,2,0) AFTER wire.css — a
+ * single-class rule would lose. A sheet that means to restyle the badge can
+ * still reach (0,3,0) by naming it under its section.
+ * The base radius is a PILL, not 50%: on the square box they are the same
+ * shape, but a long `period` («Крок 1», «2024») widens into a lozenge rather
+ * than an ellipse. Long labels belong in `.wire-timeline__period`. */
+.wire-badge { font-size: 0.875rem; font-weight: 600; border-radius: 999px; }
+.tpl-salonwire .wire-badge.wire-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: start;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  inline-size: fit-content;
+  min-inline-size: var(--wire-badge-size, 2.5rem);
+  min-block-size: var(--wire-badge-size, 2.5rem);
+  padding-inline: 0.5rem;
+  line-height: 1;
+  /* The eyebrow's 0.2em tracking used to ride on this span and pushed a single
+     digit visibly off centre — the trailing letter-space is real box width. */
   letter-spacing: normal;
   text-transform: none;
-  font-family: var(--font-heading, inherit);
 }
 
 /* ── Footer ────────────────────────────────────────────────────────────── */
 
 .wire-footer { border-top: 1px solid var(--wire-line); }
 .wire-footer__inner { display: grid; grid-template-columns: 1fr; gap: 2rem; padding-block: 2.5rem; }
-.wire-footer__logo { display: block; height: 2.5rem; width: auto; }
-.wire-footer__link { color: inherit; text-decoration: none; }
+/* Size only — the geometry lives on .wire-brandmark above, which the markup
+   carries alongside this alias. The old `height + width:auto` pair here was
+   what let a sheet's `object-fit: fill` squash a square logo to 240×40. */
+.wire-footer__logo { --wire-brandmark-size: 2.5rem; }
+/* EVERY link in the footer carries this class ALONE — never `.wire-nav__link`
+   (sheet-coloured for the LIGHT nav: 2.4:1 on a dark footer) and never
+   `.wire-text` (whose ink is contrast-checked against `.wire-section` and
+   `.wire-card`, both light). It carries the body type itself so dropping
+   `.wire-text` costs nothing. THE LOCK is below at (0,3,0): a footer link, and
+   every text line beside it, is the colour of the footer's own ink — which IS
+   contrast-repaired (css-contrast PAIRS: `.wire-footer` sameElement). A sheet
+   that really wants its own footer ink still wins by naming
+   `.tpl-salonwire .wire-footer .wire-text` itself. */
+.wire-footer__link { color: inherit; text-decoration: none; font-size: 0.9375rem; }
+.tpl-salonwire .wire-footer :is(.wire-footer__link, .wire-text) { color: inherit; }
 
 @media (min-width: 640px) { .wire-footer__inner { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { .wire-footer__inner { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
@@ -580,14 +789,91 @@
 
 .wire-map__canvas { aspect-ratio: 16 / 7; }
 
+/* ── Instagram CTA ─────────────────────────────────────────────────────────
+ *
+ * Structure: heading, optional subtitle, the handle as IDENTITY TEXT, and
+ * exactly ONE link — the button, which opens Direct (ig.me/m/<handle>). The
+ * handle is never an <a> and never a URL: a printed link is machine output, not
+ * copy. A live site shipped «@https://www.instagram.com/san.team.tennis» as body
+ * text; the section is now dropped outright when no real handle can be resolved.
+ *
+ * LOCKED: the identity row is a wrapping flex line that can SHRINK, so a long
+ * handle plus a follower count never widen the section.
+ * SURFACE (yours): every colour, background, font-size/weight, radius, the
+ * section's own alignment and its spacing.
+ */
+
+.wire-igcta__identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  min-inline-size: 0;
+  margin: 0;
+}
+
+/* ── User-supplied VALUES — LOCKED overflow safety ─────────────────────────
+ * These classes print strings nobody here wrote (an owner's phone, address,
+ * handle) which can be arbitrarily long with no break opportunity — a
+ * 451-character handle made a real tenant scroll sideways at 390px.
+ *   · `overflow-wrap: anywhere`, NOT `break-word`: only `anywhere` shrinks the
+ *     MIN-CONTENT size, which is what lets the track get narrower;
+ *   · `min-inline-size: 0`: a flex/grid child's automatic minimum is its
+ *     min-content size, so the track otherwise refuses to shrink.
+ * Never solve a long value with overflow: hidden, a fixed width or nowrap —
+ * that hides the owner's phone number. Colour and size stay yours. */
+
+.wire-igcta__handle,
+.wire-igcta__followers,
+.wire-contact__value,
+.wire-contact__link,
+.wire-footer__link {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
 /* ── Contacts ──────────────────────────────────────────────────────────── */
 
+.wire-contact { min-inline-size: 0; }
 .wire-contact__link { color: inherit; text-decoration: none; }
 
 /* ── FAQ ───────────────────────────────────────────────────────────────── */
 
+/* THE DISCLOSURE MARKER IS MARKUP, NOT CSS — do not write one.
+ * `sections.tsx` puts an inline `<svg class="wire-faq__icon">` chevron in every
+ * `<summary>`; this file kills the native ::marker and rotates that chevron on
+ * open. Measured 2026-08-10: a sheet added `.wire-faq__q::before { content:
+ * "\2022" }` while the native ▶ still showed — two markers, neither the site's.
+ * So the slot is code's end to end: `list-style: none` +
+ * `::-webkit-details-marker` kill the native one, the `content: none` lock at
+ * (0,3,0) below kills a generated one (a stylist ::before is (0,2,0) and lands
+ * after this file, so anything weaker ties and loses).
+ * The icon's SURFACE is yours for free: it strokes in `currentColor` and sizes
+ * in `em`, so restyling `.wire-faq__q` restyles the chevron.
+ * LOCKED: the summary's flex row, the 2.75rem minimum (the 44px hit-area
+ * floor), the marker kills, the icon's flex and rotation.
+ * YOURS: colour · weight · size · border · background · the rule's dividers. */
 .wire-faq__item { border-bottom: 1px solid var(--wire-line); padding-block: 1rem; }
-.wire-faq__q { font-weight: 600; cursor: pointer; }
+.wire-faq__q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-block-size: 2.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.wire-faq__q::-webkit-details-marker { display: none; }
+/* The question text is its own flex item so a long question shrinks and wraps
+   instead of pushing the chevron off the row. */
+.wire-faq__qtext { min-inline-size: 0; }
+.tpl-salonwire .wire-faq .wire-faq__q::before,
+.tpl-salonwire .wire-faq .wire-faq__q::after { content: none; }
+.wire-faq__icon { flex: 0 0 auto; }
+/* The rotation is STATE, not decoration — it must show with motion switched
+   off, so only the transition (in the motion block below) is gated. */
+.wire-faq__item[open] .wire-faq__icon { transform: rotate(180deg); }
 .wire-faq__a { margin-top: 0.5rem; color: var(--wire-ink-soft); }
 
 /* ── Motion — CSS only, zero JS (pipeline v2 §1) ───────────────────────────
@@ -635,6 +921,10 @@
   .wire-footer__link,
   .wire-contact__link,
   .wire-faq__q { transition: color 160ms ease, opacity 160ms ease; }
+  /* The FAQ chevron: the rotation itself is state and lives outside this
+     block; only its easing is motion. Levels 0 and reduced-motion zero every
+     transition-duration below, so nothing further is needed for either. */
+  .wire-faq__icon { transition: transform 200ms ease; }
 
   /* Levels 2–3: load entrance + stagger (support-independent). `backwards`
      fill on purpose — after the animation the element releases to its natural

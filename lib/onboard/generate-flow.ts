@@ -4,7 +4,7 @@ import { uniqueSubdomain } from "@/lib/tenant/subdomain";
 import { runPipeline, type PipelineStageEvent } from "@/lib/site/pipeline";
 import { classifyVertical } from "@/lib/verticals/registry";
 import { buildDossierForConversation } from "@/lib/dossier";
-import { getLatestSnapshot } from "@/lib/ig/snapshots";
+import { getLatestSnapshot, linkSnapshotsToTenant } from "@/lib/ig/snapshots";
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { isAuthConfigured, getUser } from "@/lib/supabase/auth";
@@ -286,6 +286,18 @@ export async function runGenerateFlow(input: GenerateFlowInput): Promise<Generat
           }
           if (conversationId) {
             await sb.from("conversations").update({ tenant_id: t.id }).eq("id", conversationId);
+            // The conversation's IG scrape is its provenance: promote it with the
+            // conversation, in the SAME idempotent block, so «which tenant owns
+            // this snapshot» can never drift from «which tenant owns this chat».
+            // Before this existed every ig_snapshots row kept tenant_id = NULL
+            // forever and no tenant-keyed reader could prove the generated copy
+            // came from the real profile. Fail-open (returns null on any error);
+            // the reader-side fan-out in getLatestSnapshot is the safety net.
+            const promoted = await linkSnapshotsToTenant({
+              conversationId,
+              tenantId: t.id as string,
+            });
+            if (promoted) log.info("ig snapshots linked to tenant", { host, promoted });
           }
         }
       }

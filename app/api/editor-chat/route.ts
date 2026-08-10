@@ -22,6 +22,7 @@ import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limi
 import { blockLibrary } from "@/lib/blocks/library";
 import { isBlockType, type StoredBlock } from "@/lib/blocks/schema";
 import type { BusinessFacts } from "@/lib/verticals/schema";
+import { canonicalizeContactFacts } from "@/lib/blocks/contact-links";
 import { buildDossierForTenant, formatDossierForPrompt, type Dossier } from "@/lib/dossier";
 import { scrapeInstagramDeep } from "@/lib/ig/deep";
 import { analyzePhoto, type PhotoAnalysis } from "@/lib/media/analyze-photo";
@@ -279,7 +280,12 @@ export async function POST(req: Request): Promise<Response> {
         const keys = Object.keys(patch);
         if (!keys.length) return { ok: false, summary: "Патч фактів порожній — нічого оновлювати." };
         if (!sb) return { ok: false, summary: "Немає підключення до бази — не вдалося зберегти факти." };
-        const merged: Partial<BusinessFacts> = { ...facts, ...patch };
+        // Identity facts land canonically (bare @handle), exactly as the onboard
+        // agent's save_facts does. The editor agent is just as happy to store
+        // «https://www.instagram.com/x» in a field that MEANS a handle, and this
+        // row is what every href builder and the QA drift check read afterwards
+        // (live audit 2026-08-10). Unnormalizable values pass through untouched.
+        const merged: Partial<BusinessFacts> = canonicalizeContactFacts({ ...facts, ...patch });
         const { error } = await sb.from("tenants").update({ facts: merged }).eq("id", site.tenantId);
         if (error) return { ok: false, summary: `Не збереглося: ${error.message}` };
         facts = merged;

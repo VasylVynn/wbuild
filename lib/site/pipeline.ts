@@ -14,8 +14,8 @@ import {
   type SiteMedia,
 } from "@/lib/media/media";
 import { MIN_USABLE_PHOTOS, usablePhotoCount } from "@/lib/media/rank";
-import { aggregatePalette, eligiblePaletteMetas, extractPalette } from "@/lib/media/palette";
-import { buildDossier, type Dossier } from "@/lib/dossier";
+import { aggregatePalette, eligiblePaletteMetas, extractPalette, measureLogoPlateFromUrl } from "@/lib/media/palette";
+import { buildDossier, buildDossierForTenant, type Dossier } from "@/lib/dossier";
 import { runDraftQualityLoop } from "@/lib/site/inspect";
 import { advanceDesignNonce, nonceForBrandWrite, rollAxis } from "@/lib/design/seed";
 import { hueForVertical } from "@/lib/design/hue";
@@ -368,7 +368,23 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
       media = { ...(media ?? { photos: [] }), generatedPending: GENERATED_GALLERY_COUNT };
     }
 
-    const dossier = opts.dossier ?? buildDossier({ facts, media: media ?? null });
+    // Dossier resolution — ONE rule for every entry point. The onboarding flow
+    // hands us a conversation dossier; the paths that don't (editor
+    // regeneration, admin test-generation, dev smokes) used to fall straight to
+    // a bare facts+media dossier, which silently dropped the Instagram snapshot
+    // — the site's only evidence that its copy describes a real business. If a
+    // tenant row exists, resolve the tenant dossier first (snapshot included,
+    // found by tenant OR through the tenant's conversations); fail-open to the
+    // bare one so a missing table or an unlinked scrape can never block a run.
+    let dossier = opts.dossier;
+    if (!dossier && prevRow?.id) {
+      dossier =
+        (await buildDossierForTenant(prevRow.id as string, {
+          media: media ?? null,
+          facts,
+        })) ?? undefined;
+    }
+    dossier ??= buildDossier({ facts, media: media ?? null });
 
     // ── S1: design brief (fail-open → v1 path) ──────────────────────────────
     await emit({ stage: "s1_brief", status: "start" });
@@ -574,6 +590,19 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
       delete carriedBrand.photoMeta;
       delete carriedBrand.generatedHero;
       const brandPhotoMeta = siteScopedPhotoMeta(media);
+      // O1 (owner audit 2026-08-10): an opaque logo asset gets a chip in its
+      // OWN backdrop colour in the chrome. Measured once, here, and reused
+      // while the logo URL is unchanged — a re-measure per generation would
+      // put a network fetch on the preview write's critical path. Fail-open:
+      // no measurement → no plate → today's rendering.
+      const sameLogo = !!media?.logoUrl && carriedBrand.logoUrl === media.logoUrl;
+      let logoPlate =
+        sameLogo && typeof carriedBrand.logoPlate === "string" ? carriedBrand.logoPlate : undefined;
+      if (media?.logoUrl && !sameLogo) {
+        const measured = await measureLogoPlateFromUrl(media.logoUrl);
+        if (measured && /^#[0-9a-f]{6}$/i.test(measured)) logoPlate = measured;
+      }
+      delete carriedBrand.logoPlate;
       const { data: tenant, error: tErr } = await sb
         .from("tenants")
         .upsert(
@@ -586,6 +615,7 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
               businessName: facts.businessName,
               ...brandSeedFields,
               ...(media?.logoUrl && { logoUrl: media.logoUrl }),
+              ...(logoPlate && { logoPlate }),
               ...(media?.photos?.length && { photos: media.photos }),
               ...(brandPhotoMeta.length && { photoMeta: brandPhotoMeta }),
               ...(media?.generatedHero && { generatedHero: media.generatedHero }),

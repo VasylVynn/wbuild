@@ -41,7 +41,19 @@ export interface TemplateBrand {
   brandAccent?: string;
   /** Owner's logo (storage URL). Absent → the Nav keeps its text-only brand. */
   logoUrl?: string;
+  /** Backdrop for an OPAQUE logo asset, measured from the asset's own pixels at
+   *  import: `"none"`/absent → the mark sits directly on the chrome surface; a
+   *  hex → the wireframe chrome renders a small chip in that colour behind the
+   *  mark, so a logo that ships on a black square reads as a deliberate badge
+   *  on both the light nav and the dark footer instead of a rendering accident.
+   *  Never a design choice — it depends on the owner's pixels. */
+  logoPlate?: string;
   navLinks?: { href: string; label: string }[];
+  /** Every linkable section in document order, UNCAPPED. `navLinks` is the
+   *  budgeted subset the nav bar can show in one row; the wireframe footer
+   *  renders this one, so a section dropped from the nav is still indexed
+   *  somewhere. Legacy templates ignore it (their footers read navLinks). */
+  allSectionLinks?: { href: string; label: string }[];
   ctaHref?: string;
   /** The stylesheet the model wrote for THIS site, injected after the
    *  wireframe's own CSS. Legacy templates ignore it. */

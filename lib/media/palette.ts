@@ -125,6 +125,108 @@ async function extract(buf: Buffer, logo: boolean): Promise<string[] | null> {
 }
 
 /**
+ * LOGO PLATE (owner audit 2026-08-10, O1). An owner's mark often ships on an
+ * opaque square — typically black — and pasting that square onto a light nav
+ * and a dark footer reads as a rendering accident. Cutting the background out
+ * is not ours to do at import (that is an edit of the owner's asset), so the
+ * chrome instead renders a deliberate chip in the asset's OWN backdrop colour
+ * (`.wire-brandmark--plated`). This is the producer for `brand.logoPlate`:
+ * a MEASUREMENT of the pixels, never a design choice.
+ *
+ *   "none"  — the asset has a transparent background (or no uniform backdrop
+ *             we can name): the mark sits directly on the chrome surface;
+ *   "#rrggbb" — the measured backdrop colour;
+ *   null    — could not measure (sharp absent, decode failed): callers persist
+ *             nothing, which renders exactly like "none". Fail-open.
+ *
+ * The backdrop is read off the 1px BORDER RING, not the whole image: the ring
+ * is what actually touches the chrome surface, and a mark whose ring is not
+ * near-uniform has no plate to draw.
+ */
+const PLATE_RING_UNIFORM_MIN = 0.9;
+/** Max per-channel distance still counted as "the same backdrop colour". */
+const PLATE_RING_TOLERANCE = 12;
+
+export async function measureLogoPlate(buf: Buffer): Promise<string | null> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const { data, info } = await sharp(buf)
+      .resize(QUANT_MAX_DIM, QUANT_MAX_DIM, { fit: "inside", withoutEnlargement: true })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    if (info.channels !== 4 || info.width < 3 || info.height < 3) return null;
+
+    const at = (x: number, y: number) => (y * info.width + x) * 4;
+    let transparent = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i] < ALPHA_OPAQUE_MIN) transparent += 1;
+    const total = info.width * info.height;
+    // A transparent-background asset needs no plate — this is the common,
+    // already-correct case and it must stay free.
+    if (transparent / total > LOGO_TRANSPARENT_RATIO) return "none";
+
+    const ring: number[] = [];
+    for (let x = 0; x < info.width; x++) {
+      ring.push(at(x, 0), at(x, info.height - 1));
+    }
+    for (let y = 1; y < info.height - 1; y++) {
+      ring.push(at(0, y), at(info.width - 1, y));
+    }
+    // Modal colour of the ring, bucketed coarsely so JPEG noise still agrees.
+    const buckets = new Map<string, { n: number; r: number; g: number; b: number }>();
+    for (const i of ring) {
+      if (data[i + 3] < ALPHA_OPAQUE_MIN) continue;
+      const key = `${data[i] >> 4}.${data[i + 1] >> 4}.${data[i + 2] >> 4}`;
+      const cur = buckets.get(key) ?? { n: 0, r: 0, g: 0, b: 0 };
+      cur.n += 1;
+      cur.r += data[i];
+      cur.g += data[i + 1];
+      cur.b += data[i + 2];
+      buckets.set(key, cur);
+    }
+    let best: { n: number; r: number; g: number; b: number } | null = null;
+    for (const v of buckets.values()) if (!best || v.n > best.n) best = v;
+    if (!best) return "none";
+    const mean = [Math.round(best.r / best.n), Math.round(best.g / best.n), Math.round(best.b / best.n)];
+
+    // Uniformity is measured against the MEAN with a tolerance, not against the
+    // bucket: a backdrop that straddles two buckets is still one backdrop.
+    let near = 0;
+    for (const i of ring) {
+      if (data[i + 3] < ALPHA_OPAQUE_MIN) continue;
+      if (
+        Math.abs(data[i] - mean[0]) <= PLATE_RING_TOLERANCE &&
+        Math.abs(data[i + 1] - mean[1]) <= PLATE_RING_TOLERANCE &&
+        Math.abs(data[i + 2] - mean[2]) <= PLATE_RING_TOLERANCE
+      ) {
+        near += 1;
+      }
+    }
+    if (near / ring.length < PLATE_RING_UNIFORM_MIN) return "none"; // a photo-ish edge: no plate to draw
+    return `#${mean.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+  } catch (e) {
+    console.warn("[media/palette] plate measurement unavailable:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/**
+ * `measureLogoPlate` over a stored logo URL — the shape both persist points
+ * need (editor logo action, onboarding brand write). Best-effort by contract:
+ * a slow or failing fetch returns null and the logo simply ships unplated.
+ */
+export async function measureLogoPlateFromUrl(url: string, timeoutMs = 4000): Promise<string | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!res.ok) return null;
+    return await measureLogoPlate(Buffer.from(await res.arrayBuffer()));
+  } catch (e) {
+    console.warn("[media/palette] plate fetch failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/**
  * QuantizerCelebi's WsMeans stage seeds its k-means point→cluster assignment
  * with Math.random (quantizer_wsmeans.js:95) — the ONE nondeterminism in the
  * §3-S0 pipeline. `quantize` is fully synchronous, so patching Math.random with

@@ -5,6 +5,7 @@ import { CSS_SIZE_LIMIT } from "@/lib/design/css-size";
 import { wireChromeVariants } from "./chrome-variants";
 import {
   instagramHref,
+  mailtoHref,
   normalizeIgHandle,
   normalizeUaPhoneDigits,
   telegramHref,
@@ -59,6 +60,46 @@ function fullBrandName(brand?: TemplateBrand): string {
   return joined || "Назва бізнесу";
 }
 
+/** A plate colour is a MEASUREMENT of the owner's asset, but it lands in a
+ *  style attribute, so only a literal hex is ever let through — `"none"`,
+ *  anything malformed and anything absent all mean "no plate". */
+const PLATE_HEX = /^#[0-9a-f]{3,8}$/i;
+function logoPlate(brand?: TemplateBrand): string | undefined {
+  const v = brand?.logoPlate?.trim();
+  return v && PLATE_HEX.test(v) ? v : undefined;
+}
+
+/**
+ * The owner's logo — ONE component for both chrome placements (invariant: the
+ * brand mark never has two geometries). `.wire-brandmark` carries the locked
+ * geometry, the `--nav`/`--footer` alias only sets its size, and the plate is
+ * an inline custom property because it is per-tenant data, not a design choice.
+ *
+ * `alt=""` on purpose: the business name is rendered as text right next to the
+ * mark, so announcing it twice is noise.
+ */
+function BrandMark({
+  src,
+  place,
+  plate,
+}: {
+  src: string;
+  place: "nav" | "footer";
+  plate?: string;
+}) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className={`wire-brandmark wire-${place}__logo${plate ? " wire-brandmark--plated" : ""}`}
+      src={src}
+      alt=""
+      {...(plate
+        ? { style: { "--wire-brandmark-plate": plate } as CSSProperties }
+        : {})}
+    />
+  );
+}
+
 export function SalonWireWrapper({
   children,
   brand,
@@ -75,11 +116,14 @@ export function SalonWireWrapper({
   // designSpec — see chrome-variants.ts for the interim derivation contract.
   const chrome = wireChromeVariants(brand?.designSpec);
   const links = brand?.navLinks ?? [];
+  // The footer indexes every section; the nav shows the capped set (brand.ts).
+  const indexLinks = brand?.allSectionLinks ?? links;
   const contact = brand?.contact;
   const phoneDigits = contact?.phone ? normalizeUaPhoneDigits(contact.phone) : "";
   const tgHref = telegramHref(contact?.telegram);
   const igHandle = normalizeIgHandle(contact?.instagram);
   const igLink = instagramHref(contact?.instagram);
+  const plate = logoPlate(brand);
 
   return (
     <div
@@ -99,10 +143,7 @@ export function SalonWireWrapper({
               rendering brandName alone silently dropped the last word of every
               multi-word business name («Барбершоп Кузня» → «Барбершоп»). */}
           <span className="wire-nav__brandlock">
-            {brand?.logoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="wire-nav__logo" src={brand.logoUrl} alt="" />
-            )}
+            {brand?.logoUrl && <BrandMark src={brand.logoUrl} place="nav" plate={plate} />}
             <span className="wire-nav__brand">{fullBrandName(brand)}</span>
           </span>
           <nav className="wire-nav__links">
@@ -131,35 +172,38 @@ export function SalonWireWrapper({
       >
         <div className="wire-container wire-footer__inner">
           <div className="wire-stack">
-            {brand?.logoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="wire-footer__logo" src={brand.logoUrl} alt="" />
-            )}
+            {brand?.logoUrl && <BrandMark src={brand.logoUrl} place="footer" plate={plate} />}
             <span className="wire-heading">{fullBrandName(brand)}</span>
           </div>
           <div className="wire-stack">
             <span className="wire-eyebrow">Контакти</span>
             {contact?.phone &&
               (phoneDigits ? (
-                <a className="wire-text wire-footer__link" href={`tel:+${phoneDigits}`}>
+                <a className="wire-footer__link" href={`tel:+${phoneDigits}`}>
                   {contact.phone}
                 </a>
               ) : (
                 <span className="wire-text">{contact.phone}</span>
               ))}
-            {contact?.email && (
-              <a className="wire-text wire-footer__link" href={`mailto:${contact.email}`}>
-                {contact.email}
-              </a>
-            )}
+            {contact?.email &&
+              (mailtoHref(contact.email) ? (
+                // Same contract as the contacts block: the owner's text is the
+                // label, the EXTRACTED address is the href, and an unparseable
+                // value renders as plain text rather than as a dead mailto.
+                <a className="wire-footer__link" href={mailtoHref(contact.email)!}>
+                  {contact.email}
+                </a>
+              ) : (
+                <span className="wire-text">{contact.email}</span>
+              ))}
             {contact?.address && <span className="wire-text">{contact.address}</span>}
             {tgHref && contact?.telegram && (
-              <a className="wire-text wire-footer__link" href={tgHref}>
+              <a className="wire-footer__link" href={tgHref}>
                 Telegram
               </a>
             )}
             {igLink && (
-              <a className="wire-text wire-footer__link" href={igLink}>
+              <a className="wire-footer__link" href={igLink}>
                 Instagram{igHandle ? ` — @${igHandle}` : ""}
               </a>
             )}
@@ -170,8 +214,14 @@ export function SalonWireWrapper({
           </div>
           <div className="wire-stack">
             <span className="wire-eyebrow">Розділи</span>
-            {links.map((l) => (
-              <a className="wire-nav__link" href={l.href} key={l.href}>
+            {/* The FULL section index, not the nav's capped set: the nav budget
+                DROPS overflow rather than hiding it in a menu, which is only
+                honest if the dropped section is still listed somewhere. Classes:
+                `.wire-footer__link` alone — `.wire-nav__link` is sheet-coloured
+                for the LIGHT nav (2.4:1 here) and `.wire-text`'s ink is
+                contrast-checked against light surfaces only (see wire.css). */}
+            {indexLinks.map((l) => (
+              <a className="wire-footer__link" href={l.href} key={l.href}>
                 {l.label}
               </a>
             ))}

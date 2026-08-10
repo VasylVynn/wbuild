@@ -27,6 +27,7 @@ import { validateFacts } from "@/lib/onboard/validate";
 import { selectGaps } from "@/lib/onboard/gaps";
 import { getVertical } from "@/lib/verticals/registry";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
+import { canonicalizeContactFacts } from "@/lib/blocks/contact-links";
 import {
   MAX_PHOTOS,
   MAX_PHOTO_META,
@@ -118,7 +119,18 @@ function parseBody(body: unknown): {
     typeof b.conversationId === "string" && b.conversationId.trim()
       ? b.conversationId.trim().slice(0, 64)
       : undefined;
-  return { history, facts: factsParsed.data, verticalId, media, conversationId };
+  // The client re-sends the accumulated facts every turn, so a conversation
+  // started BEFORE identity canonicalization would keep replaying its old
+  // «https://www.instagram.com/x» through the agent forever. Canonicalizing at
+  // the boundary repairs those in place on the next message; values that do not
+  // normalize are byte-identical, so nothing the owner said is ever rewritten.
+  return {
+    history,
+    facts: canonicalizeContactFacts(factsParsed.data),
+    verticalId,
+    media,
+    conversationId,
+  };
 }
 
 const dedupe = (arr: string[]): string[] => [...new Set(arr)];

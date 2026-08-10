@@ -74,8 +74,66 @@ export function instagramHref(raw: string | undefined | null): string | null {
 }
 
 /**
- * https://t.me/... link. `raw` is either a Telegram username (with or
- * without a leading @) or a phone number (any punctuation, UA-normalized).
+ * Instagram DIRECT deep link — https://ig.me/m/<handle>. This is the href a
+ * button labelled «Написати в Direct» must carry: `instagramHref` opens the
+ * PROFILE, so pairing that URL with that label promises a chat and delivers a
+ * feed. A button whose label does not match its target is a broken promise, and
+ * the funnel (invariant 8) is the one place we cannot afford one.
+ *
+ * Returns null when the input holds no usable handle — the caller then renders
+ * no button at all rather than a dead one.
+ */
+export function igDirectHref(raw: string | undefined | null): string | null {
+  const handle = normalizeIgHandle(raw);
+  return handle ? `https://ig.me/m/${handle}` : null;
+}
+
+/**
+ * mailto: link from a freeform email fact. `contactsSchema.email` is a plain
+ * `z.string()` — the owner's own text is copied 1:1 (invariant 5), so it can
+ * legitimately arrive as «пошта: hello@example.com» or carry stray whitespace,
+ * and interpolating it raw puts that noise inside the href. The address is
+ * EXTRACTED rather than assumed; null means «render the value as plain text,
+ * not as a dead link».
+ */
+export function mailtoHref(raw: string | undefined | null): string | null {
+  if (!raw?.trim()) return null;
+  const match = raw.match(/[^\s<>()[\]",;:@]+@[^\s<>()[\]",;:@]+\.[a-z]{2,}/i);
+  return match ? `mailto:${match[0]}` : null;
+}
+
+/**
+ * Telegram username from freeform input: bare name, "@name", or a full
+ * t.me / telegram.me profile URL. Returns null when nothing usable remains —
+ * including a phone-like value (that is a `+digits` deep link, not a
+ * username) and a `t.me/+invite` join link (not a profile either).
+ *
+ * Live-audit 2026-08-10: `facts.telegram` on a real tenant was the FULL URL
+ * "https://t.me/SanTeamTennis" — a raw value in a `https://t.me/${raw}`
+ * template literal produced "https://t.me/https://t.me/SanTeamTennis". Every
+ * renderer and every href builder goes through here now.
+ */
+export function normalizeTelegramUsername(raw: string | undefined | null): string | null {
+  if (!raw?.trim()) return null;
+  let s = raw.trim();
+  const fromUrl = s.match(/(?:t|telegram)\.me\/([^/?#\s]+)/i);
+  if (fromUrl) s = fromUrl[1];
+  s = s.replace(/^@+/, "");
+  // Telegram usernames: letters/digits/underscore, 5–32 chars. "+380…" join
+  // links and phone numbers are handled by telegramHref, not here.
+  if (!/^[a-z0-9_]{5,32}$/i.test(s)) return null;
+  return s;
+}
+
+/** "@username" for display, or null when the value is not a real username. */
+export function telegramLabel(raw: string | undefined | null): string | null {
+  const username = normalizeTelegramUsername(raw);
+  return username ? `@${username}` : null;
+}
+
+/**
+ * https://t.me/... link. `raw` is either a Telegram username (bare, "@name" or
+ * a full t.me URL) or a phone number (any punctuation, UA-normalized).
  * Returns null when there's nothing usable to link to.
  */
 export function telegramHref(raw: string | undefined | null): string | null {
@@ -86,7 +144,36 @@ export function telegramHref(raw: string | undefined | null): string | null {
     if (!digits) return null;
     return `https://t.me/+${digits}`;
   }
-  const username = trimmed.replace(/^@+/, "");
-  if (!username) return null;
-  return `https://t.me/${username}`;
+  const username = normalizeTelegramUsername(trimmed);
+  if (username) return `https://t.me/${username}`;
+  // A t.me/+invite join link is a legitimate destination — keep it verbatim
+  // rather than rebuilding it (rebuilding is what produced the double URL).
+  const invite = trimmed.match(/(?:t|telegram)\.me\/(\+[A-Za-z0-9_-]+)/i);
+  if (invite) return `https://t.me/${invite[1]}`;
+  if (/^https?:\/\//i.test(trimmed)) return null; // some other URL — never a handle
+  const bare = trimmed.replace(/^@+/, "");
+  return bare ? `https://t.me/${bare}` : null;
+}
+
+/**
+ * Canonicalize the contact facts that are IDENTITIES rather than free text:
+ * `instagram` and `telegram` are stored as bare handles, so every downstream
+ * consumer (grounding, QA drift check, renderer, JSON-LD) sees ONE shape.
+ *
+ * Not a violation of the requisites-1:1 rule (invariant 5): the handle is the
+ * same identity written canonically, never a different or invented value —
+ * and anything that does NOT normalize is left byte-identical so nothing the
+ * owner said is ever lost.
+ */
+export function canonicalizeContactFacts<T extends { instagram?: string; telegram?: string }>(
+  facts: T,
+): T {
+  const out = { ...facts };
+  if (typeof out.instagram === "string") {
+    out.instagram = normalizeIgHandle(out.instagram) ?? out.instagram;
+  }
+  if (typeof out.telegram === "string") {
+    out.telegram = normalizeTelegramUsername(out.telegram) ?? out.telegram;
+  }
+  return out;
 }

@@ -8,6 +8,7 @@ import { getVertical, VERTICAL_IDS } from "@/lib/verticals/registry";
 import type { VerticalConfig } from "@/lib/verticals/types";
 import { validateFacts } from "@/lib/onboard/validate";
 import { hasContactChannel } from "@/lib/onboard/contact-channel";
+import { canonicalizeContactFacts } from "@/lib/blocks/contact-links";
 import { selectGaps, type DataGap } from "@/lib/onboard/gaps";
 import { isApifyConfigured } from "@/lib/ig/apify";
 import { PHOTO_ROLES } from "@/lib/media/media";
@@ -223,7 +224,12 @@ export function applySaveFacts(input: unknown, base: OnboardAccum): OnboardAccum
   if (!parsed.success) return base;
   const d = parsed.data;
   return {
-    facts: { ...base.facts, ...d.factsPatch },
+    // Contact IDENTITIES are stored canonically (bare @handle), not as the
+    // string the owner pasted: the agent happily saves
+    // «https://www.instagram.com/x» into a field that means a handle, and every
+    // downstream link builder then wraps it into a 404 (audit 2026-08-10).
+    // Values that don't normalize pass through byte-identical.
+    facts: canonicalizeContactFacts({ ...base.facts, ...d.factsPatch }),
     verticalId: VERTICAL_IDS.includes(d.verticalId) ? d.verticalId : base.verticalId,
     status: d.status,
     quickReplies: (d.quickReplies ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 4),

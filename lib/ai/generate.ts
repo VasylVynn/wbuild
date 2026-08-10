@@ -38,6 +38,7 @@ import {
   BENEFITS_TITLE,
   itemCountOf,
   meetsItemFloor,
+  scrubVisibleUrls,
 } from "@/lib/blocks/hygiene";
 import {
   getTemplate,
@@ -55,6 +56,7 @@ import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
 import {
   normalizeUaPhoneDigits,
   normalizeIgHandle,
+  normalizeTelegramUsername,
   instagramHref,
   telegramHref,
   viberHref,
@@ -1289,7 +1291,16 @@ function assemble(
       };
     }
     return b;
-  });
+  })
+    // Contact-value hygiene (owner audit 2026-08-10, item 8). The rule is not
+    // «fix the Instagram section» — it is that NO user-visible string on a
+    // generated site is ever a URL. A model asked for a subtitle will paste the
+    // profile link into it, and a fact that means a handle can arrive as a full
+    // address; either way the page ends up printing machine output as copy, and
+    // an unbreakable 451px token scrolls the whole phone viewport sideways.
+    // Identity fields (handle/telegram/instagram) are canonicalized separately
+    // in groundAndPlace; image/href props are never touched (invariant 1).
+    .map(scrubVisibleUrls);
 
   const hero = converted.find((b) => b.type === "hero");
   const contacts = converted.find((b) => b.type === "contacts");
@@ -1559,6 +1570,17 @@ function groundImages(b: BlockInstance, allowed: Set<string>): BlockInstance {
  * link present in the facts. Anything invented (bare instagram.com, /booking…)
  * is rewritten to "#lead_form": the funnel is always a truthful destination.
  */
+/** The one canonical form of an identity contact fact, absence-preserving. */
+function canonicalInstagram(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  return normalizeIgHandle(raw) ?? raw;
+}
+
+function canonicalTelegram(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  return normalizeTelegramUsername(raw) ?? raw;
+}
+
 function allowedFactHrefs(facts: BusinessFacts): Set<string> {
   const set = new Set<string>();
   for (const s of facts.socials ?? []) {
@@ -1689,10 +1711,15 @@ function groundAndPlace(
         address: facts.address ?? b.props.address,
         hours: facts.hours ?? b.props.hours,
         viber: facts.viber ?? b.props.viber,
-        telegram: facts.telegram ?? b.props.telegram,
+        // Identity facts are grounded CANONICALLY (bare handle), never as the
+        // raw string the owner pasted: a full "https://t.me/x" /
+        // "https://instagram.com/x" in the props is what every renderer then
+        // re-wraps into a broken link (live audit 2026-08-10). Unnormalizable
+        // input falls through byte-identical — nothing is invented or lost.
+        telegram: canonicalTelegram(facts.telegram) ?? b.props.telegram,
         // Strict (unlike the ?? fields above): a handle is only ever a FACT —
         // a model-invented one must not survive when the owner gave none.
-        instagram: facts.instagram,
+        instagram: canonicalInstagram(facts.instagram),
       },
       ...placement,
       variant,
@@ -1723,7 +1750,7 @@ function groundAndPlace(
       ...b,
       props: {
         ...b.props,
-        handle: facts.instagram ?? b.props.handle,
+        handle: canonicalInstagram(facts.instagram) ?? b.props.handle,
         followersCount: igFollowers,
       },
       ...placement,
