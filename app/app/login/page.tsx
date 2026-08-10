@@ -102,6 +102,34 @@ function LoginForm() {
     if (error) phCapture("ui_auth_error", { message: error, mode });
   }, [error, mode]);
 
+  /**
+   * M12 same-tab resume, ARMED (and disarmed) around each auth call.
+   *
+   * Armed BEFORE the call because a successful action redirects out of this
+   * component — there is no "after" to run in. Which is exactly why every
+   * branch that DOES come back has to disarm: sessionStorage outlives the
+   * attempt for as long as the tab is open, so a flag left behind by a
+   * rejected password or by «Перевірте пошту» would still be sitting here when
+   * the owner returns to this tab through a confirmation link hours later, and
+   * generation would start with no recent ask. The confirmation branch has its
+   * own explicit continue button, and that button arms the flag itself.
+   */
+  const armResume = () => {
+    if (!handoffConv) return;
+    try {
+      sessionStorage.setItem(AUTH_RESUME_KEY, handoffConv);
+    } catch {
+      /* storage blocked — /new degrades to the recap + button path */
+    }
+  };
+  const disarmResume = () => {
+    try {
+      sessionStorage.removeItem(AUTH_RESUME_KEY);
+    } catch {
+      /* nothing to undo */
+    }
+  };
+
   const switchMode = (nextMode: Mode) => {
     setMode(nextMode);
     setError("");
@@ -146,14 +174,22 @@ function LoginForm() {
         : await signInAction(email, password, next);
       // On success the action redirects (throws) — we only get here on a
       // returned result, which always means an error or the confirm state.
+      // Anything returned means we are still HERE: no redirect happened, so
+      // the flag armed above describes an attempt that did not land.
       if (result && "needsConfirmation" in result) {
+        // The journey now goes through the inbox, and it comes back through
+        // «Я підтвердив — продовжити», which arms the flag again on the press.
+        disarmResume();
         setConfirmSent(true);
       } else if (result?.error) {
+        disarmResume();
         setError(result.error);
       }
     } catch (err) {
-      // NEXT_REDIRECT propagates as a thrown error — let Next handle it.
+      // NEXT_REDIRECT propagates as a thrown error — let Next handle it (and
+      // keep the flag: that throw IS the successful ending).
       if (err && typeof err === "object" && "digest" in err) throw err;
+      disarmResume();
       setError("Щось пішло не так. Спробуйте ще раз.");
     } finally {
       setLoading(false);
@@ -165,21 +201,17 @@ function LoginForm() {
     setError("");
     setGoogleLoading(true);
     phCapture("ui_google_click");
-    // M12: same flag, same reason as the password form above — stamped BEFORE
-    // the redirect so /new can tell «same tab, straight back» from a
-    // bearer-link visit (recap + button, no token burn).
-    if (handoffConv) {
-      try {
-        sessionStorage.setItem(AUTH_RESUME_KEY, handoffConv);
-      } catch {
-        /* storage blocked — /new degrades to the recap + button path */
-      }
-    }
+    // M12: same flag, same discipline as the password form above.
+    armResume();
     try {
       const result = await signInWithGoogleAction(next);
-      if (result?.error) setError(result.error);
+      if (result?.error) {
+        disarmResume();
+        setError(result.error);
+      }
     } catch (err) {
       if (err && typeof err === "object" && "digest" in err) throw err;
+      disarmResume();
       setError("Щось пішло не так. Спробуйте ще раз.");
     } finally {
       setGoogleLoading(false);
@@ -201,11 +233,19 @@ function LoginForm() {
     setContinueError("");
     setResendNote("");
     setContinueLoading(true);
+    // THE explicit continue: the owner is here, in this tab, saying they have
+    // confirmed. That press is the ask — arm the resume for it, and take it
+    // back if the check says they are not signed in after all.
+    armResume();
     try {
       const result = await confirmedContinueAction(next);
-      if (result?.error) setContinueError(result.error);
+      if (result?.error) {
+        disarmResume();
+        setContinueError(result.error);
+      }
     } catch (err) {
       if (err && typeof err === "object" && "digest" in err) throw err;
+      disarmResume();
       setContinueError("Щось пішло не так. Спробуйте ще раз.");
     } finally {
       setContinueLoading(false);

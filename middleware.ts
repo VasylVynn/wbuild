@@ -12,6 +12,10 @@ import { isPlatformHost, isDashboardHost, stripPort } from "@/lib/config";
  *
  * Middleware must NOT hit Postgres per request (§2.5); it only inspects Host.
  */
+/** The payment provider's `returnUrl` target — before and after the /app
+ *  rewrite. The only page in the product a third party POSTs a browser into. */
+const PAY_RESULT_PATHS = new Set(["/pay/result", "/app/pay/result"]);
+
 export function middleware(req: NextRequest): NextResponse {
   const host = stripPort(req.headers.get("host") ?? "");
   const { pathname, search } = req.nextUrl;
@@ -29,6 +33,28 @@ export function middleware(req: NextRequest): NextResponse {
     }
     // Dashboard/editor lives on app.<root>, served under the /app namespace.
     if (isDashboardHost(host)) {
+      // WayForPay returns the BUYER to `returnUrl` with an HTTP POST — an
+      // auto-submitted form from secure.wayforpay.com, not a link. Next reads a
+      // POST to a page as a Server Action call and checks the origin against
+      // x-forwarded-host; a third party's origin never matches, so it aborts:
+      //
+      //   `x-forwarded-host` header with value `app.3minsite.com.ua` does not
+      //   match `origin` header with value `secure.wayforpay.com` from a
+      //   forwarded Server Actions request. Aborting the action.
+      //   Invalid Server Actions request. { page: '/app/pay/result' }
+      //
+      // That is the 500 an owner meets in the seconds after paying — the worst
+      // possible moment for one — and why reloading "fixed" it: a reload is a
+      // GET. Turn it into one; 303 is the redirect status that CHANGES the
+      // method, so Next never classifies the request as an action at all.
+      // Deliberately NOT `serverActions.allowedOrigins`: that would let a third
+      // party's origin post real actions to us, which is a much larger door
+      // than this screen needs. Nothing is lost either — the order reference
+      // travels in the query (app/app/pay/actions.ts builds returnUrl that
+      // way), and the webhook, never this screen, decides what is paid.
+      if (req.method === "POST" && PAY_RESULT_PATHS.has(pathname)) {
+        return NextResponse.redirect(req.nextUrl, 303);
+      }
       if (pathname === "/app" || pathname.startsWith("/app/")) return NextResponse.next();
       const dest = pathname === "/" ? "/app" : `/app${pathname}`;
       // new URL(pathname, …) drops the query string — carry it over explicitly,
