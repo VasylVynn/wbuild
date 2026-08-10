@@ -64,9 +64,13 @@ function fullBrandName(brand?: TemplateBrand): string {
  *  style attribute, so only a literal hex is ever let through — `"none"`,
  *  anything malformed and anything absent all mean "no plate". */
 const PLATE_HEX = /^#[0-9a-f]{3,8}$/i;
-function logoPlate(brand?: TemplateBrand): string | undefined {
+function logoPlate(brand: TemplateBrand | undefined, place: "nav" | "footer"): string | undefined {
   const v = brand?.logoPlate?.trim();
-  return v && PLATE_HEX.test(v) ? v : undefined;
+  if (!v || !PLATE_HEX.test(v)) return undefined;
+  // A plate scoped to one chrome is a statement about THAT surface's contrast
+  // (registry `logoPlatePlace`); an unscoped one is the asset's own square and
+  // belongs on both.
+  return !brand?.logoPlatePlace || brand.logoPlatePlace === place ? v : undefined;
 }
 
 /**
@@ -130,7 +134,6 @@ export function SalonWireWrapper({
   const tgHref = telegramHref(contact?.telegram);
   const igHandle = normalizeIgHandle(contact?.instagram);
   const igLink = instagramHref(contact?.instagram);
-  const plate = logoPlate(brand);
 
   return (
     <div
@@ -150,7 +153,7 @@ export function SalonWireWrapper({
               rendering brandName alone silently dropped the last word of every
               multi-word business name («Барбершоп Кузня» → «Барбершоп»). */}
           <span className="wire-nav__brandlock">
-            {brand?.logoUrl && <BrandMark src={brand.logoUrl} place="nav" plate={plate} />}
+            {brand?.logoUrl && <BrandMark src={brand.logoUrl} place="nav" plate={logoPlate(brand, "nav")} />}
             <span className="wire-nav__brand">{fullBrandName(brand)}</span>
           </span>
           <nav className="wire-nav__links">
@@ -183,7 +186,7 @@ export function SalonWireWrapper({
               block, but may not hang a ::before/::after ornament on it — the
               same guarantee the nav's lockup carries. */}
           <div className="wire-stack wire-footer__brandlock">
-            {brand?.logoUrl && <BrandMark src={brand.logoUrl} place="footer" plate={plate} />}
+            {brand?.logoUrl && <BrandMark src={brand.logoUrl} place="footer" plate={logoPlate(brand, "footer")} />}
             <span className="wire-heading">{fullBrandName(brand)}</span>
           </div>
           <div className="wire-stack">

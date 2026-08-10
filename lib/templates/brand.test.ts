@@ -211,7 +211,28 @@ describe("resolveDisplayLogo — adapted over original, plate paired to the asse
     // chip, and the chip is a neutral, never the black slab we just removed.
     expect(
       resolveDisplayLogo({ logoUrl: stored("orig"), logoAdaptedUrl: stored("adapted"), logoInkL: 90 }),
-    ).toEqual({ logoUrl: stored("adapted"), logoPlate: "#1c1c1c" });
+    ).toEqual({ logoUrl: stored("adapted"), logoPlate: "#1c1c1c", logoPlatePlace: "nav" });
+  });
+
+  it("scopes that chip to the nav — the dark footer is where pale ink reads best", () => {
+    // Owner report 2026-08-10: the chip is measured against the LIGHT nav, but
+    // it was painted in both chromes, so the footer got the black square back —
+    // behind a mark that had just been made transparent to be rid of it.
+    const brand = buildTemplateBrand("X", [], template, {
+      logoAdaptedUrl: stored("adapted"),
+      logoInkL: 90,
+    });
+    expect(brand.logoPlate).toBe("#1c1c1c");
+    expect(brand.logoPlatePlace).toBe("nav");
+  });
+
+  it("leaves an OPAQUE asset's own plate unscoped — that square is real in both", () => {
+    const brand = buildTemplateBrand("X", [], template, {
+      logoUrl: stored("orig"),
+      logoPlate: "#0b0b0b",
+    });
+    expect(brand.logoPlate).toBe("#0b0b0b");
+    expect("logoPlatePlace" in brand).toBe(false);
   });
 
   it("gives a dark adapted mark no chip — it already reads on the light chrome", () => {

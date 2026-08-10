@@ -612,7 +612,13 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
           : undefined;
       let logoInkL =
         sameLogo && typeof carriedBrand.logoInkL === "number" ? carriedBrand.logoInkL : undefined;
-      if (media?.logoUrl && !sameLogo) {
+      // Retry whenever there is no adapted mark yet — not merely when the logo
+      // changed. A refusal is a judgement of the CODE, not of the asset: a tenant
+      // that fell back to a plate under an older, stricter proof would otherwise
+      // keep that plate forever and never see the improved one. Costs nothing in
+      // the steady state (an adapted mark short-circuits to zero calls) and needs
+      // no backfill — the next generation self-heals.
+      if (media?.logoUrl && !logoAdaptedUrl) {
         const adapted = await ensureAdaptedLogo(media.logoUrl);
         logoAdaptedUrl = adapted?.url;
         // The adapted mark's own ink: masking the canvas away also removed the
@@ -620,8 +626,10 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         // still reads on a light nav (`resolveDisplayLogo`).
         logoInkL = adapted?.inkL;
         // Only when nothing was cut out: a plate painted behind an ADAPTED mark
-        // would restore the very slab the mask removed.
-        if (!logoAdaptedUrl) {
+        // would restore the very slab the mask removed — including a plate this
+        // tenant carried in from the attempt that used to fail.
+        if (logoAdaptedUrl) logoPlate = undefined;
+        else {
           const measured = await measureLogoPlateFromUrl(media.logoUrl);
           if (measured && /^#[0-9a-f]{6}$/i.test(measured)) logoPlate = measured;
         }

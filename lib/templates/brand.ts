@@ -104,13 +104,21 @@ const NEUTRAL_PLATE = "#1c1c1c";
 export function resolveDisplayLogo(src?: BrandLogoSource): {
   logoUrl?: string;
   logoPlate?: string;
+  logoPlatePlace?: "nav";
 } {
   if (!src) return {};
   if (isStorageUrl(src.logoAdaptedUrl)) {
     const inkL = src.logoInkL;
     const vanishes =
       typeof inkL === "number" && Math.abs(CHROME_SURFACE_L - inkL) < INK_SURFACE_MIN_DELTA_L;
-    return { logoUrl: src.logoAdaptedUrl, ...(vanishes ? { logoPlate: NEUTRAL_PLATE } : {}) };
+    // Scoped to the nav, and only the nav: `CHROME_SURFACE_L` IS the nav's
+    // surface. The very ink that disappears there — pale — is the ink the dark
+    // footer shows best, so a chip in the footer would put back exactly the
+    // slab the adaptation was built to remove (owner report, 2026-08-10).
+    return {
+      logoUrl: src.logoAdaptedUrl,
+      ...(vanishes ? { logoPlate: NEUTRAL_PLATE, logoPlatePlace: "nav" as const } : {}),
+    };
   }
   if (!isStorageUrl(src.logoUrl)) return {};
   return { logoUrl: src.logoUrl, ...(src.logoPlate ? { logoPlate: src.logoPlate } : {}) };
@@ -181,6 +189,7 @@ export function buildTemplateBrand(
     brandAccent: words.length > 1 ? words[words.length - 1] : "",
     ...(display.logoUrl ? { logoUrl: display.logoUrl } : {}),
     ...(display.logoPlate ? { logoPlate: display.logoPlate } : {}),
+    ...(display.logoPlatePlace ? { logoPlatePlace: display.logoPlatePlace } : {}),
     navLinks,
     allSectionLinks,
     ctaHref: "#lead_form",

@@ -55,6 +55,12 @@ export interface TemplateBrand {
    *  it is only ever set for the asset actually being displayed (an adapted
    *  mark is transparent by construction and never carries one). */
   logoPlate?: string;
+  /** Which chrome the plate is TRUE for. Absent → both, because a plate
+   *  measured from an opaque asset is that asset's own square and reads the
+   *  same wherever it goes. `"nav"` → the chip exists only because the mark's
+   *  ink matched the light nav; the footer is dark by contract
+   *  (`.wire-footer__link`), so painting it there is the black slab back. */
+  logoPlatePlace?: "nav";
   navLinks?: { href: string; label: string }[];
   /** Every linkable section in document order, UNCAPPED. `navLinks` is the
    *  budgeted subset the nav bar can show in one row; the wireframe footer
