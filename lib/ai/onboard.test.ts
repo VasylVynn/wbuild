@@ -182,7 +182,7 @@ describe("buildOnboardSystem", () => {
   });
 
   it("carries the data-gap block only when the detector found something", () => {
-    expect(buildOnboardSystem(base)).not.toContain("ПРОГАЛИНИ В ДАНИХ");
+    expect(full(base)).not.toContain("ПРОГАЛИНИ В ДАНИХ");
     const sys = full({
       ...base,
       gaps: [
