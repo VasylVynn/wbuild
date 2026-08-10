@@ -1,5 +1,5 @@
 -- 0011_pipeline_v2_p2.sql — Pipeline v2 (spec 2026-08-07) part 2:
--- contentRev backfill (§9) and the generation progress store (§7).
+-- the generation progress store (§7).
 -- Idempotent; safe to re-run. Applied MANUALLY in the Supabase SQL editor
 -- (no DATABASE_URL / migrate script). Run AFTER 0010_pipeline_v2_p1.sql.
 --
@@ -10,17 +10,10 @@
 -- the 2026-08-06 semantics change (0009), paid_until only means «may order a
 -- custom domain» — publishing is free, so live real customers have NULL too.
 
--- §9 contentRev backfill: every async DRAFT writer now compare-and-swaps on
--- coalesce((draft_content->>'contentRev')::int, 0). The coalesce in the code
--- already accepts NULL-as-0 on pre-v2 rows, so this backfill is belt, not
--- correctness — but an explicit 0 makes the CAS filters uniform and the rows
--- self-describing. Published copies deliberately NOT touched: contentRev is
--- DRAFT_ONLY (publishedFromDraft strips it).
-update pages
-   set draft_content = jsonb_set(draft_content, '{contentRev}', '0'::jsonb, true)
- where draft_content is not null
-   and jsonb_typeof(draft_content) = 'object'
-   and draft_content->'contentRev' is null;
+-- §9 contentRev needs no backfill: every async DRAFT writer compare-and-swaps
+-- on coalesce((draft_content->>'contentRev')::int, 0), so a pre-v2 row without
+-- the key already CASes correctly as 0. An UPDATE over every page to write that
+-- same 0 explicitly used to live here and bought nothing.
 
 -- §7 progress store: one row per host, overwritten at every stage boundary by
 -- the /api/generate transport (the pipeline itself only emits onStage events —
