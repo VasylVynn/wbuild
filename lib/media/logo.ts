@@ -78,10 +78,16 @@ const CANVAS_COVERAGE_MIN = 0.03;
 const CANVAS_COVERAGE_MAX = 0.9;
 /** Disc proof. The ±2% annulus around the inscribed circle is EXCLUDED from
  *  both counts: those pixels are the artwork's own anti-aliased rim and belong
- *  to neither side honestly. Measured asset: outside ratio ≈ 1.00 (near-black is
- *  20.0% of the image, the excluded-annulus "outside" region is 18.8% of it),
- *  inside ratio ≈ 0. */
-const DISC_ANNULUS = 0.02;
+ *  to neither side honestly.
+ *
+ *  MEASURED on the real asset (1080² disc on black, sampled 64² nearest): the
+ *  inside ratio is 0 at every width, but the outside ratio is 0.9621 at ±2%
+ *  and exactly 1.0000 at ±4% — the rim of a disc that big spans more than 2%
+ *  of the radius, so a ±2% annulus leaves ~4% of its own edge sitting in the
+ *  "outside" count and the 0.99 gate below refuses the very case this exists
+ *  for. ±4% excludes the rim and nothing else: a corner wordmark lives out at
+ *  r·1.41 and is still judged by both the ratio and the blob test. */
+const DISC_ANNULUS = 0.04;
 /** 0.99, not 0.92: `discAlpha` masks by RADIUS ALONE — it never revisits the
  *  pixels — so every non-canvas pixel this ratio tolerates outside the circle is
  *  artwork we MEASURED and delete anyway. The measured asset scores ≈1.00, so

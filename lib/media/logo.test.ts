@@ -229,3 +229,55 @@ describe("classifyLogoCanvas — keyed rectangular artwork", () => {
     if (plan.kind === "none") expect(plan.reason).toMatch(/border is not a uniform backdrop/);
   });
 });
+
+/**
+ * REGRESSION — the disc's own edge is what the proof has to survive. Every
+ * fixture above draws a hard, exactly-inscribed circle, so the whole suite
+ * passed while the REAL 1080² asset was refused: a rasterised edge is not a
+ * step function, and its blended ring left ~4% of the disc's own rim counted
+ * as "artwork outside the circle", tripping the 0.99 gate. Measured on the
+ * live file: outside-canvas ratio 0.9621 at an annulus of ±2%, 1.0000 at ±4%
+ * — which is why DISC_ANNULUS is 0.04.
+ */
+describe("classifyLogoCanvas — a rasterised (anti-aliased) disc", () => {
+  /** The badge drawn the way a rasteriser draws it: per-pixel coverage by 4×4
+   *  supersampling, blended toward the canvas colour. That yields one thin
+   *  partial ring at the boundary — the thing a hard-edged fixture never has. */
+  function rasterisedBadge(canvas: Rgb) {
+    const s = blank();
+    const c = (DIM - 1) / 2;
+    const r = DIM / 2;
+    const SS = 4;
+    for (let y = 0; y < DIM; y++) {
+      for (let x = 0; x < DIM; x++) {
+        let hits = 0;
+        for (let sy = 0; sy < SS; sy++) {
+          for (let sx = 0; sx < SS; sx++) {
+            const px = x + (sx + 0.5) / SS - 0.5;
+            const py = y + (sy + 0.5) / SS - 0.5;
+            if (Math.hypot(px - c, py - c) <= r) hits += 1;
+          }
+        }
+        const t = hits / (SS * SS);
+        const ink = tennisDisc(x, y);
+        const px = ink.map((v, i) => Math.round(canvas[i] + (v - canvas[i]) * t)) as Rgb;
+        set(s, x, y, [px[0], px[1], px[2], 255]);
+      }
+    }
+    return s;
+  }
+
+  it("proves the disc despite the blended boundary ring", () => {
+    expect(classifyLogoCanvas(rasterisedBadge([0, 0, 0])).kind).toBe("disc");
+  });
+
+  it("still refuses a wordmark sitting outside the circle", () => {
+    const s = rasterisedBadge([0, 0, 0]);
+    // A legible strip in the bottom-right corner — outside the disc, far from
+    // the canvas colour, and connected: the blob guard must catch it.
+    for (let y = DIM - 6; y < DIM - 2; y++) {
+      for (let x = DIM - 14; x < DIM - 2; x++) set(s, x, y, [240, 240, 240, 255]);
+    }
+    expect(classifyLogoCanvas(s).kind).toBe("none");
+  });
+});
