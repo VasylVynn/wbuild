@@ -55,7 +55,7 @@ export function TelegramSection() {
               <div className="rounded-2xl border border-white/10 bg-surface/95 p-4 text-ink shadow-card">
                 <div className="flex items-center justify-between">
                   <span className="text-[14px] font-bold">3minsite • Заявки</span>
-                  <span className="text-[10px] text-ink-faint">2 хв тому</span>
+                  <span className="text-[10px] text-ink-muted">2 хв тому</span>
                 </div>
                 <p className="mt-1 text-[14px]">
                   <span className="font-semibold">Нова заявка!</span> Андрій — «Торт Наполеон на 12

@@ -33,7 +33,7 @@ export function SiteHeader({ loginUrl }: { loginUrl: string }) {
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 border-b transition-all duration-300 ${
+      className={`fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300 ${
         scrolled ? "border-line bg-canvas/80 backdrop-blur-xl" : "border-transparent"
       }`}
     >

@@ -45,11 +45,14 @@ export function Reveal({
   }, []);
 
   return (
+    // Named transition properties (never `all`), and will-change only while
+    // the reveal is actually pending — a permanent hint on every section
+    // wrapper holds compositor layers for nothing (design review 2026-08-10).
     <div
       ref={ref}
       style={{ transitionDelay: `${delay}ms` }}
-      className={`transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform ${
-        hidden ? "translate-y-6 opacity-0" : "translate-y-0 opacity-100"
+      className={`transition-[transform,opacity] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        hidden ? "translate-y-6 opacity-0 will-change-transform" : "translate-y-0 opacity-100"
       } ${className}`}
     >
       {children}

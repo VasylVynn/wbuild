@@ -35,11 +35,10 @@ export const maxDuration = 300;
 
 // Cross-host targets live on the dashboard host (app.<root>). ROOT_DOMAIN
 // carries the dev port (lvh.me:3000) and drops it in prod — mirror
-// app/new/actions.ts. app./new stays alive (plan §3.1) — the footer still
-// links to it; the header CTA now scrolls to the hero chat instead.
+// app/new/actions.ts. Every «Створити сайт» CTA on this page scrolls to the
+// hero chat (#chat) — app./new stays alive for direct links only.
 const isProd = process.env.NODE_ENV === "production";
 const APP_HOST = `${isProd ? "https" : "http"}://app.${ROOT_DOMAIN}`;
-const NEW_URL = `${APP_HOST}/new`;
 const LOGIN_URL = `${APP_HOST}/login`;
 
 export default function PlatformHome() {
@@ -55,7 +54,7 @@ export default function PlatformHome() {
       <TelegramSection />
       <Features />
       <Faq />
-      <SiteFooter newUrl={NEW_URL} loginUrl={LOGIN_URL} />
+      <SiteFooter loginUrl={LOGIN_URL} />
     </main>
   );
 }

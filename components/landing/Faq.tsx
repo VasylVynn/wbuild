@@ -75,7 +75,7 @@ export function Faq() {
                   id={`faq-panel-${i}`}
                   aria-hidden={!isOpen}
                   inert={!isOpen}
-                  className={`grid transition-all duration-300 ease-out ${
+                  className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
                     isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
                   }`}
                 >

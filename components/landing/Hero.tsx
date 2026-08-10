@@ -102,8 +102,12 @@ export function Hero({ igImportEnabled }: { igImportEnabled: boolean }) {
  */
 function PhoneSitePreview() {
   return (
-    <div className="no-scrollbar h-full w-full overflow-hidden bg-white text-ink">
-      <header className="flex items-center justify-between border-b border-line px-4 py-3">
+    // aria-hidden: this is a PICTURE of a generated site — its inner headings
+    // must not leak into the real document outline (design review 2026-08-10).
+    // pt-9 on the mock header clears the notch bar (top-2 + h-5) so it reads
+    // as bezel hardware instead of overlapping the mock's own text.
+    <div aria-hidden="true" className="no-scrollbar h-full w-full overflow-hidden bg-white text-ink">
+      <header className="flex items-center justify-between border-b border-line px-4 pb-3 pt-9">
         <span className="text-[13px] font-bold tracking-tight">Квіти від Олени</span>
         <span className="rounded-full bg-[#c2536b] px-2.5 py-1 text-[10px] font-semibold text-white">
           Замовити
@@ -128,14 +132,14 @@ function PhoneSitePreview() {
       </div>
 
       <section className="px-4 py-4">
-        <h2 className="mb-1.5 text-[12px] font-bold">Про нас</h2>
+        <p className="mb-1.5 text-[12px] font-bold">Про нас</p>
         <p className="text-[10px] leading-relaxed text-ink-muted">
           Авторська квіткова майстерня у Києві. Збираємо букети та композиції під кожну подію.
         </p>
       </section>
 
       <section className="bg-sunken px-4 py-4">
-        <h2 className="mb-2 text-[12px] font-bold">Послуги</h2>
+        <p className="mb-2 text-[12px] font-bold">Послуги</p>
         <div className="flex flex-col gap-1.5">
           {["Авторські букети", "Композиції на подію", "Доставка по місту"].map((service) => (
             <div
@@ -153,7 +157,7 @@ function PhoneSitePreview() {
 
       <section className="px-4 py-4">
         <div className="rounded-xl bg-[#c2536b] p-3.5 text-white">
-          <h2 className="text-[12px] font-bold">Залишити заявку</h2>
+          <p className="text-[12px] font-bold">Залишити заявку</p>
           <p className="mt-0.5 text-[10px] opacity-90">Звʼяжемось із вами протягом 15 хвилин</p>
           <div className="mt-2.5 flex flex-col gap-1.5">
             <span className="rounded-lg bg-white/90 px-2.5 py-1.5 text-[10px] text-ink-faint">

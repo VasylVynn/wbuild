@@ -36,7 +36,7 @@ export function HowItWorks() {
       <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-3">
         {steps.map((step, i) => (
           <Reveal key={step.title} delay={i * 120}>
-            <div className="relative h-full rounded-3xl border border-line bg-surface p-6 shadow-card transition-all hover:-translate-y-1 hover:shadow-lg">
+            <div className="relative h-full rounded-3xl border border-line bg-surface p-6 shadow-card transition-[transform,box-shadow] hover:-translate-y-1 hover:shadow-lg">
               <span
                 aria-hidden
                 className="absolute right-6 top-5 font-brand text-[44px] font-semibold leading-none text-sunken"

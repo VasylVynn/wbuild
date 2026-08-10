@@ -56,7 +56,7 @@ export function Features() {
         {features.map((feature, i) => (
           <Reveal key={feature.title} delay={i * 100}>
             <div
-              className={`flex h-full flex-col rounded-3xl border p-6 shadow-card transition-all hover:-translate-y-1 hover:shadow-lg sm:p-7 ${
+              className={`flex h-full flex-col rounded-3xl border p-6 shadow-card transition-[transform,box-shadow] hover:-translate-y-1 hover:shadow-lg sm:p-7 ${
                 feature.accent ? "border-transparent bg-honey-soft" : "border-line bg-surface"
               }`}
             >

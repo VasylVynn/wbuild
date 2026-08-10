@@ -70,7 +70,7 @@ function ChatCardPlaceholder() {
 
       <footer className="border-t border-line bg-surface/85 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex w-full max-w-2xl items-center gap-2.5">
-          <div className="flex h-14 min-w-0 flex-1 items-center rounded-full border border-line-strong bg-surface px-5 text-[17px] text-ink-faint">
+          <div className="flex h-14 min-w-0 flex-1 items-center rounded-full border border-line-strong bg-surface px-5 text-[17px] text-ink-muted">
             Написати…
           </div>
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand opacity-45 text-white" />

@@ -8,7 +8,7 @@ import { CtaLink } from "./CtaLink";
  * pages (WayForPay merchant review requires both reachable from the landing)
  * and the two real destinations on the dashboard host, passed down from the page.
  */
-export function SiteFooter({ newUrl, loginUrl }: { newUrl: string; loginUrl: string }) {
+export function SiteFooter({ loginUrl }: { loginUrl: string }) {
   return (
     <footer className="mx-auto max-w-6xl px-4 pb-10 sm:px-6">
       <Reveal className="relative overflow-hidden rounded-[2rem] bg-brand px-6 py-14 text-center text-white sm:px-12 sm:py-20">
@@ -24,10 +24,14 @@ export function SiteFooter({ newUrl, loginUrl }: { newUrl: string; loginUrl: str
           <p className="mx-auto mt-4 max-w-md text-[16px] text-white/70">
             Кілька хвилин — і у вас буде сайт, який приймає заявки просто в Telegram.
           </p>
+          {/* #chat, not app./new: the conversation lives in THIS origin's
+              localStorage — navigating cross-host mid-dialogue lands the user
+              in an empty chat and reads as lost work. Same label = same
+              behavior as the header CTAs (design review 2026-08-10). */}
           <CtaLink
-            href={newUrl}
+            href="#chat"
             placement="footer"
-            className="group mt-8 inline-flex min-h-13 items-center justify-center gap-2 rounded-full bg-honey px-8 font-ui text-[16px] font-bold text-honey-text transition-all hover:brightness-95"
+            className="group mt-8 inline-flex min-h-13 items-center justify-center gap-2 rounded-full bg-honey px-8 font-ui text-[16px] font-bold text-honey-text transition-[filter] hover:brightness-95"
           >
             Створити сайт
             <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
@@ -60,7 +64,9 @@ export function SiteFooter({ newUrl, loginUrl }: { newUrl: string; loginUrl: str
             Увійти
           </a>
         </nav>
-        <p className="text-[12px] text-ink-faint">© 2026 3minsite. Зроблено в Україні.</p>
+        {/* ink-muted, not ink-faint: 12px text at ink-faint measures 2.86:1 on
+            canvas — below WCAG 4.5:1 (design review 2026-08-10). */}
+        <p className="text-[12px] text-ink-muted">© 2026 3minsite. Зроблено в Україні.</p>
       </div>
     </footer>
   );

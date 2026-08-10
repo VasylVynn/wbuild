@@ -19,7 +19,7 @@ export function TelegramCard({ compact = false }: { compact?: boolean }) {
             <span className={`font-bold text-ink ${compact ? "text-[12px]" : "text-[14px]"}`}>
               3minsite • Заявки
             </span>
-            <span className="text-[10px] text-ink-faint">зараз</span>
+            <span className="text-[10px] text-ink-muted">зараз</span>
           </div>
           <p className={`mt-1 leading-snug text-ink ${compact ? "text-[11px]" : "text-[14px]"}`}>
             <span className="font-semibold">Нова заявка!</span> Марина, +380 67 214 88 12 — «Хочу
