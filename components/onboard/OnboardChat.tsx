@@ -47,7 +47,7 @@ import type { BusinessFacts } from "@/lib/verticals/schema";
 import { MAX_PHOTOS, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
 import { processImage } from "@/lib/media/client-image";
 import { Button, Card, ConfirmDialog } from "@/components/ui";
-import { appUrl, OAUTH_RESUME_KEY, shouldRestoreConversation } from "@/components/onboard/embed-helpers";
+import { appUrl, AUTH_RESUME_KEY, shouldRestoreConversation } from "@/components/onboard/embed-helpers";
 import { GoogleIcon } from "@/components/auth/AuthShell";
 import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
 import DomainStep from "@/components/onboard/DomainStep";
@@ -798,12 +798,13 @@ export function OnboardChat({
   // M12 resume semantics for the URL handoff (in priority order):
   //  1. The conversation already holds a DRAFT host → straight to the preview
   //     (no regeneration — the draft exists, tokens were already spent).
-  //  2. `?resume=1` AND the same-tab OAuth flag (stamped by /login right
-  //     before the Google redirect, sessionStorage = same tab + same origin)
-  //     → generation auto-starts: this is the ONE «продовжуємо якраз
-  //     генерацію» path the user personally initiated seconds ago.
-  //  3. `?resume=1` without the flag (email-confirmation branch, password
-  //     sign-in, any later bearer-link visit) → recap of the collected facts +
+  //  2. `?resume=1` AND the same-tab auth flag (stamped by /login before it
+  //     hands over to Google OR to the password form, sessionStorage = same
+  //     tab + same origin) → generation auto-starts: the visitor asked for a
+  //     site seconds ago and never left the tab. Signing in is a detour we
+  //     imposed, so it must not cost a second «Створити сайт» press.
+  //  3. `?resume=1` without the flag (a confirmation link opened from a mail
+  //     app, any later bearer-link visit) → recap of the collected facts +
   //     the single «Створити сайт» CTA. A link from an email must never burn
   //     3 minutes of tokens by itself.
   useEffect(() => {
@@ -813,11 +814,11 @@ export function OnboardChat({
     const stored = fromUrl ?? localStorage.getItem("vitryna_conv_id");
     // Consume the OAuth flag exactly once, even when the load below bails —
     // a stale flag must never auto-start some LATER unrelated visit.
-    let sameTabOAuth = false;
+    let sameTabAuth = false;
     if (fromUrl) {
       try {
-        sameTabOAuth = sessionStorage.getItem(OAUTH_RESUME_KEY) === fromUrl;
-        sessionStorage.removeItem(OAUTH_RESUME_KEY);
+        sameTabAuth = sessionStorage.getItem(AUTH_RESUME_KEY) === fromUrl;
+        sessionStorage.removeItem(AUTH_RESUME_KEY);
       } catch {
         /* storage blocked — degrade to the recap path */
       }
@@ -874,10 +875,11 @@ export function OnboardChat({
         setPhase("preview");
         return;
       }
-      if (fromUrl && wantsResume && sameTabOAuth) {
-        // M12 §2: same-tab OAuth return — the user clicked «create» moments
-        // ago; the effect below consumes the flag AFTER this state flushes,
-        // so generation reads the restored facts (auth gate still applies).
+      if (fromUrl && wantsResume && sameTabAuth) {
+        // M12 §2: same-tab return from ANY sign-in route — the user asked for
+        // a site moments ago and is still in that tab; the effect below
+        // consumes the flag AFTER this state flushes, so generation reads the
+        // restored facts (the auth gate still applies).
         setMessages(data.messages);
         setAutoGenerate(true);
         return;
@@ -1405,17 +1407,20 @@ export function OnboardChat({
       const s = await sessionStateAction();
       // Auth on + not signed in → warm gate (save the site), not generation.
       // Honesty (C2): the stream may have just said «Запускаю створення
-      // сайту…», but nothing generates for an anonymous visitor — and
-      // autoGenerate does not survive the login redirect, so say what will
-      // ACTUALLY happen. Persisted via appendAssistant, so the restored
-      // conversation after sign-in still points at the button.
+      // сайту…», but nothing generates for an anonymous visitor — so say what
+      // will ACTUALLY happen. Persisted via appendAssistant, so the restored
+      // conversation after sign-in still reads correctly.
       if (s.authOn && !s.loggedIn) {
+        // The promise matches M12 §2: /login stamps the same-tab flag for the
+        // password form as well as for Google, so a return to THIS tab starts
+        // the draft by itself. It is a promise about the tab, not about the
+        // method — which is why it is not «натисніть кнопку ще раз» any more.
         // Honesty (M5): with no persisted conversation (rate-limited /
         // unconfigured startConversation) NOTHING carries over — say so
         // instead of promising a resume that cannot happen.
         appendAssistant(
           convIdRef.current
-            ? "Щоб зберегти сайт за вами, спершу увійдіть. Після входу натисніть «Створити сайт» — і я зберу чернетку."
+            ? "Щоб зберегти сайт за вами, спершу увійдіть — і я одразу почну збирати чернетку."
             : "Щоб створити сайт, спершу увійдіть. Цю розмову не вдалося зберегти, тож після входу я поставлю кілька коротких питань ще раз.",
         );
         setGenPending(false);
@@ -2167,7 +2172,7 @@ export function OnboardChat({
               disabled={loading}
               placeholder={confirmed ? "Або допишіть щось…" : "Написати…"}
               autoComplete="off"
-              className="h-14 min-w-0 flex-1 rounded-full border border-line-strong bg-surface px-5 text-[17px] text-ink placeholder:text-ink-faint transition-shadow focus:border-honey-deep focus:outline-none focus:ring-4 focus:ring-honey/20 disabled:opacity-50"
+              className="h-14 min-w-0 flex-1 rounded-full border border-line-strong bg-surface px-5 text-[17px] text-ink placeholder:text-ink-muted transition-shadow focus:border-honey-deep focus:outline-none focus:ring-4 focus:ring-honey/20 focus-visible:outline-2 focus-visible:outline-honey-deep focus-visible:outline-offset-2 disabled:opacity-50"
             />
             <button
               onClick={handleSend}

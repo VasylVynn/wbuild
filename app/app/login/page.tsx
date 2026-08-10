@@ -13,7 +13,7 @@ import {
 } from "./actions";
 import { Button, Field, Input } from "@/components/ui";
 import { AuthShell, GoogleIcon } from "@/components/auth/AuthShell";
-import { convFromNext, OAUTH_RESUME_KEY } from "@/components/onboard/embed-helpers";
+import { AUTH_RESUME_KEY, convFromNext } from "@/components/onboard/embed-helpers";
 import { phCapture } from "@/components/analytics/PostHogProvider";
 
 /**
@@ -36,9 +36,13 @@ import { phCapture } from "@/components/analytics/PostHogProvider";
  *    EXPLICIT click. Auto-firing OAuth from a URL parameter was a login-CSRF
  *    vector (security review): any link could silently push a visitor with a
  *    consented Google session through sign-in onto an attacker-chosen `next`.
- *  - Before redirecting to Google we stamp sessionStorage[OAUTH_RESUME_KEY]
- *    with the conversation id (M12): only the same-tab OAuth return may
- *    auto-start generation on /new.
+ *  - Before handing the visitor to ANY sign-in route we stamp
+ *    sessionStorage[AUTH_RESUME_KEY] with the conversation id (M12): a return
+ *    to THIS tab may auto-start generation on /new. Google is not special —
+ *    someone who typed a password is exactly as present as someone who clicked
+ *    Google, and owners reported the extra «press the button again» step as a
+ *    dead end. What the flag still excludes is a fresh tab: a confirmation
+ *    link opened from a mail app carries none.
  */
 type Mode = "signin" | "signup";
 
@@ -112,6 +116,18 @@ function LoginForm() {
     // Attempts, not outcomes: a successful action redirects (throws) and never
     // comes back here, so counting after the await would only ever count failures.
     phCapture(isSignup ? "ui_signup_submitted" : "ui_signin_submitted");
+    // M12: the same-tab resume flag, stamped BEFORE the action redirects. Both
+    // endings of this form return to THIS tab — sign-in and confirmation-free
+    // sign-up redirect straight to `next`, and the «Перевірте пошту» screen
+    // continues from here too — so /new can start generating without asking
+    // the owner to press «Створити сайт» a second time.
+    if (handoffConv) {
+      try {
+        sessionStorage.setItem(AUTH_RESUME_KEY, handoffConv);
+      } catch {
+        /* storage blocked — /new degrades to the recap + button path */
+      }
+    }
     // Belt-and-braces for the email branch (review must-fix): the conversation
     // id must survive even if the Redirect Allow List drops `next` (GoTrue
     // silently falls back to SITE_URL). We are ON the app origin here — stamp
@@ -149,12 +165,12 @@ function LoginForm() {
     setError("");
     setGoogleLoading(true);
     phCapture("ui_google_click");
-    // M12: stamp the same-tab OAuth resume flag BEFORE the redirect — /new
-    // consumes it to distinguish «same tab, straight back from Google» (auto-
-    // start generation) from a bearer-link visit (recap + button, no token burn).
+    // M12: same flag, same reason as the password form above — stamped BEFORE
+    // the redirect so /new can tell «same tab, straight back» from a
+    // bearer-link visit (recap + button, no token burn).
     if (handoffConv) {
       try {
-        sessionStorage.setItem(OAUTH_RESUME_KEY, handoffConv);
+        sessionStorage.setItem(AUTH_RESUME_KEY, handoffConv);
       } catch {
         /* storage blocked — /new degrades to the recap + button path */
       }

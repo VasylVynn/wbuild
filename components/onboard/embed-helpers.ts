@@ -22,15 +22,23 @@ export function appUrl(path = "/"): string {
 }
 
 /**
- * sessionStorage key for the M12 same-tab OAuth resume flag. /login writes the
- * conversation id here right before redirecting to Google; OnboardChat on
- * /new?conv=…&resume=1 consumes it. sessionStorage is per-tab AND per-origin —
- * both /login and /new live on the app host, and the OAuth round-trip stays in
- * the same tab, so the flag survives exactly that path and nothing else: an
- * email-confirmation link opened from the mail tab (or any later bearer-link
- * visit) has no flag and must NOT auto-burn generation tokens.
+ * sessionStorage key for the M12 same-tab AUTH resume flag. /login writes the
+ * conversation id here right before handing the visitor to ANY sign-in route —
+ * Google, sign-in, sign-up — and OnboardChat on /new?conv=…&resume=1 consumes
+ * it to start generation without a second button press.
+ *
+ * The discriminator is the TAB, never the auth method. sessionStorage is
+ * per-tab AND per-origin, and both /login and /new live on the app host, so
+ * the flag exists only for a visitor who is still sitting in the tab where
+ * they asked for a site seconds ago. What it excludes is what it always
+ * excluded: a confirmation link opened from a mail app, or any later
+ * bearer-link visit — a fresh tab carries no flag and must NOT auto-burn
+ * generation tokens.
+ *
+ * The stored string keeps its original name so a session mid-flow across a
+ * deploy still resumes.
  */
-export const OAUTH_RESUME_KEY = "vitryna_oauth_resume";
+export const AUTH_RESUME_KEY = "vitryna_oauth_resume";
 
 /**
  * Conversation id carried by a login `next` path (`/new?conv=…`), or null.
