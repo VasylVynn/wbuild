@@ -327,12 +327,18 @@
   gap: 0.5rem 1rem;
   padding-block: 0.625rem;
 }
-.wire-nav__brandlock { display: flex; align-items: center; gap: 0.625rem; min-inline-size: 0; }
+/* Bands PINNED, not auto-placed. Auto-placement follows DOM order and never
+   goes back: the brand took (1,1), the link row spans `1 / -1` so it could only
+   start a new row, and the CTA — coming last in the markup — was pushed to a
+   THIRD band of its own. The comment above promised two. Nothing here changes
+   the ≥1024px flex row, where grid-row is inert. */
+.wire-nav__brandlock { display: flex; align-items: center; gap: 0.625rem; min-inline-size: 0; grid-column: 1; grid-row: 1; }
 .wire-nav__logo { --wire-brandmark-size: 2.25rem; }
 /* Capped so a long name cannot start eating the link row on a tablet. */
 .wire-nav__brand { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-inline-size: 18ch; }
 .wire-nav__links {
   grid-column: 1 / -1;
+  grid-row: 2;
   display: flex;
   flex-wrap: nowrap;
   gap: 0.375rem 1.25rem;
@@ -347,7 +353,7 @@
 .wire-nav__links::-webkit-scrollbar { display: none; }
 /* The hit area is the link's own box, not the text's 20px line. */
 .wire-nav__link { display: inline-flex; align-items: center; min-block-size: 2.75rem; text-decoration: none; color: inherit; white-space: nowrap; }
-.wire-nav__cta { flex: 0 0 auto; justify-self: end; }
+.wire-nav__cta { flex: 0 0 auto; justify-self: end; grid-column: 2; grid-row: 1; }
 
 /* One row from 1024px — NOT 768px: at 768–900 the capped link set plus a
    wordmark plus the CTA did not fit, and the row silently hid its tail behind

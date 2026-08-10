@@ -105,23 +105,36 @@ export function resolveDisplayLogo(src?: BrandLogoSource): {
   logoUrl?: string;
   logoPlate?: string;
   logoPlatePlace?: "nav";
+  logoAspect?: number;
 } {
   if (!src) return {};
+  const aspect =
+    typeof src.logoAspect === "number" && src.logoAspect > 0 ? { logoAspect: src.logoAspect } : {};
+  // Ink that is the same tone as the nav is artwork nobody can see. Scoped to
+  // the nav, and only the nav: `CHROME_SURFACE_L` IS the nav's surface, and the
+  // very ink that disappears there — pale — is the ink the dark footer shows
+  // best, so a chip in the footer would put back exactly the slab we removed
+  // (owner report, 2026-08-10).
+  const inkL = src.logoInkL;
+  const chip =
+    typeof inkL === "number" && Math.abs(CHROME_SURFACE_L - inkL) < INK_SURFACE_MIN_DELTA_L
+      ? { logoPlate: NEUTRAL_PLATE, logoPlatePlace: "nav" as const }
+      : {};
   if (isStorageUrl(src.logoAdaptedUrl)) {
-    const inkL = src.logoInkL;
-    const vanishes =
-      typeof inkL === "number" && Math.abs(CHROME_SURFACE_L - inkL) < INK_SURFACE_MIN_DELTA_L;
-    // Scoped to the nav, and only the nav: `CHROME_SURFACE_L` IS the nav's
-    // surface. The very ink that disappears there — pale — is the ink the dark
-    // footer shows best, so a chip in the footer would put back exactly the
-    // slab the adaptation was built to remove (owner report, 2026-08-10).
-    return {
-      logoUrl: src.logoAdaptedUrl,
-      ...(vanishes ? { logoPlate: NEUTRAL_PLATE, logoPlatePlace: "nav" as const } : {}),
-    };
+    return { logoUrl: src.logoAdaptedUrl, ...chip, ...aspect };
   }
   if (!isStorageUrl(src.logoUrl)) return {};
-  return { logoUrl: src.logoUrl, ...(src.logoPlate ? { logoPlate: src.logoPlate } : {}) };
+  // The SAME check on the untouched asset. It used to live only in the adapted
+  // branch, which read as "no adaptation, nothing to worry about" — but the
+  // standard «white version for dark headers» export needs no adaptation AND
+  // vanishes on a light nav (measured: L* 99.96 against the nav's 98, contrast
+  // 1.04:1 — not faint, absent). An asset's own measured plate still wins: it
+  // describes a real opaque square, whereas the chip is our own remedy.
+  return {
+    logoUrl: src.logoUrl,
+    ...(src.logoPlate ? { logoPlate: src.logoPlate } : chip),
+    ...aspect,
+  };
 }
 
 export function buildTemplateBrand(
@@ -190,6 +203,7 @@ export function buildTemplateBrand(
     ...(display.logoUrl ? { logoUrl: display.logoUrl } : {}),
     ...(display.logoPlate ? { logoPlate: display.logoPlate } : {}),
     ...(display.logoPlatePlace ? { logoPlatePlace: display.logoPlatePlace } : {}),
+    ...(display.logoAspect ? { logoAspect: display.logoAspect } : {}),
     navLinks,
     allSectionLinks,
     ctaHref: "#lead_form",

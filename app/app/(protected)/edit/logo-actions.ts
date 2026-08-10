@@ -22,6 +22,7 @@ type BrandRow = {
   logoAdaptedUrl?: string;
   logoPlate?: string;
   logoInkL?: number;
+  logoAspect?: number;
 } & Record<string, unknown>;
 
 /** A hex plate is a MEASUREMENT of the asset (lib/media/palette). "none", an
@@ -58,6 +59,7 @@ export async function setLogoAction(host: string, url: string | null): Promise<L
   delete brand.logoPlate;
   delete brand.logoAdaptedUrl;
   delete brand.logoInkL;
+  delete brand.logoAspect;
   if (url === null) delete brand.logoUrl;
   else {
     brand.logoUrl = url;
@@ -65,11 +67,14 @@ export async function setLogoAction(host: string, url: string | null): Promise<L
     // sibling file; `logoUrl` above stays the owner's untouched original, so
     // removing the logo or a future change always falls back to it.
     const adapted = await ensureAdaptedLogo(url);
-    if (adapted) {
+    // The mark's own ink, so the chrome can tell "transparent" from "invisible"
+    // — a pale mark on the light nav still needs a chip, whether we cut its
+    // canvas away or it arrived transparent already. Its shape rides along: a
+    // wordmark must not have the business name printed beside it.
+    if (adapted?.inkL !== undefined) brand.logoInkL = adapted.inkL;
+    if (adapted?.aspect !== undefined) brand.logoAspect = adapted.aspect;
+    if (adapted?.url) {
       brand.logoAdaptedUrl = adapted.url;
-      // The mark's own ink, so the chrome can tell "transparent" from
-      // "invisible" — a pale mark on the light nav still needs a chip.
-      if (adapted.inkL !== undefined) brand.logoInkL = adapted.inkL;
     } else {
       // O1, and ONLY when nothing was cut out: a mark that still ships on an
       // opaque square gets a deliberate chip in the asset's own backdrop colour

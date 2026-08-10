@@ -612,15 +612,20 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
           : undefined;
       let logoInkL =
         sameLogo && typeof carriedBrand.logoInkL === "number" ? carriedBrand.logoInkL : undefined;
+      let logoAspect =
+        sameLogo && typeof carriedBrand.logoAspect === "number"
+          ? carriedBrand.logoAspect
+          : undefined;
       // Retry whenever there is no adapted mark yet — not merely when the logo
       // changed. A refusal is a judgement of the CODE, not of the asset: a tenant
       // that fell back to a plate under an older, stricter proof would otherwise
       // keep that plate forever and never see the improved one. Costs nothing in
       // the steady state (an adapted mark short-circuits to zero calls) and needs
       // no backfill — the next generation self-heals.
-      if (media?.logoUrl && !logoAdaptedUrl) {
+      if (media?.logoUrl && !logoAdaptedUrl && logoInkL === undefined) {
         const adapted = await ensureAdaptedLogo(media.logoUrl);
         logoAdaptedUrl = adapted?.url;
+        logoAspect = adapted?.aspect;
         // The adapted mark's own ink: masking the canvas away also removed the
         // contrast it provided, so the chrome needs to know whether what is left
         // still reads on a light nav (`resolveDisplayLogo`).
@@ -637,6 +642,7 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
       delete carriedBrand.logoPlate;
       delete carriedBrand.logoAdaptedUrl;
       delete carriedBrand.logoInkL;
+      delete carriedBrand.logoAspect;
       const { data: tenant, error: tErr } = await sb
         .from("tenants")
         .upsert(
@@ -651,6 +657,7 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
               ...(media?.logoUrl && { logoUrl: media.logoUrl }),
               ...(logoAdaptedUrl && { logoAdaptedUrl }),
               ...(logoInkL !== undefined && { logoInkL }),
+              ...(logoAspect !== undefined && { logoAspect }),
               ...(logoPlate && { logoPlate }),
               ...(media?.photos?.length && { photos: media.photos }),
               ...(brandPhotoMeta.length && { photoMeta: brandPhotoMeta }),

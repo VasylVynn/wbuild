@@ -485,6 +485,9 @@ export async function adaptLogoBuffer(buf: Buffer): Promise<{
    *  and only a measurement can tell the two cases apart (`brand.logoInkL` →
    *  `resolveDisplayLogo`). */
   inkL: number;
+  /** Width ÷ height of the TRIMMED mark — the shape the chrome will lay out,
+   *  which after the ink-box crop is no longer the source file's shape. */
+  aspect: number;
 } | null> {
   try {
     const sample = await sampleLogo(buf);
@@ -530,7 +533,7 @@ export async function adaptLogoBuffer(buf: Buffer): Promise<{
       .joinChannel(alphaCrop, { raw: { width: box.w, height: box.h, channels: 1 } })
       .webp({ quality: OUT_QUALITY, alphaQuality: 100 })
       .toBuffer();
-    return { data: out, plan, inkL };
+    return { data: out, plan, inkL, aspect: box.w / box.h };
   } catch (e) {
     console.warn("[media/logo] adaptation unavailable:", e instanceof Error ? e.message : e);
     return null;
@@ -671,16 +674,53 @@ function adaptedPathFor(path: string): string | null {
   return `${dir}/${base}${ADAPTED_SUFFIX}.webp`;
 }
 
-/** What a caller persists on `tenants.brand` for an adapted mark. */
+/** What a caller persists on `tenants.brand` about the mark it will DISPLAY —
+ *  which is the adapted asset when we produced one and the owner's original
+ *  otherwise. Every field is optional because each is an independent
+ *  measurement: any of them may be unavailable without invalidating the rest. */
 export type AdaptedLogo = {
-  /** → `brand.logoAdaptedUrl`. */
-  url: string;
-  /** → `brand.logoInkL`: mean CIE L* of the mark's own ink. OPTIONAL because a
-   *  mark that already exists in Storage is reused without re-decoding it when
-   *  it cannot be re-read; absent simply means "no chip", which is today's
-   *  rendering and always safe. */
+  /** → `brand.logoAdaptedUrl`. ABSENT when no adaptation was produced, which
+   *  includes the case where none was NEEDED: an asset that already ships alpha
+   *  has nothing to cut, yet still has ink worth measuring. */
+  url?: string;
+  /** → `brand.logoInkL`: mean CIE L* of the ink that will actually be seen.
+   *  OPTIONAL because a mark reused from Storage is not re-decoded when it
+   *  cannot be re-read; absent means "no chip", which is always safe EXCEPT for
+   *  the case this field exists for — see `resolveDisplayLogo`. */
   inkL?: number;
+  /** → `brand.logoAspect`: displayed width ÷ height of that same mark. The
+   *  chrome reads it to tell a wordmark (the business name AS artwork) from an
+   *  icon, because only one of the two may have the name printed beside it. */
+  aspect?: number;
 };
+
+/**
+ * Ink and shape of an asset we are NOT going to adapt — the already-transparent
+ * case. Refusing to cut is right (there is nothing to prove), but refusing to
+ * MEASURE is what left the standard "white version for dark headers" export
+ * rendering as an empty slot on the light nav: no adaptation → no `inkL` → the
+ * invisibility check never ran. Measured on the sample, over opaque pixels only.
+ */
+async function measureUncutLogo(buf: Buffer): Promise<{ inkL?: number; aspect?: number } | null> {
+  try {
+    const sample = await sampleLogo(buf);
+    if (!sample) return null;
+    const { width: w, height: h, data } = sample;
+    const aspect = h > 0 ? w / h : undefined;
+    if (classifyLogoCanvas(sample).kind !== "alpha") return { aspect };
+    let sum = 0;
+    let n = 0;
+    for (let p = 0; p < w * h; p++) {
+      const i = p * 4;
+      if (data[i + 3] < ALPHA_OPAQUE_MIN) continue;
+      sum += lStar(relLuminance(data[i], data[i + 1], data[i + 2]));
+      n += 1;
+    }
+    return { aspect, ...(n > 0 ? { inkL: sum / n } : {}) };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Produce (or reuse) the adapted mark for a stored logo and return its public
@@ -726,7 +766,10 @@ export async function ensureAdaptedLogo(
     }
 
     const adapted = await adaptLogoBuffer(source);
-    if (!adapted) return null;
+    // Nothing was cut — but "nothing to cut" and "nothing to know" are different
+    // answers, and conflating them is what made a white-on-transparent wordmark
+    // vanish on the light nav. Measure the asset we are about to display.
+    if (!adapted) return await measureUncutLogo(source);
 
     const up = await store.upload(adaptedPath, adapted.data, {
       contentType: "image/webp",
@@ -736,19 +779,20 @@ export async function ensureAdaptedLogo(
       console.warn("[media/logo] adapted upload failed:", up.error.message);
       return null;
     }
-    return { url: publicUrl(), inkL: adapted.inkL };
+    return { url: publicUrl(), inkL: adapted.inkL, aspect: adapted.aspect };
   } catch (e) {
     console.warn("[media/logo] ensureAdaptedLogo failed:", e instanceof Error ? e.message : e);
     return null;
   }
 }
 
-/** Mean ink L* of an already-derived mark. Fail-open in every direction: an
- *  unreadable file yields `{}`, i.e. no chip, never a lost adaptation. */
+/** Mean ink L* and shape of an already-derived mark. Fail-open in every
+ *  direction: an unreadable file yields `{}`, i.e. no chip and no wordmark
+ *  treatment — today's rendering, never a lost adaptation. */
 async function inkOfStored(
   store: { download: (p: string) => Promise<{ data: Blob | null; error: unknown }> },
   path: string,
-): Promise<{ inkL?: number }> {
+): Promise<{ inkL?: number; aspect?: number }> {
   try {
     const { data: blob, error } = await store.download(path);
     if (error || !blob) return {};
@@ -759,6 +803,7 @@ async function inkOfStored(
       .raw()
       .toBuffer({ resolveWithObject: true });
     if (info.channels !== 4) return {};
+    const aspect = info.height > 0 ? info.width / info.height : undefined;
     let sum = 0;
     let n = 0;
     for (let p = 0; p < info.width * info.height; p++) {
@@ -767,7 +812,7 @@ async function inkOfStored(
       sum += lStar(relLuminance(data[i], data[i + 1], data[i + 2]));
       n += 1;
     }
-    return n === 0 ? {} : { inkL: sum / n };
+    return { aspect, ...(n > 0 ? { inkL: sum / n } : {}) };
   } catch {
     return {};
   }

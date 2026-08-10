@@ -160,7 +160,8 @@ export async function POST(req: NextRequest) {
     url: pub.publicUrl,
     warnings,
     ...(palette?.length && { palette }),
-    ...(adapted && { logoAdaptedUrl: adapted.url }),
+    ...(adapted?.url && { logoAdaptedUrl: adapted.url }),
     ...(adapted?.inkL !== undefined && { logoInkL: adapted.inkL }),
+    ...(adapted?.aspect !== undefined && { logoAspect: adapted.aspect }),
   });
 }

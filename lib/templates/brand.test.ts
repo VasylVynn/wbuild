@@ -235,6 +235,42 @@ describe("resolveDisplayLogo — adapted over original, plate paired to the asse
     expect("logoPlatePlace" in brand).toBe(false);
   });
 
+  it("chips an UNCUT pale mark too — «white version for dark headers» is invisible on the nav", () => {
+    // Measured (workflow audit 2026-08-10): a 1600x300 transparent PNG with
+    // white ink classifies as "alpha", so nothing is adapted and — until this —
+    // nothing was measured either. Its mean ink is L* 99.96 against the nav's
+    // 98: contrast 1.04:1, i.e. the owner's logo is not faint, it is absent.
+    // Same rule, same scope as the adapted case: the dark footer shows it fine.
+    expect(resolveDisplayLogo({ logoUrl: stored("orig"), logoInkL: 99.96 })).toEqual({
+      logoUrl: stored("orig"),
+      logoPlate: "#1c1c1c",
+      logoPlatePlace: "nav",
+    });
+  });
+
+  it("still prefers an opaque asset's OWN measured plate over the neutral chip", () => {
+    // A measured plate describes a real square in the artwork; the chip is our
+    // remedy for artwork that has none. When both could apply, the asset wins.
+    expect(
+      resolveDisplayLogo({ logoUrl: stored("orig"), logoPlate: "#0b0b0b", logoInkL: 99 }),
+    ).toEqual({ logoUrl: stored("orig"), logoPlate: "#0b0b0b" });
+  });
+
+  it("carries the mark's shape through both branches — the chrome reads it to spot a wordmark", () => {
+    expect(resolveDisplayLogo({ logoUrl: stored("orig"), logoAspect: 5.33 }).logoAspect).toBe(5.33);
+    expect(
+      resolveDisplayLogo({ logoAdaptedUrl: stored("adapted"), logoInkL: 20, logoAspect: 1.02 })
+        .logoAspect,
+    ).toBe(1.02);
+    // Junk never reaches the chrome as a shape.
+    expect("logoAspect" in resolveDisplayLogo({ logoUrl: stored("orig"), logoAspect: 0 })).toBe(
+      false,
+    );
+    expect(buildTemplateBrand("X", [], template, { logoUrl: stored("orig") })).not.toHaveProperty(
+      "logoAspect",
+    );
+  });
+
   it("gives a dark adapted mark no chip — it already reads on the light chrome", () => {
     expect(resolveDisplayLogo({ logoAdaptedUrl: stored("adapted"), logoInkL: 22 })).toEqual({
       logoUrl: stored("adapted"),

@@ -32,11 +32,17 @@ export interface BrandLogoRecord {
    *  as a rendering accident). A MEASUREMENT, not a design choice — see
    *  TemplateBrand.logoPlate. Absent → no plate. */
   logoPlate?: string;
-  /** Mean CIE L* of the ADAPTED mark's own ink. Masking the canvas away also
-   *  removes the contrast that came with it, so this is what tells the chrome
-   *  whether the surviving artwork still reads on the surface it lands on —
-   *  measured, never chosen. Absent → no chip. */
+  /** Mean CIE L* of the ink that will actually be DISPLAYED — the adapted mark
+   *  when there is one, otherwise the owner's own asset. Masking a canvas away
+   *  removes the contrast that came with it, and an asset that shipped alpha
+   *  never had any: both cases can leave artwork the same tone as the surface
+   *  under it, and only a measurement tells them from artwork that reads fine.
+   *  Measured, never chosen. Absent → no chip. */
   logoInkL?: number;
+  /** Displayed width ÷ height of that same mark. A mark wide enough to BE the
+   *  business name in artwork must not have the name printed beside it as well;
+   *  a square icon must. Measured from the asset, never declared by a model. */
+  logoAspect?: number;
 }
 
 export interface Tenant {
