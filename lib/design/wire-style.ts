@@ -200,13 +200,18 @@ export async function generateWireStyle(
     thinking: { type: "adaptive" },
     output_config: { effort: "high" },
     system: SYSTEM,
+    // Prompt caching (2026-08-10): the wireframe source is byte-identical for
+    // EVERY tenant on a deploy, so it leads the user turn with a cache
+    // breakpoint — system + framework read at 0.1× on every style call
+    // org-wide. The per-business brief follows OUTSIDE the cached prefix and
+    // sits last, closest to the task, where instructions land best anyway.
     messages: [
       {
         role: "user",
-        content: `БІЗНЕС:
-${brief}${anchor}
-
-КАРКАС — базовий CSS (ці правила ЗАФІКСОВАНІ, вони тримають адаптивність; ти пишеш поверх них):
+        content: [
+          {
+            type: "text" as const,
+            text: `КАРКАС — базовий CSS (ці правила ЗАФІКСОВАНІ, вони тримають адаптивність; ти пишеш поверх них):
 \`\`\`css
 ${css}
 \`\`\`
@@ -214,9 +219,17 @@ ${css}
 КАРКАС — розмітка секцій (звідси бери реальні назви класів):
 \`\`\`tsx
 ${tsxForPrompt}
-\`\`\`
+\`\`\``,
+            cache_control: { type: "ephemeral" as const },
+          },
+          {
+            type: "text" as const,
+            text: `БІЗНЕС:
+${brief}${anchor}
 
 Напиши CSS, який зробить із цього каркаса сайт для описаного бізнесу.`,
+          },
+        ],
       },
     ],
     // Retries disabled (pipeline v2 §6): one attempt IS the S2а/S4-regen stage
@@ -244,6 +257,11 @@ ${tsxForPrompt}
     cssChars: css.length,
     inputTokens: res.usage.input_tokens,
     outputTokens: res.usage.output_tokens,
+    // Cache verification (2026-08-10): read>0 = the framework prefix hit;
+    // write>0 = this call warmed it (1.25×). Both zero on repeat = silent
+    // invalidator, go look for byte drift in the prefix.
+    cacheRead: res.usage.cache_read_input_tokens ?? 0,
+    cacheWrite: res.usage.cache_creation_input_tokens ?? 0,
   });
 
   return {

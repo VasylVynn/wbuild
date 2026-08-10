@@ -257,9 +257,10 @@ export function sanitizeInboundMessage(role: "user" | "assistant", content: stri
 // ---------------------------------------------------------------------------
 // System prompt (rewritten for W0, plan §0): generate-first, infer-don't-ask,
 // ≤1–2 clarifying questions per CONVERSATION, honesty about state (C2), one
-// genderless voice (C4), terse style (C5). The dossier (facts + scraped
-// candidates + media inventory + injection rule) is appended LAST so a
-// byte-stable static prefix stays cache-friendly.
+// genderless voice (C4), terse style (C5). Returned in TWO parts so the route
+// can put a cache_control breakpoint between them: `stable` is byte-identical
+// across every turn of every conversation on the same vertical+deploy (prompt
+// caching, 2026-08-10), `dynamic` carries facts + issues + gaps + dossier.
 // ---------------------------------------------------------------------------
 
 export function buildOnboardSystem(args: {
@@ -271,7 +272,7 @@ export function buildOnboardSystem(args: {
   /** Data-shaped gaps worth ONE question (lib/onboard/gaps.ts). Already budget-
    *  filtered by `selectGaps` — an empty array means «say nothing about this». */
   gaps?: DataGap[];
-}): string {
+}): { stable: string; dynamic: string } {
   const { vertical, facts, dossier, issues, apifyEnabled, gaps = [] } = args;
 
   const igLine = apifyEnabled
@@ -346,10 +347,11 @@ ${igToolLine}- Хочеш роздивитись фото детальніше �
 - НЕ вміємо: інтернет-магазин / кошик / оплату, онлайн-запис із календарем, кабінети, інтеграції (CRM, 1C), довільний дизайн чи власний код, багатосторінкові сайти.
 - Просить те, чого немає — чесно й тепло скажи, що платформа проста й недорога і цього в ній немає (не обіцяй). Додай: у редакторі є кнопка «Хочу кастомні зміни». Тексти, послуги, ціни, фото, кольори, порядок секцій — наша звичайна робота, таке НЕ відхиляй.
 
-Поточні зібрані факти (JSON): ${JSON.stringify(facts)}${issuesBlock}${gapsBlock}`;
+Далі — поточні зібрані факти й дані про бізнес.`;
 
   const dossierBlock = dossier ? `\n\n${formatDossierForPrompt(dossier)}` : "";
-  return `${staticPrompt}${dossierBlock}`;
+  const dynamicPrompt = `Поточні зібрані факти (JSON): ${JSON.stringify(facts)}${issuesBlock}${gapsBlock}${dossierBlock}`;
+  return { stable: staticPrompt, dynamic: dynamicPrompt };
 }
 
 // ---------------------------------------------------------------------------
@@ -478,7 +480,17 @@ export async function onboardTurn(
     thinking: { type: "adaptive" },
     // Same lone-surrogate guard as the streaming route: history resent by the
     // client may carry an emoji cut mid-pair (the prod 400) — strip before send.
-    system: stripLoneSurrogates(system),
+    // Same cache-breakpoint shape as the streaming route. NOTE: this path's
+    // smaller tool set means a DIFFERENT prefix (tools render first), so it
+    // keeps its own cache entry — still worth it across degraded turns.
+    system: [
+      {
+        type: "text" as const,
+        text: stripLoneSurrogates(system.stable),
+        cache_control: { type: "ephemeral" as const },
+      },
+      { type: "text" as const, text: stripLoneSurrogates(system.dynamic) },
+    ],
     // start_generation is available so the degraded path stays behavior-
     // consistent with the prompt (readiness = tool-call, item W0-7).
     tools: [saveFactsTool, startGenerationTool],

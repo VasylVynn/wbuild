@@ -304,7 +304,11 @@ export async function analyzePhoto(url: string): Promise<PhotoAnalysis | null> {
             ],
           },
         ],
-        tools: [analysisTool],
+        // Prompt caching (2026-08-10): the tool schema is the whole stable
+        // prefix here (no system; the image leads the user turn and varies per
+        // call) — cache it once, read on every one of the ~15 analyses per
+        // onboarding and across tenants.
+        tools: [{ ...analysisTool, cache_control: { type: "ephemeral" as const } }],
         tool_choice: { type: "tool", name: "photo_analysis" },
       },
       { timeout: VISION_TIMEOUT_MS },

@@ -351,7 +351,7 @@ export async function POST(req: Request): Promise<Response> {
       // {t:"generate"} before {t:"final"} so the client starts runGenerate.
       let generateRequested = false;
       // Last-built system prompt — reused by the no-tools "speak up" call below.
-      let lastSystem = "";
+      let lastSystem = { stable: "", dynamic: "" };
 
       try {
         let rounds = 0;
@@ -398,7 +398,18 @@ export async function POST(req: Request): Promise<Response> {
             betas: ["task-budgets-2026-03-13"],
             // Strip lone surrogates (emoji cut mid-pair by our excerpt slices) —
             // an unpaired surrogate anywhere in the body is a hard 400 (§sanitize).
-            system: stripLoneSurrogates(system),
+            // Prompt caching (2026-08-10): the breakpoint sits after the stable
+            // part — byte-identical across turns/conversations per vertical —
+            // so tools + the static prompt are read from cache at 0.1×; facts +
+            // dossier vary per turn and stay outside the cached prefix.
+            system: [
+              {
+                type: "text" as const,
+                text: stripLoneSurrogates(system.stable),
+                cache_control: { type: "ephemeral" as const },
+              },
+              { type: "text" as const, text: stripLoneSurrogates(system.dynamic) },
+            ],
             tools: onboardTools,
             messages: sanitizeMessages(apiMessages),
           });
@@ -425,6 +436,20 @@ export async function POST(req: Request): Promise<Response> {
           }
 
           const final = await stream.finalMessage();
+
+          // Cache verification (2026-08-10): read>0 from turn 2 on = the
+          // stable system prefix hits; both zero on repeat = byte drift.
+          console.log(
+            JSON.stringify({
+              level: "info",
+              module: "onboard",
+              msg: "turn usage",
+              input: final.usage.input_tokens,
+              output: final.usage.output_tokens,
+              cacheRead: final.usage.cache_read_input_tokens ?? 0,
+              cacheWrite: final.usage.cache_creation_input_tokens ?? 0,
+            }),
+          );
 
           // Server web_fetch may pause the turn — resume WITHOUT consuming a round.
           if (final.stop_reason === "pause_turn") {
@@ -534,7 +559,16 @@ export async function POST(req: Request): Promise<Response> {
               max_tokens: 2000,
               thinking: { type: "adaptive" },
               output_config: { effort: "low" },
-              system: stripLoneSurrogates(lastSystem),
+              // Same stable-prefix blocks as the main call: tool_choice only
+              // invalidates the messages tier, so this reads the same cache.
+              system: [
+                {
+                  type: "text" as const,
+                  text: stripLoneSurrogates(lastSystem.stable),
+                  cache_control: { type: "ephemeral" as const },
+                },
+                { type: "text" as const, text: stripLoneSurrogates(lastSystem.dynamic) },
+              ],
               tools: onboardTools,
               tool_choice: { type: "none" },
               messages: sanitizeMessages(apiMessages),

@@ -473,13 +473,17 @@ export async function generateSite(
   // byte-stable per vertical, the volatile per-business parts (design brief,
   // dossier) LAST.
   const briefDoc = designSpec ? `${buildDesignBriefDoc(designSpec)}\n\n` : "";
-  const userPrompt = `Бібліотека блоків:
+  // Prompt caching (2026-08-10): the library + section docs are byte-identical
+  // for every generation on a deploy — they lead the user turn with a cache
+  // breakpoint, so tools + system + docs read at 0.1× across tenants (one
+  // cache entry per vertical, since the system prompt varies by vertical).
+  // The brief + dossier vary per business and stay outside the cached prefix.
+  const staticDocs = `Бібліотека блоків:
 ${buildLibraryDoc()}
 
 Секції, з яких компонується сторінка:
-${buildSectionDoc(template)}
-
-${briefDoc}${formatDossierForPrompt(dossier)}
+${buildSectionDoc(template)}`;
+  const dynamicPrompt = `${briefDoc}${formatDossierForPrompt(dossier)}
 
 Збери сайт за правилами вище і виклич build_site.`;
 
@@ -499,7 +503,19 @@ ${briefDoc}${formatDossierForPrompt(dossier)}
     system: stripLoneSurrogates(buildSystem(vertical, template)),
     tools: [buildSiteTool],
     tool_choice: { type: "auto" },
-    messages: [{ role: "user", content: stripLoneSurrogates(userPrompt) }],
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text" as const,
+            text: stripLoneSurrogates(staticDocs),
+            cache_control: { type: "ephemeral" as const },
+          },
+          { type: "text" as const, text: stripLoneSurrogates(dynamicPrompt) },
+        ],
+      },
+    ],
     // Retries disabled (pipeline v2 §6): one attempt IS the 120s S2б stage
     // budget — a second full composition can't fit, so a 429/transient goes
     // straight to the caller's honest-error path. The per-request timeout must

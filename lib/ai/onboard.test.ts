@@ -136,6 +136,12 @@ describe("start_generation tool", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildOnboardSystem", () => {
+  // The builder returns {stable, dynamic} for the prompt-cache breakpoint;
+  // these content tests assert on the full assembled prompt.
+  const full = (args: Parameters<typeof buildOnboardSystem>[0]) => {
+    const r = buildOnboardSystem(args);
+    return `${r.stable}\n\n${r.dynamic}`;
+  };
   const base = {
     vertical: getVertical("generic"),
     facts: { businessName: "Лапусі" },
@@ -145,13 +151,13 @@ describe("buildOnboardSystem", () => {
   };
 
   it("teaches start_generation and bans claiming generation already runs", () => {
-    const sys = buildOnboardSystem(base);
+    const sys = full(base);
     expect(sys).toContain("start_generation");
     expect(sys).toContain("НІКОЛИ не стверджуй");
   });
 
   it("has no required-field checklist and no phone-only readiness", () => {
-    const sys = buildOnboardSystem(base);
+    const sys = full(base);
     expect(sys).not.toContain("без яких сайт не вийде");
     expect(sys).not.toContain('НЕМОЖЛИВІ без назви, міста і телефону');
   });
@@ -162,11 +168,11 @@ describe("buildOnboardSystem", () => {
     // interrogate — the pre-W0 registry did exactly that.
     const banned = ["СПЕРШУ з'ясуй", "СПЕРШУ уточни", "спитай", "уточни "];
     for (const id of VERTICAL_IDS) {
-      const sys = buildOnboardSystem({ ...base, vertical: getVertical(id) });
+      const sys = full({ ...base, vertical: getVertical(id) });
       for (const phrase of banned) expect(sys).not.toContain(phrase);
       // the gap block is data-driven, not a script — it must not smuggle the
       // interrogation phrasing back in either
-      const withGaps = buildOnboardSystem({
+      const withGaps = full({
         ...base,
         vertical: getVertical(id),
         gaps: [{ rule: "singleton_set", subject: "services", weight: 82, note: "Одна послуга." }],
@@ -177,7 +183,7 @@ describe("buildOnboardSystem", () => {
 
   it("carries the data-gap block only when the detector found something", () => {
     expect(buildOnboardSystem(base)).not.toContain("ПРОГАЛИНИ В ДАНИХ");
-    const sys = buildOnboardSystem({
+    const sys = full({
       ...base,
       gaps: [
         { rule: "singleton_set", subject: "testimonials", weight: 46, note: "Зібрано лише один відгук." },
@@ -188,7 +194,7 @@ describe("buildOnboardSystem", () => {
   });
 
   it("gap questions stay capped, skippable and non-blocking", () => {
-    const sys = buildOnboardSystem({
+    const sys = full({
       ...base,
       gaps: [{ rule: "empty_set", subject: "photos", weight: 80, note: "Жодного фото." }],
     });
@@ -201,7 +207,7 @@ describe("buildOnboardSystem", () => {
 
   it("keeps the dossier LAST even with a gap block (prompt-cache ordering)", () => {
     const dossier = buildDossier({ facts: { businessName: "Лапусі" } });
-    const sys = buildOnboardSystem({
+    const sys = full({
       ...base,
       dossier,
       gaps: [{ rule: "empty_set", subject: "photos", weight: 80, note: "Жодного фото." }],
@@ -211,7 +217,7 @@ describe("buildOnboardSystem", () => {
 
   it("keeps the dossier LAST (prompt-cache ordering)", () => {
     const dossier = buildDossier({ facts: { businessName: "Лапусі" } });
-    const sys = buildOnboardSystem({ ...base, dossier });
+    const sys = full({ ...base, dossier });
     const marker = "ПРАВИЛО ПРО ДАНІ";
     expect(sys).toContain(marker);
     // nothing but the dossier follows the static prompt
