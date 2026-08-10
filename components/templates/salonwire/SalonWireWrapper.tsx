@@ -73,17 +73,6 @@ function logoPlate(brand: TemplateBrand | undefined, place: "nav" | "footer"): s
   return !brand?.logoPlatePlace || brand.logoPlatePlace === place ? v : undefined;
 }
 
-/** At or beyond this width-to-height ratio a mark is a WORDMARK: artwork whose
- *  content IS the business name. Below it the mark is an icon that needs the
- *  name spelled out beside it. 3:1 because a square-ish emblem, a shield and a
- *  circular badge all sit far below it, while «name set in a typeface», with or
- *  without a small glyph in front, sits far above. Absent measurement → icon,
- *  i.e. today's lockup, which is never wrong-looking, only redundant. */
-const WORDMARK_MIN_ASPECT = 3;
-function isWordmark(brand?: TemplateBrand): boolean {
-  return typeof brand?.logoAspect === "number" && brand.logoAspect >= WORDMARK_MIN_ASPECT;
-}
-
 /**
  * The owner's logo — ONE component for both chrome placements (invariant: the
  * brand mark never has two geometries). `.wire-brandmark` carries the locked
@@ -97,28 +86,32 @@ function isWordmark(brand?: TemplateBrand): boolean {
  * the same component in the nav and in the footer, so the two placements can
  * never drift apart.
  *
- * `alt` follows the lockup: an icon sits beside the name as text, so announcing
- * it twice is noise and the mark is decorative (`alt=""`). A WORDMARK replaces
- * that text, so it must carry the name itself or the business becomes nameless
- * to a screen reader and to search.
+ * `alt=""` on purpose: the business name is rendered as text right next to the
+ * mark, so announcing it twice is noise.
+ *
+ * NOT branched on the mark's SHAPE. A wide mark is often a wordmark that already
+ * spells the name, and printing the name beside it is then redundant — but wide
+ * is not proof of that, and the two mistakes do not cost the same: a duplicated
+ * name is untidy, whereas hiding the name from artwork that never contained it
+ * (a decorative banner, an ornament, a tagline) leaves the business nameless on
+ * its own site. Nothing short of READING the artwork settles it, so the chrome
+ * keeps the name and stays wrong only in the cheap direction.
  */
 function BrandMark({
   src,
   place,
   plate,
-  alt,
 }: {
   src: string;
   place: "nav" | "footer";
   plate?: string;
-  alt: string;
 }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       className={`wire-brandmark wire-${place}__logo${plate ? " wire-brandmark--plated" : ""}`}
       src={src}
-      alt={alt}
+      alt=""
       {...(plate
         ? { style: { "--wire-brandmark-plate": plate } as CSSProperties }
         : {})}
@@ -141,7 +134,6 @@ export function SalonWireWrapper({
   // Nav/footer silhouette (spec §5): seeded per site, derived from the same
   // designSpec — see chrome-variants.ts for the interim derivation contract.
   const chrome = wireChromeVariants(brand?.designSpec);
-  const wordmark = !!brand?.logoUrl && isWordmark(brand);
   const links = brand?.navLinks ?? [];
   // The footer indexes every section; the nav shows the capped set (brand.ts).
   const indexLinks = brand?.allSectionLinks ?? links;
@@ -170,16 +162,9 @@ export function SalonWireWrapper({
               multi-word business name («Барбершоп Кузня» → «Барбершоп»). */}
           <span className="wire-nav__brandlock">
             {brand?.logoUrl && (
-              <BrandMark
-                src={brand.logoUrl}
-                place="nav"
-                plate={logoPlate(brand, "nav")}
-                alt={wordmark ? fullBrandName(brand) : ""}
-              />
+              <BrandMark src={brand.logoUrl} place="nav" plate={logoPlate(brand, "nav")} />
             )}
-            {/* A wordmark already spells the name in the owner's own typeface;
-                printing it again beside itself is the name twice in two fonts. */}
-            {!wordmark && <span className="wire-nav__brand">{fullBrandName(brand)}</span>}
+            <span className="wire-nav__brand">{fullBrandName(brand)}</span>
           </span>
           <nav className="wire-nav__links">
             {links.map((l) => (
@@ -212,14 +197,9 @@ export function SalonWireWrapper({
               same guarantee the nav's lockup carries. */}
           <div className="wire-stack wire-footer__brandlock">
             {brand?.logoUrl && (
-              <BrandMark
-                src={brand.logoUrl}
-                place="footer"
-                plate={logoPlate(brand, "footer")}
-                alt={wordmark ? fullBrandName(brand) : ""}
-              />
+              <BrandMark src={brand.logoUrl} place="footer" plate={logoPlate(brand, "footer")} />
             )}
-            {!wordmark && <span className="wire-heading">{fullBrandName(brand)}</span>}
+            <span className="wire-heading">{fullBrandName(brand)}</span>
           </div>
           <div className="wire-stack">
             <span className="wire-eyebrow">Контакти</span>

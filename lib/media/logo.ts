@@ -485,9 +485,6 @@ export async function adaptLogoBuffer(buf: Buffer): Promise<{
    *  and only a measurement can tell the two cases apart (`brand.logoInkL` →
    *  `resolveDisplayLogo`). */
   inkL: number;
-  /** Width ÷ height of the TRIMMED mark — the shape the chrome will lay out,
-   *  which after the ink-box crop is no longer the source file's shape. */
-  aspect: number;
 } | null> {
   try {
     const sample = await sampleLogo(buf);
@@ -533,7 +530,7 @@ export async function adaptLogoBuffer(buf: Buffer): Promise<{
       .joinChannel(alphaCrop, { raw: { width: box.w, height: box.h, channels: 1 } })
       .webp({ quality: OUT_QUALITY, alphaQuality: 100 })
       .toBuffer();
-    return { data: out, plan, inkL, aspect: box.w / box.h };
+    return { data: out, plan, inkL };
   } catch (e) {
     console.warn("[media/logo] adaptation unavailable:", e instanceof Error ? e.message : e);
     return null;
@@ -688,10 +685,6 @@ export type AdaptedLogo = {
    *  cannot be re-read; absent means "no chip", which is always safe EXCEPT for
    *  the case this field exists for — see `resolveDisplayLogo`. */
   inkL?: number;
-  /** → `brand.logoAspect`: displayed width ÷ height of that same mark. The
-   *  chrome reads it to tell a wordmark (the business name AS artwork) from an
-   *  icon, because only one of the two may have the name printed beside it. */
-  aspect?: number;
 };
 
 /**
@@ -701,13 +694,12 @@ export type AdaptedLogo = {
  * rendering as an empty slot on the light nav: no adaptation → no `inkL` → the
  * invisibility check never ran. Measured on the sample, over opaque pixels only.
  */
-async function measureUncutLogo(buf: Buffer): Promise<{ inkL?: number; aspect?: number } | null> {
+async function measureUncutLogo(buf: Buffer): Promise<{ inkL: number } | null> {
   try {
     const sample = await sampleLogo(buf);
     if (!sample) return null;
     const { width: w, height: h, data } = sample;
-    const aspect = h > 0 ? w / h : undefined;
-    if (classifyLogoCanvas(sample).kind !== "alpha") return { aspect };
+    if (classifyLogoCanvas(sample).kind !== "alpha") return null;
     let sum = 0;
     let n = 0;
     for (let p = 0; p < w * h; p++) {
@@ -716,7 +708,7 @@ async function measureUncutLogo(buf: Buffer): Promise<{ inkL?: number; aspect?: 
       sum += lStar(relLuminance(data[i], data[i + 1], data[i + 2]));
       n += 1;
     }
-    return { aspect, ...(n > 0 ? { inkL: sum / n } : {}) };
+    return n > 0 ? { inkL: sum / n } : null;
   } catch {
     return null;
   }
@@ -779,20 +771,19 @@ export async function ensureAdaptedLogo(
       console.warn("[media/logo] adapted upload failed:", up.error.message);
       return null;
     }
-    return { url: publicUrl(), inkL: adapted.inkL, aspect: adapted.aspect };
+    return { url: publicUrl(), inkL: adapted.inkL };
   } catch (e) {
     console.warn("[media/logo] ensureAdaptedLogo failed:", e instanceof Error ? e.message : e);
     return null;
   }
 }
 
-/** Mean ink L* and shape of an already-derived mark. Fail-open in every
- *  direction: an unreadable file yields `{}`, i.e. no chip and no wordmark
- *  treatment — today's rendering, never a lost adaptation. */
+/** Mean ink L* of an already-derived mark. Fail-open in every direction: an
+ *  unreadable file yields `{}`, i.e. no chip, never a lost adaptation. */
 async function inkOfStored(
   store: { download: (p: string) => Promise<{ data: Blob | null; error: unknown }> },
   path: string,
-): Promise<{ inkL?: number; aspect?: number }> {
+): Promise<{ inkL?: number }> {
   try {
     const { data: blob, error } = await store.download(path);
     if (error || !blob) return {};
@@ -803,7 +794,6 @@ async function inkOfStored(
       .raw()
       .toBuffer({ resolveWithObject: true });
     if (info.channels !== 4) return {};
-    const aspect = info.height > 0 ? info.width / info.height : undefined;
     let sum = 0;
     let n = 0;
     for (let p = 0; p < info.width * info.height; p++) {
@@ -812,7 +802,7 @@ async function inkOfStored(
       sum += lStar(relLuminance(data[i], data[i + 1], data[i + 2]));
       n += 1;
     }
-    return { aspect, ...(n > 0 ? { inkL: sum / n } : {}) };
+    return n === 0 ? {} : { inkL: sum / n };
   } catch {
     return {};
   }

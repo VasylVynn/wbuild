@@ -256,21 +256,6 @@ describe("resolveDisplayLogo — adapted over original, plate paired to the asse
     ).toEqual({ logoUrl: stored("orig"), logoPlate: "#0b0b0b" });
   });
 
-  it("carries the mark's shape through both branches — the chrome reads it to spot a wordmark", () => {
-    expect(resolveDisplayLogo({ logoUrl: stored("orig"), logoAspect: 5.33 }).logoAspect).toBe(5.33);
-    expect(
-      resolveDisplayLogo({ logoAdaptedUrl: stored("adapted"), logoInkL: 20, logoAspect: 1.02 })
-        .logoAspect,
-    ).toBe(1.02);
-    // Junk never reaches the chrome as a shape.
-    expect("logoAspect" in resolveDisplayLogo({ logoUrl: stored("orig"), logoAspect: 0 })).toBe(
-      false,
-    );
-    expect(buildTemplateBrand("X", [], template, { logoUrl: stored("orig") })).not.toHaveProperty(
-      "logoAspect",
-    );
-  });
-
   it("gives a dark adapted mark no chip — it already reads on the light chrome", () => {
     expect(resolveDisplayLogo({ logoAdaptedUrl: stored("adapted"), logoInkL: 22 })).toEqual({
       logoUrl: stored("adapted"),

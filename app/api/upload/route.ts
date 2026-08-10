@@ -162,6 +162,5 @@ export async function POST(req: NextRequest) {
     ...(palette?.length && { palette }),
     ...(adapted?.url && { logoAdaptedUrl: adapted.url }),
     ...(adapted?.inkL !== undefined && { logoInkL: adapted.inkL }),
-    ...(adapted?.aspect !== undefined && { logoAspect: adapted.aspect }),
   });
 }

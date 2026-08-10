@@ -271,13 +271,22 @@
  * `.wire-brandmark`/`.wire-nav__logo`/`.wire-footer__logo`.
  */
 
+/* Sized by two MAXIMA, not by a fixed height. A wide mark held its full 10rem
+   beside a 390px nav and squeezed the business name to a 0px box (measured):
+   the name vanished from the header entirely. The name is the one thing that
+   must never disappear, so the MARK gives first — `min(…, 45%)` bounds it by
+   the lockup it shares. Both axes auto under a maximum each means the browser
+   scales the mark by its own ratio and the element ends up the size of the
+   artwork, so a wide mark leaves no letterbox for the chip to paint. */
 .wire-brandmark {
   display: block;
   align-self: start;
-  flex: 0 0 auto;
-  block-size: var(--wire-brandmark-size, 2.25rem);
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  block-size: auto;
   inline-size: auto;
-  max-inline-size: var(--wire-brandmark-max, 10rem);
+  max-block-size: var(--wire-brandmark-size, 2.25rem);
+  max-inline-size: min(var(--wire-brandmark-max, 10rem), 45%);
   object-fit: contain;
   object-position: left center;
 }
@@ -300,6 +309,7 @@
 .tpl-salonwire :is(.wire-nav, .wire-footer) .wire-brandmark {
   align-self: start;
   inline-size: auto;
+  block-size: auto;
   object-fit: contain;
 }
 .tpl-salonwire :is(.wire-nav, .wire-footer) .wire-brandmark--plated { box-sizing: content-box; }

@@ -61,11 +61,6 @@ export interface TemplateBrand {
    *  ink matched the light nav; the footer is dark by contract
    *  (`.wire-footer__link`), so painting it there is the black slab back. */
   logoPlatePlace?: "nav";
-  /** Displayed width ÷ height of the mark. At or above WORDMARK_MIN_ASPECT the
-   *  chrome treats it as a WORDMARK — artwork that already spells the business
-   *  name — and stops printing the name beside it. Absent → treated as an icon,
-   *  which is today's lockup and safe for anything squarish. */
-  logoAspect?: number;
   navLinks?: { href: string; label: string }[];
   /** Every linkable section in document order, UNCAPPED. `navLinks` is the
    *  budgeted subset the nav bar can show in one row; the wireframe footer

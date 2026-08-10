@@ -105,11 +105,8 @@ export function resolveDisplayLogo(src?: BrandLogoSource): {
   logoUrl?: string;
   logoPlate?: string;
   logoPlatePlace?: "nav";
-  logoAspect?: number;
 } {
   if (!src) return {};
-  const aspect =
-    typeof src.logoAspect === "number" && src.logoAspect > 0 ? { logoAspect: src.logoAspect } : {};
   // Ink that is the same tone as the nav is artwork nobody can see. Scoped to
   // the nav, and only the nav: `CHROME_SURFACE_L` IS the nav's surface, and the
   // very ink that disappears there — pale — is the ink the dark footer shows
@@ -121,7 +118,7 @@ export function resolveDisplayLogo(src?: BrandLogoSource): {
       ? { logoPlate: NEUTRAL_PLATE, logoPlatePlace: "nav" as const }
       : {};
   if (isStorageUrl(src.logoAdaptedUrl)) {
-    return { logoUrl: src.logoAdaptedUrl, ...chip, ...aspect };
+    return { logoUrl: src.logoAdaptedUrl, ...chip };
   }
   if (!isStorageUrl(src.logoUrl)) return {};
   // The SAME check on the untouched asset. It used to live only in the adapted
@@ -130,11 +127,7 @@ export function resolveDisplayLogo(src?: BrandLogoSource): {
   // vanishes on a light nav (measured: L* 99.96 against the nav's 98, contrast
   // 1.04:1 — not faint, absent). An asset's own measured plate still wins: it
   // describes a real opaque square, whereas the chip is our own remedy.
-  return {
-    logoUrl: src.logoUrl,
-    ...(src.logoPlate ? { logoPlate: src.logoPlate } : chip),
-    ...aspect,
-  };
+  return { logoUrl: src.logoUrl, ...(src.logoPlate ? { logoPlate: src.logoPlate } : chip) };
 }
 
 export function buildTemplateBrand(
@@ -203,7 +196,6 @@ export function buildTemplateBrand(
     ...(display.logoUrl ? { logoUrl: display.logoUrl } : {}),
     ...(display.logoPlate ? { logoPlate: display.logoPlate } : {}),
     ...(display.logoPlatePlace ? { logoPlatePlace: display.logoPlatePlace } : {}),
-    ...(display.logoAspect ? { logoAspect: display.logoAspect } : {}),
     navLinks,
     allSectionLinks,
     ctaHref: "#lead_form",
