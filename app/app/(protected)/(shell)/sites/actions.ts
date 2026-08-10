@@ -31,6 +31,11 @@ export async function getTelegramConnectLinkForHost(
   if (!t) return { ok: false, error: "сайт не знайдено" };
   return getTelegramConnectLink(t.id as string);
 }
+/** The one place the deep link's shape is written. */
+function deepLink(username: string, token: string): string {
+  return `https://t.me/${username}?start=${token}`;
+}
+
 export async function getTelegramConnectLink(
   tenantId: string,
 ): Promise<{ ok: true; link: string } | { ok: false; error: string }> {
@@ -48,15 +53,45 @@ export async function getTelegramConnectLink(
     .maybeSingle();
   if (!t) return { ok: false, error: "сайт не знайдено" };
 
-  let token = t.telegram_connect_token as string | null;
-  if (!token) {
-    token = crypto.randomUUID().replace(/-/g, "");
-    const { error } = await sb
-      .from("tenants")
-      .update({ telegram_connect_token: token })
-      .eq("id", tenantId);
-    if (error) return { ok: false, error: error.message };
+  const existing = t.telegram_connect_token as string | null;
+  if (existing) return { ok: true, link: deepLink(username, existing) };
+
+  // MINT UNDER A COMPARE-AND-SWAP. The read above and the write below are two
+  // statements, and the token is the tenant's ONLY identity to the bot: the
+  // webhook looks a Start up by this exact string and then nulls it (single
+  // use, app/api/telegram/webhook/route.ts:40,53). Two callers that both read
+  // null used to both mint and both write, and the loser of that write walked
+  // away holding a link whose token no longer existed — a button that opens
+  // Telegram, says Start, and binds nothing, with no error anywhere to see.
+  //
+  // Reachable without anyone clicking twice: the publish screen now resolves
+  // this link on arrival, React re-invokes effects, and the sites list can be
+  // open in another tab. `.is(..., null)` makes the write conditional, so only
+  // the first caller writes; everyone else re-reads and returns the token that
+  // actually landed.
+  const minted = crypto.randomUUID().replace(/-/g, "");
+  const { data: won, error } = await sb
+    .from("tenants")
+    .update({ telegram_connect_token: minted })
+    .eq("id", tenantId)
+    .is("telegram_connect_token", null)
+    .select("telegram_connect_token")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (won?.telegram_connect_token) {
+    return { ok: true, link: deepLink(username, won.telegram_connect_token as string) };
   }
-  return { ok: true, link: `https://t.me/${username}?start=${token}` };
+
+  // The CAS matched nothing: another caller minted first (or the owner
+  // connected in between and the webhook consumed it). Whatever is on the row
+  // now is the only truth — never the string we just made up.
+  const { data: after } = await sb
+    .from("tenants")
+    .select("telegram_connect_token")
+    .eq("id", tenantId)
+    .maybeSingle();
+  const current = (after?.telegram_connect_token as string | null) ?? null;
+  if (!current) return { ok: false, error: "не вдалося підготувати посилання, спробуйте ще раз" };
+  return { ok: true, link: deepLink(username, current) };
 }
 

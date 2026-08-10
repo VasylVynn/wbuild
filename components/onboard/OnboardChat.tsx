@@ -751,6 +751,10 @@ export function OnboardChat({
   // (no bot configured / not the owner) and the row says so instead of
   // pretending.
   const [tgLink, setTgLink] = useState<string | null>(null);
+  // Fired at most once per site. State cannot guard this by itself: two
+  // invocations that start before the first resolves both still read `null`,
+  // and each one asks the server to mint a token.
+  const tgAsked = useRef(false);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1454,7 +1458,8 @@ export function OnboardChat({
   // instead of a trip to the sites list to press a differently-named button
   // there (owner report: «too many actions»).
   useEffect(() => {
-    if (phase !== "done" || !draft?.host || tgLink !== null) return;
+    if (phase !== "done" || !draft?.host || tgAsked.current) return;
+    tgAsked.current = true;
     let cancelled = false;
     void getTelegramConnectLinkForHost(draft.host)
       .then((res) => {
@@ -1466,7 +1471,7 @@ export function OnboardChat({
     return () => {
       cancelled = true;
     };
-  }, [phase, draft?.host, tgLink]);
+  }, [phase, draft?.host]);
 
   // Consume the {t:"generate"} signal ONE render after applyResult set it —
   // by now facts/media/verticalId are flushed, so generation reads this
