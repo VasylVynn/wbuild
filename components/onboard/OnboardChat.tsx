@@ -751,10 +751,17 @@ export function OnboardChat({
   // (no bot configured / not the owner) and the row says so instead of
   // pretending.
   const [tgLink, setTgLink] = useState<string | null>(null);
-  // Fired at most once per site. State cannot guard this by itself: two
-  // invocations that start before the first resolves both still read `null`,
-  // and each one asks the server to mint a token.
-  const tgAsked = useRef(false);
+  // The in-flight (or settled) request, memoised BY HOST. Not a boolean "already
+  // asked": a flag set before the answer arrives turns a second effect pass into
+  // a permanent «Готуємо…», because the pass that owned the request has had its
+  // result discarded by its own cleanup and no pass is allowed to ask again.
+  // Holding the PROMISE instead means one request per site and every pass —
+  // StrictMode's double invoke, a remount, a phase bounce — subscribes to the
+  // same answer.
+  const tgReq = useRef<{
+    host: string;
+    promise: Promise<{ ok: true; link: string } | { ok: false; error: string }>;
+  } | null>(null);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1458,16 +1465,21 @@ export function OnboardChat({
   // instead of a trip to the sites list to press a differently-named button
   // there (owner report: «too many actions»).
   useEffect(() => {
-    if (phase !== "done" || !draft?.host || tgAsked.current) return;
-    tgAsked.current = true;
+    const host = draft?.host;
+    if (phase !== "done" || !host) return;
+    if (tgReq.current?.host !== host) {
+      tgReq.current = { host, promise: getTelegramConnectLinkForHost(host) };
+    }
     let cancelled = false;
-    void getTelegramConnectLinkForHost(draft.host)
+    tgReq.current.promise
       .then((res) => {
         if (!cancelled) setTgLink(res.ok ? res.link : "");
       })
       .catch(() => {
         if (!cancelled) setTgLink("");
       });
+    // Cancels this pass's setState only. The request itself is not abandoned —
+    // the next pass attaches to the very same promise and reads the answer.
     return () => {
       cancelled = true;
     };
