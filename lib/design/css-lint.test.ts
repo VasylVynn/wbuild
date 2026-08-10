@@ -59,4 +59,144 @@ describe("geometry-owned selectors", () => {
     const { cleanCss } = lintWireCss(".tpl-salonwire .wire-nav__links { overflow-x: hidden; }");
     expect(cleanCss).not.toContain("overflow-x");
   });
+
+  it("strips the values that HIDE the funnel, but keeps a fade as a hover state", () => {
+    const { cleanCss } = lintWireCss(
+      ".tpl-salonwire .wire-nav__cta { opacity: 0; }" +
+        ".tpl-salonwire .wire-leadform__form { visibility: hidden; }" +
+        ".tpl-salonwire .wire-nav__link:hover { opacity: 0.7; }",
+    );
+    expect(cleanCss).not.toContain("opacity: 0;");
+    expect(cleanCss).not.toContain("visibility");
+    expect(cleanCss).toContain("opacity: 0.7");
+  });
+});
+
+/**
+ * V9 — the brand lockup is identity, not surface. A live sheet wrote
+ * `.wire-nav__brandlock::before { content:""; background:rgb(185,69,11);
+ * width:9.59px; height:9.59px; border-radius:50% }` and hung an orange dot on a
+ * tenant's logo. It broke no rule: the prompt promises ::before/::after for
+ * decor, and a decor rule is exempt from the geometry strip, so nothing looked
+ * at it. The fix is not "the model misbehaved" — it is that identity was ever
+ * decoratable.
+ */
+describe("identity is not decoratable", () => {
+  it("strips the orange dot the live sheet hung on the nav brand lockup", () => {
+    const { cleanCss, violations } = lintWireCss(
+      '.tpl-salonwire .wire-nav__brandlock::before { content: ""; background: rgb(185,69,11); width: 9.59px; height: 9.59px; border-radius: 50%; }',
+    );
+    expect(cleanCss.trim()).toBe("");
+    expect(violations.join()).toContain("brand ornament");
+  });
+
+  it("covers the mark, the wordmark and the footer lockup, both pseudo spellings", () => {
+    const { cleanCss } = lintWireCss(
+      '.tpl-salonwire .wire-brandmark::after { content: "★"; }' +
+        '.tpl-salonwire .wire-nav__brand:before { content: "| "; }' +
+        '.tpl-salonwire .wire-footer__brandlock::before { content: ""; }' +
+        '.tpl-salonwire .wire-footer__logo::after { content: ""; }',
+    );
+    expect(cleanCss.trim()).toBe("");
+  });
+
+  it("drops ONLY the identity selector from a rule shared with ordinary decor", () => {
+    const { cleanCss } = lintWireCss(
+      '.tpl-salonwire .wire-card::before, .tpl-salonwire .wire-nav__brandlock::before { content: ""; background: #b9450b; }',
+    );
+    expect(cleanCss).toContain(".wire-card::before");
+    expect(cleanCss).not.toContain("brandlock");
+    expect(cleanCss).toContain("background: #b9450b"); // the card keeps its decor
+  });
+
+  it("keeps the ::before/::after freedom the prompt promises ordinary sections", () => {
+    const { cleanCss, violations } = lintWireCss(
+      '.tpl-salonwire .wire-section::before { content: ""; background: #b9450b; }',
+    );
+    expect(cleanCss).toContain("content");
+    expect(violations).toEqual([]);
+  });
+
+  it("leaves colour and type on the lockups — that IS the header's character", () => {
+    const { cleanCss, violations } = lintWireCss(
+      ".tpl-salonwire .wire-nav__brandlock { background: #fff8ee; border-radius: 8px; }" +
+        ".tpl-salonwire .wire-nav__brand { color: #2b1a10; letter-spacing: 0.06em; font-weight: 700; }",
+    );
+    expect(cleanCss).toContain("background: #fff8ee");
+    expect(cleanCss).toContain("letter-spacing: 0.06em");
+    expect(violations).toEqual([]);
+  });
+});
+
+describe("the brand mark is the owner's pixels", () => {
+  it("strips everything that repaints, fades, masks or distorts the artwork", () => {
+    const { cleanCss } = lintWireCss(
+      ".tpl-salonwire .wire-brandmark { background: #000; opacity: 0.4; filter: invert(1); " +
+        "mix-blend-mode: multiply; clip-path: circle(50%); -webkit-mask-image: linear-gradient(#000,#000); " +
+        "transform: rotate(4deg); border-radius: 999px; }",
+    );
+    for (const gone of [
+      "background",
+      "opacity",
+      "filter",
+      "mix-blend-mode",
+      "clip-path",
+      "mask-image",
+      "transform",
+    ]) {
+      expect(cleanCss).not.toContain(gone);
+    }
+    expect(cleanCss).toContain("border-radius: 999px"); // the chip's shape stays the stylist's
+  });
+
+  it("keeps the size knobs wire.css hands the stylist on the placement aliases", () => {
+    const { cleanCss, violations } = lintWireCss(
+      ".tpl-salonwire .wire-nav__logo { --wire-brandmark-size: 2.75rem; --wire-brandmark-max: 12rem; }",
+    );
+    expect(cleanCss).toContain("--wire-brandmark-size: 2.75rem");
+    expect(cleanCss).toContain("--wire-brandmark-max: 12rem");
+    expect(violations).toEqual([]);
+  });
+
+  it("strips `content` on a real element — on an <img> it swaps the logo outright", () => {
+    const { cleanCss } = lintWireCss(
+      '.tpl-salonwire .wire-brandmark { content: url("data:image/svg+xml,x"); }',
+    );
+    expect(cleanCss).not.toContain("content");
+  });
+});
+
+describe("code-owned custom properties and whole-rule resets", () => {
+  it("strips the measurements: the logo plate and the hero crop anchor", () => {
+    const { cleanCss, violations } = lintWireCss(
+      ".tpl-salonwire .wire-brandmark--plated { --wire-brandmark-plate: #000; }" +
+        ".tpl-salonwire .wire-hero__bg { --wire-hero-focus: 50% 90%; }",
+    );
+    expect(cleanCss).not.toContain("--wire-brandmark-plate");
+    expect(cleanCss).not.toContain("--wire-hero-focus");
+    expect(violations).toHaveLength(2);
+  });
+
+  it("keeps the custom properties wire.css declares as the stylist's", () => {
+    const { cleanCss } = lintWireCss(
+      ".tpl-salonwire .wire-hero { --wire-scrim: linear-gradient(#000, #000); --wire-split-order: -1; }",
+    );
+    expect(cleanCss).toContain("--wire-scrim");
+    expect(cleanCss).toContain("--wire-split-order");
+  });
+
+  it("strips `all`, which takes back a whole wire.css rule in one declaration", () => {
+    const { cleanCss } = lintWireCss(
+      ".tpl-salonwire .wire-nav__inner { all: unset; background: #fff; }",
+    );
+    expect(cleanCss).not.toContain("all:");
+    expect(cleanCss).toContain("background: #fff");
+  });
+
+  it("strips content-visibility and contain, which hide or clip real content", () => {
+    const { cleanCss } = lintWireCss(
+      ".tpl-salonwire .wire-section { content-visibility: hidden; contain: paint; }",
+    );
+    expect(cleanCss.trim()).toBe("");
+  });
 });

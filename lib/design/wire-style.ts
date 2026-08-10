@@ -15,7 +15,12 @@ import type { DesignSpec, SectionPlanEntry } from "@/lib/site/design-spec";
  * business brief, and returns a stylesheet. Layout is off-limits (wire.css owns
  * it), fonts and motion are code-owned facts stated by the brief (pipeline v2
  * §1/§3-S3) — everything else on the SURFACE (colour, type weight, shadow,
- * radius, spacing, pseudo-elements) is its call. A v2 designSpec anchors the
+ * radius, spacing, pseudo-elements) is its call. The one carve-out is IDENTITY
+ * (V9): the brand mark is the owner's pixels and its lockups take no ornaments,
+ * because a sheet hung a decorative dot beside a tenant's logo. The prompt
+ * states that rule so the model spends its output on what will survive —
+ * css-lint enforces it either way, and a stripped rule the model believed in
+ * leaves a sheet reasoning about decor that is no longer there. A v2 designSpec anchors the
  * palette roles; without one the colour world is fully the model's. That
  * freedom is what makes two sites in one niche look genuinely different
  * instead of recolouring the same template.
@@ -49,7 +54,7 @@ const SYSTEM = `Ти — сильний веб-дизайнер, який пиш
 - box-shadow, border, border-radius, outline
 - padding і margin ВСЕРЕДИНІ секцій
 - align-items, justify-content, text-align, gap
-- ::before / ::after для декору, роздільників, лічильників, акцентних смуг
+- ::before / ::after для декору, роздільників, лічильників, акцентних смуг — у секціях. Виняток один: знак бренду (див. нижче)
 - transition і hover-стани
 - 1–2 делікатні анімації через @keyframes (напр. мʼяке проявлення акценту, легкий підйом картки на hover). Каркас уже має власний scroll-reveal і базові transition — не дублюй їх і не роби нічого, що смикається чи блимає. НЕ загортай анімації в @media: усі @media з твого CSS вирізаються, лишиться порожньо
 - --wire-split-order, щоб перекинути фото switchback ліворуч або праворуч
@@ -64,6 +69,15 @@ const SYSTEM = `Ти — сильний веб-дизайнер, який пиш
 - будь-які @media, що звужують уже наявні брейкпоінти або ламають мобільний вигляд
 - display:none на секціях чи їхньому вмісті
 - @import, url() на зовнішні домени, будь-які шрифти ззовні
+
+ЗНАК БРЕНДУ — це ідентичність бізнесу, а не поверхня. Це єдине місце сторінки, де декор заборонений:
+- .wire-brandmark, .wire-nav__logo, .wire-footer__logo — це піксели власника, його лого. Не перефарбовуй і не переробляй його: background, opacity, visibility, filter, backdrop-filter, mix-blend-mode, mask, clip-path, transform і content там вирізаються. Твоє тут — тільки --wire-brandmark-size і --wire-brandmark-max
+- .wire-nav__brandlock, .wire-nav__brand, .wire-footer__brandlock — лого-блоки в шапці й у футері. Колір, шрифт, вага, трекінг, фон самого блока — ТВОЇ, це і є характер шапки. Але ::before / ::after на них вирізаються цілком: жодних крапок, рисок, зірочок чи іконок біля лого й назви бізнесу
+- у всіх інших секціях ::before / ::after лишаються твоїми в повному обсязі
+
+CODE-ЗМІННІ (не пиши їх — вирізаються): --font-heading, --font-body, --wire-brandmark-plate (колір, ЗАМІРЯНИЙ з пікселів лого власника), --wire-hero-focus (точка кадрування реального фото). Це виміри, а не смак.
+
+ЩЕ ТРИ ВЛАСТИВОСТІ, які вирізаються всюди: content поза ::before/::after (він підміняє вміст елемента, а не декорує його — на <img> просто замінює лого), all (скидає одразу все правило каркаса) і content-visibility / contain (ховають або обрізають контент).
 
 ШРИФТИ: шрифтову пару (заголовки/основний текст) задає бриф, а підключає код при рендері. НЕ пиши font-family і НЕ чіпай змінні --font-heading/--font-body — вони будуть вирізані. Твої інструменти — вага, розмір, letter-spacing, line-height, регістр.
 

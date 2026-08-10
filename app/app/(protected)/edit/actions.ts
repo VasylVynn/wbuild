@@ -11,6 +11,7 @@ import type { BusinessFacts } from "@/lib/verticals/schema";
 import { type PageSeo } from "@/lib/tenant/types";
 import type { PageContent } from "@/lib/site/page-content";
 import type { DesignSpec } from "@/lib/site/design-spec";
+import type { BrandLogoSource } from "@/lib/templates/brand";
 import { publishDraft } from "@/lib/site/publish";
 import { runPipeline } from "@/lib/site/pipeline";
 import { casUpdateDraft, readContentRev } from "@/lib/site/draft-cas";
@@ -40,10 +41,11 @@ export interface EditorData {
   // The wireframe this draft was composed against — the preview renders through
   // its OWN section components + wrapper, matching the published site.
   templateId?: string;
-  displayLogoUrl?: string;
-  // Opaque-logo backdrop measured at import (Tenant.brand.logoPlate) — the
-  // editor preview must render the brand mark exactly like the public site.
-  displayLogoPlate?: string;
+  // The tenant's whole logo record (original + adapted + the measured plate).
+  // Passed through unresolved so the preview runs the SAME resolution as the
+  // public site (buildTemplateBrand → resolveDisplayLogo) instead of a second
+  // copy of the rule that could drift.
+  displayLogo?: BrandLogoSource;
   // The model-written stylesheet for this draft. The frame preview must read the
   // DRAFT's design, or it shows a bare grey wireframe while the site is styled.
   wireCss?: string;
@@ -84,8 +86,7 @@ export async function getEditorData(host: string): Promise<EditorData | null> {
     templateId: (p?.draft_content as { templateId?: string } | null)?.templateId,
     wireCss: (p?.draft_content as { wireCss?: string } | null)?.wireCss,
     designSpec: (p?.draft_content as { designSpec?: DesignSpec } | null)?.designSpec,
-    displayLogoUrl: (t.brand as { logoUrl?: string } | null)?.logoUrl,
-    displayLogoPlate: (t.brand as { logoPlate?: string } | null)?.logoPlate,
+    displayLogo: (t.brand ?? undefined) as BrandLogoSource | undefined,
     seo: (p?.draft_content as { seo?: PageSeo } | null)?.seo,
   };
 }

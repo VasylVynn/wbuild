@@ -97,10 +97,11 @@ export default async function TenantPage({ params }: { params: Params }) {
       tenant.brand.businessName ?? "",
       page.blocks,
       template,
-      tenant.brand.logoUrl,
+      // The whole logo record, not a single URL: buildTemplateBrand resolves
+      // adapted-over-original and pairs the plate with the asset it belongs to.
+      tenant.brand,
       page.wireCss,
       page.designSpec,
-      tenant.brand.logoPlate,
     );
   }
 

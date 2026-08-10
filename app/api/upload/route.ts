@@ -3,6 +3,8 @@ import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { checkRateLimit, ipFromHeaders } from "@/lib/rate-limit";
 // Safe static import: palette.ts lazy-loads sharp itself and fails open (null).
 import { extractLogoPalette, extractPalette } from "@/lib/media/palette";
+// Same contract: sharp is lazy inside, every failure path returns null.
+import { ensureAdaptedLogo } from "@/lib/media/logo";
 
 /**
  * Photo upload (§4.8 MVP): the CLIENT pre-processes (canvas re-encode strips
@@ -142,6 +144,15 @@ export async function POST(req: NextRequest) {
   }
 
   const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(mainPath);
+
+  // L1 (owner audit 2026-08-10): a mark exported onto a solid canvas — the
+  // classic circular badge on an opaque black square — is masked to real alpha
+  // and stored as a SIBLING file; the original above is never touched. The
+  // buffer is handed over directly so this costs no Storage round-trip.
+  // Fail-open: nothing proved / sharp absent → no field, render uses the original.
+  const adapted =
+    kind === "logo" ? await ensureAdaptedLogo(pub.publicUrl, corrected ?? buf) : null;
+
   // `palette` is additive: existing clients read {url, warnings} and ignore it;
   // the chat/editor upload flows may thread it into PhotoMeta (§3-S0).
   return NextResponse.json({
@@ -149,5 +160,7 @@ export async function POST(req: NextRequest) {
     url: pub.publicUrl,
     warnings,
     ...(palette?.length && { palette }),
+    ...(adapted && { logoAdaptedUrl: adapted.url }),
+    ...(adapted?.inkL !== undefined && { logoInkL: adapted.inkL }),
   });
 }

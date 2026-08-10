@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { buildTemplateBrand } from "./brand";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { buildTemplateBrand, resolveDisplayLogo } from "./brand";
 import type { SiteTemplate } from "./registry";
 import type { DesignSpec } from "@/lib/site/design-spec";
 
@@ -146,11 +146,97 @@ describe("buildTemplateBrand nav budget", () => {
   });
 });
 
+/** ONE door into the display logo: the record, storage-checked. The bare-string
+ *  overload is gone — it skipped that check (invariant 1) and by the end existed
+ *  only to keep these two lines compiling. */
 describe("buildTemplateBrand logo plate", () => {
+  const SUPABASE_URL = "https://proj.supabase.co";
+  const stored = `${SUPABASE_URL}/storage/v1/object/public/photos/t/logo.webp`;
+  const prevUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  beforeAll(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL;
+  });
+  afterAll(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl;
+  });
+
   it("threads the measured plate through; absent stays absent (no plate is safe)", () => {
     expect(
-      buildTemplateBrand("X", [], template, "/logo.png", undefined, undefined, "#0b0b0b").logoPlate,
+      buildTemplateBrand("X", [], template, { logoUrl: stored, logoPlate: "#0b0b0b" }).logoPlate,
     ).toBe("#0b0b0b");
-    expect("logoPlate" in buildTemplateBrand("X", [], template, "/logo.png")).toBe(false);
+    expect("logoPlate" in buildTemplateBrand("X", [], template, { logoUrl: stored })).toBe(false);
+  });
+});
+
+/**
+ * The display-logo contract (V9 / owner audit L1). The URL choice belongs to
+ * `brandLogoUrl` (lib/media/media.ts) — these cover what buildTemplateBrand adds
+ * on top: passing `tenant.brand` whole works, and the PLATE stays paired with
+ * the asset it was measured from. A plate carried onto an adapted, now
+ * transparent mark would paint the original's opaque canvas back behind it —
+ * the black slab the adaptation just removed.
+ */
+describe("resolveDisplayLogo — adapted over original, plate paired to the asset", () => {
+  const SUPABASE_URL = "https://proj.supabase.co";
+  const stored = (name: string) =>
+    `${SUPABASE_URL}/storage/v1/object/public/photos/t/${name}.webp`;
+  const prevUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  beforeAll(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL;
+  });
+  afterAll(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl;
+  });
+
+  it("shows the adapted mark and DROPS the original's plate with it", () => {
+    expect(
+      resolveDisplayLogo({
+        logoUrl: stored("orig"),
+        logoAdaptedUrl: stored("adapted"),
+        logoPlate: "#0b0b0b",
+      }),
+    ).toEqual({ logoUrl: stored("adapted") });
+  });
+
+  it("falls back to the original WITH its plate when no adaptation was possible", () => {
+    expect(resolveDisplayLogo({ logoUrl: stored("orig"), logoPlate: "#0b0b0b" })).toEqual({
+      logoUrl: stored("orig"),
+      logoPlate: "#0b0b0b",
+    });
+  });
+
+  it("keeps a NEUTRAL chip when the adapted mark's own ink is as pale as the nav", () => {
+    // The measured tennis badge: masking the black square away leaves a pale
+    // blue disc (mean L* ≈ 90) on a #fafafa nav (L* ≈ 98) — invisible without a
+    // chip, and the chip is a neutral, never the black slab we just removed.
+    expect(
+      resolveDisplayLogo({ logoUrl: stored("orig"), logoAdaptedUrl: stored("adapted"), logoInkL: 90 }),
+    ).toEqual({ logoUrl: stored("adapted"), logoPlate: "#1c1c1c" });
+  });
+
+  it("gives a dark adapted mark no chip — it already reads on the light chrome", () => {
+    expect(resolveDisplayLogo({ logoAdaptedUrl: stored("adapted"), logoInkL: 22 })).toEqual({
+      logoUrl: stored("adapted"),
+    });
+  });
+
+  it("refuses a foreign URL in either field (invariant 1)", () => {
+    expect(
+      resolveDisplayLogo({
+        logoUrl: "https://cdn.example.com/logo.png",
+        logoAdaptedUrl: "https://cdn.example.com/logo-cut.png",
+      }),
+    ).toEqual({});
+    expect(resolveDisplayLogo(undefined)).toEqual({});
+  });
+
+  it("buildTemplateBrand takes the record whole — both chrome placements read one field", () => {
+    const brand = buildTemplateBrand("X", [], template, {
+      logoUrl: stored("orig"),
+      logoAdaptedUrl: stored("adapted"),
+      logoPlate: "#0b0b0b",
+    });
+    expect(brand.logoUrl).toBe(stored("adapted"));
+    expect("logoPlate" in brand).toBe(false);
   });
 });

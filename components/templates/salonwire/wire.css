@@ -252,10 +252,23 @@
  * as deliberate on the light nav and the dark footer alike. Transparent asset →
  * no plate. No logo → wordmark only; never a placeholder, never a monogram.
  *
+ * IDENTITY IS NOT A SURFACE (V9). The mark is the owner's own pixels, so the
+ * generated sheet may size its box and nothing else: `background`, `opacity`,
+ * `visibility`, `filter`, `backdrop-filter`, `mix-blend-mode`, `mask`,
+ * `clip-path`, `transform` and `content` are STRIPPED by css-lint on
+ * `.wire-brandmark`/`.wire-nav__logo`/`.wire-footer__logo`. And nothing may be
+ * hung beside it: `::before`/`::after` on the mark or on either brand lockup
+ * (`.wire-nav__brandlock`, `.wire-nav__brand`, `.wire-footer__brandlock`) is
+ * stripped whole — a live sheet drew a small orange dot next to a tenant's logo
+ * that way. Everywhere ELSE the ::before/::after decor layer is yours in full.
+ *
  * YOURS: `--wire-brandmark-size`/`--wire-brandmark-max`, the chip's radius and
- * padding. LOCKED: display, object-fit, align-self, inline-size, box-sizing —
- * and `--wire-brandmark-plate`, which is a measurement, not a taste. Never set
- * a width/height pair on `.wire-brandmark`/`.wire-nav__logo`/`.wire-footer__logo`.
+ * padding, and every surface property on the LOCKUPS themselves (colour, type,
+ * weight, tracking, a background behind the whole lockup) — that is where a
+ * header gets its character. LOCKED: display, object-fit, align-self,
+ * inline-size, box-sizing — and `--wire-brandmark-plate`, which is a
+ * measurement, not a taste. Never set a width/height pair on
+ * `.wire-brandmark`/`.wire-nav__logo`/`.wire-footer__logo`.
  */
 
 .wire-brandmark {
@@ -682,6 +695,11 @@
    carries alongside this alias. The old `height + width:auto` pair here was
    what let a sheet's `object-fit: fill` squash a square logo to 240×40. */
 .wire-footer__logo { --wire-brandmark-size: 2.5rem; }
+/* The footer's brand block, named so identity is lockable on BOTH ends of the
+   page (css-lint BRAND_LOCKUP): colour and type here are yours, ornaments are
+   not. `min-inline-size: 0` for the same reason as the nav's lockup — a long
+   business name must not blow the footer's grid column open. */
+.wire-footer__brandlock { min-inline-size: 0; }
 /* EVERY link in the footer carries this class ALONE — never `.wire-nav__link`
    (sheet-coloured for the LIGHT nav: 2.4:1 on a dark footer) and never
    `.wire-text` (whose ink is contrast-checked against `.wire-section` and

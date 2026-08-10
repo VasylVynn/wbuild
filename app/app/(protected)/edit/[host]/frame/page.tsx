@@ -43,10 +43,9 @@ export default async function EditorFramePage({
           data.businessName,
           data.blocks,
           template,
-          data.displayLogoUrl,
+          data.displayLogo,
           data.wireCss,
           data.designSpec,
-          data.displayLogoPlate,
         )}
       />
     </div>

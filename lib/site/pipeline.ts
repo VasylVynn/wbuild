@@ -15,6 +15,7 @@ import {
 } from "@/lib/media/media";
 import { MIN_USABLE_PHOTOS, usablePhotoCount } from "@/lib/media/rank";
 import { aggregatePalette, eligiblePaletteMetas, extractPalette, measureLogoPlateFromUrl } from "@/lib/media/palette";
+import { ensureAdaptedLogo } from "@/lib/media/logo";
 import { buildDossier, buildDossierForTenant, type Dossier } from "@/lib/dossier";
 import { runDraftQualityLoop } from "@/lib/site/inspect";
 import { advanceDesignNonce, nonceForBrandWrite, rollAxis } from "@/lib/design/seed";
@@ -595,14 +596,39 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
       // while the logo URL is unchanged — a re-measure per generation would
       // put a network fetch on the preview write's critical path. Fail-open:
       // no measurement → no plate → today's rendering.
+      //
+      // L1 (same audit): this is also the ONE funnel where an onboarding logo
+      // becomes brand data — an owner upload and an Instagram avatar both
+      // arrive here as `media.logoUrl` — so the canvas adaptation is derived
+      // here too. It writes a SIBLING file and never rewrites `logoUrl`.
+      // `ensureAdaptedLogo` short-circuits when the mark already exists (the
+      // upload route usually made it), so the steady state is one list call.
       const sameLogo = !!media?.logoUrl && carriedBrand.logoUrl === media.logoUrl;
       let logoPlate =
         sameLogo && typeof carriedBrand.logoPlate === "string" ? carriedBrand.logoPlate : undefined;
+      let logoAdaptedUrl =
+        sameLogo && typeof carriedBrand.logoAdaptedUrl === "string"
+          ? carriedBrand.logoAdaptedUrl
+          : undefined;
+      let logoInkL =
+        sameLogo && typeof carriedBrand.logoInkL === "number" ? carriedBrand.logoInkL : undefined;
       if (media?.logoUrl && !sameLogo) {
-        const measured = await measureLogoPlateFromUrl(media.logoUrl);
-        if (measured && /^#[0-9a-f]{6}$/i.test(measured)) logoPlate = measured;
+        const adapted = await ensureAdaptedLogo(media.logoUrl);
+        logoAdaptedUrl = adapted?.url;
+        // The adapted mark's own ink: masking the canvas away also removed the
+        // contrast it provided, so the chrome needs to know whether what is left
+        // still reads on a light nav (`resolveDisplayLogo`).
+        logoInkL = adapted?.inkL;
+        // Only when nothing was cut out: a plate painted behind an ADAPTED mark
+        // would restore the very slab the mask removed.
+        if (!logoAdaptedUrl) {
+          const measured = await measureLogoPlateFromUrl(media.logoUrl);
+          if (measured && /^#[0-9a-f]{6}$/i.test(measured)) logoPlate = measured;
+        }
       }
       delete carriedBrand.logoPlate;
+      delete carriedBrand.logoAdaptedUrl;
+      delete carriedBrand.logoInkL;
       const { data: tenant, error: tErr } = await sb
         .from("tenants")
         .upsert(
@@ -615,6 +641,8 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
               businessName: facts.businessName,
               ...brandSeedFields,
               ...(media?.logoUrl && { logoUrl: media.logoUrl }),
+              ...(logoAdaptedUrl && { logoAdaptedUrl }),
+              ...(logoInkL !== undefined && { logoInkL }),
               ...(logoPlate && { logoPlate }),
               ...(media?.photos?.length && { photos: media.photos }),
               ...(brandPhotoMeta.length && { photoMeta: brandPhotoMeta }),

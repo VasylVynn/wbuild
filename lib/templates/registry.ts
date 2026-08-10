@@ -39,14 +39,21 @@ export type { TemplateSectionDef };
 export interface TemplateBrand {
   brandName?: string;
   brandAccent?: string;
-  /** Owner's logo (storage URL). Absent → the Nav keeps its text-only brand. */
+  /** The DISPLAY mark (storage URL) — already resolved by `resolveDisplayLogo`
+   *  (lib/templates/brand.ts): the ADAPTED asset when the media import could
+   *  prove and remove the asset's background, the owner's untouched original
+   *  otherwise. One field on purpose: the chrome must not branch on which of
+   *  the two it got, or the nav and the footer eventually disagree.
+   *  Absent → the Nav keeps its text-only brand. */
   logoUrl?: string;
-  /** Backdrop for an OPAQUE logo asset, measured from the asset's own pixels at
-   *  import: `"none"`/absent → the mark sits directly on the chrome surface; a
-   *  hex → the wireframe chrome renders a small chip in that colour behind the
-   *  mark, so a logo that ships on a black square reads as a deliberate badge
-   *  on both the light nav and the dark footer instead of a rendering accident.
-   *  Never a design choice — it depends on the owner's pixels. */
+  /** Backdrop for an OPAQUE logo asset, measured from THAT asset's own pixels
+   *  at import: `"none"`/absent → the mark sits directly on the chrome surface;
+   *  a hex → the wireframe chrome renders a small chip in that colour behind
+   *  the mark, so a logo that ships on a coloured square reads as a deliberate
+   *  badge on both the light nav and the dark footer instead of a rendering
+   *  accident. Never a design choice — it depends on the owner's pixels, and
+   *  it is only ever set for the asset actually being displayed (an adapted
+   *  mark is transparent by construction and never carries one). */
   logoPlate?: string;
   navLinks?: { href: string; label: string }[];
   /** Every linkable section in document order, UNCAPPED. `navLinks` is the

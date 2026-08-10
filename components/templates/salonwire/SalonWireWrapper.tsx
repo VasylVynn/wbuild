@@ -75,6 +75,13 @@ function logoPlate(brand?: TemplateBrand): string | undefined {
  * geometry, the `--nav`/`--footer` alias only sets its size, and the plate is
  * an inline custom property because it is per-tenant data, not a design choice.
  *
+ * `brand.logoUrl` is the DISPLAY mark, already resolved upstream
+ * (`resolveDisplayLogo`, lib/templates/brand.ts): the adapted asset when the
+ * import could prove and remove a background, the owner's original otherwise.
+ * The wrapper deliberately does not know which it got — one field, one <img>,
+ * the same component in the nav and in the footer, so the two placements can
+ * never drift apart.
+ *
  * `alt=""` on purpose: the business name is rendered as text right next to the
  * mark, so announcing it twice is noise.
  */
@@ -171,7 +178,11 @@ export function SalonWireWrapper({
         }`}
       >
         <div className="wire-container wire-footer__inner">
-          <div className="wire-stack">
+          {/* `wire-footer__brandlock` is the footer's half of the identity
+              lock (css-lint BRAND_LOCKUP): the sheet may colour and set this
+              block, but may not hang a ::before/::after ornament on it — the
+              same guarantee the nav's lockup carries. */}
+          <div className="wire-stack wire-footer__brandlock">
             {brand?.logoUrl && <BrandMark src={brand.logoUrl} place="footer" plate={plate} />}
             <span className="wire-heading">{fullBrandName(brand)}</span>
           </div>

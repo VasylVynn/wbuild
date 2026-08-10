@@ -10,6 +10,35 @@ import type { DesignSpec } from "@/lib/site/design-spec";
 
 export type TenantStatus = "demo" | "draft" | "published" | "suspended";
 
+/**
+ * THE logo record on `tenants.brand` — declared ONCE, here, and re-exported as
+ * `BrandLogoSource` from lib/templates/brand.ts, which is where it is consumed.
+ * The render path hands `tenant.brand` over WHOLE (`buildTemplateBrand` →
+ * `resolveDisplayLogo`), so every field it reads must be declared on the tenant
+ * model too: a second, partial declaration is how a renamed or dropped write
+ * passes the compiler and fails in production.
+ */
+export interface BrandLogoRecord {
+  /** The owner's ORIGINAL upload. Never rewritten, never deleted. */
+  logoUrl?: string;
+  /** Our sibling-stored adaptation of it (lib/media/logo.ts): the same artwork
+   *  with a baked-in canvas masked to real alpha. Written ONLY when the pixels
+   *  proved what could be removed — absent means "we could not prove it", not
+   *  "we did not try". */
+  logoAdaptedUrl?: string;
+  /** Backdrop measured from the ORIGINAL's own pixels at import: `"none"` (the
+   *  asset has a transparent background) or a hex (it is opaque, so the chrome
+   *  renders a matching chip behind it instead of letting a black square read
+   *  as a rendering accident). A MEASUREMENT, not a design choice — see
+   *  TemplateBrand.logoPlate. Absent → no plate. */
+  logoPlate?: string;
+  /** Mean CIE L* of the ADAPTED mark's own ink. Masking the canvas away also
+   *  removes the contrast that came with it, so this is what tells the chrome
+   *  whether the surviving artwork still reads on the surface it lands on —
+   *  measured, never chosen. Absent → no chip. */
+  logoInkL?: number;
+}
+
 export interface Tenant {
   id: string;
   /**
@@ -21,16 +50,11 @@ export interface Tenant {
    *  sitemap, JSON-LD, metadataBase) is built from this, never the request host. */
   canonicalHostname: string;
   status: TenantStatus;
-  brand: {
+  /** The logo record (`BrandLogoRecord`) is mixed in whole — the render path
+   *  passes `tenant.brand` straight into `buildTemplateBrand`. */
+  brand: BrandLogoRecord & {
     businessName: string;
     tagline?: string;
-    logoUrl?: string;
-    /** Backdrop measured from the logo's own pixels at import: `"none"` (the
-     *  asset has a transparent background) or a hex (it is opaque, so the
-     *  chrome renders a matching chip behind it instead of letting a black
-     *  square read as a rendering accident). A MEASUREMENT, not a design
-     *  choice — see TemplateBrand.logoPlate. Absent → no plate. */
-    logoPlate?: string;
     /** Owner-uploaded photos (§4.8) — the trusted source for hero/gallery imagery. */
     photos?: string[];
     /** Atmospheric hero background generated when the owner has NO photos (§4.8).

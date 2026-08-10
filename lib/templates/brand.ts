@@ -1,5 +1,7 @@
 import type { StoredBlock } from "@/lib/blocks/schema";
 import type { SiteTemplate, TemplateBrand } from "@/lib/templates/registry";
+import type { BrandLogoRecord } from "@/lib/tenant/types";
+import { isStorageUrl } from "@/lib/media/media";
 
 /**
  * Build the TemplateBrand (Nav/Footer identity) for a template site from the
@@ -52,24 +54,85 @@ function navRank(section: string): number {
   return i === -1 ? NAV_RANK.length : i;
 }
 
+/**
+ * The tenant's logo record as stored on `tenants.brand`, declared ONCE on the
+ * tenant model (lib/tenant/types.ts) and re-exported here, where it is read.
+ * Structurally typed so `tenant.brand` can be handed over WHOLE: the render
+ * path never picks a URL out of it by hand, which is how the nav and the footer
+ * stay in step, and a new field there needs no rewiring.
+ */
+export type BrandLogoSource = BrandLogoRecord;
+
+/** The chrome surface the mark is drawn on: wire.css `--wire-surface: #fafafa`
+ *  (`.wire-nav`), in CIE L*. The footer's background is the generated sheet's,
+ *  so the nav is the one surface we can name deterministically — and the one an
+ *  invisible mark is most often reported on. */
+const CHROME_SURFACE_L = 98;
+/** Closer than this and the mark and the surface are the same tone: the artwork
+ *  is there and nobody can see it. */
+const INK_SURFACE_MIN_DELTA_L = 20;
+/** A NEUTRAL chip, deliberately not the original canvas colour — the point of
+ *  the adaptation was to remove that slab, not to repaint it. This only ever
+ *  appears behind a mark measured to be as pale as the chrome it sits on. */
+const NEUTRAL_PLATE = "#1c1c1c";
+
+/**
+ * THE display-logo contract (owner audit L1): every surface that shows the
+ * brand mark resolves through here — public nav and footer, editor preview.
+ * Adapted when we have one, the owner's original otherwise, and NEITHER unless
+ * it lives in our own bucket (invariant 1: a foreign URL can never be a site's
+ * logo, whatever a tampered row says).
+ *
+ * The pairing is the part that is easy to get wrong. A plate belongs to the
+ * ASSET IT WAS MEASURED FROM, not to the tenant: an adapted mark is transparent
+ * by construction, so carrying the original's plate across would paint the
+ * original's opaque canvas colour behind it — the black slab straight back,
+ * behind a mark that no longer needs any backdrop at all. The write side
+ * already declines to store both; this is the belt, and it is what keeps the
+ * two placements honest if a row ever carries both.
+ *
+ * What replaces the plate for an adapted mark is a MEASUREMENT of the mark
+ * itself. Masking a canvas away removes the contrast that came with it: the
+ * pale badge that read perfectly on its black square is a pale shape on a
+ * near-white nav once the square is gone — a different failure, not a fix. So
+ * when `logoInkL` says the surviving ink is the same tone as the chrome surface,
+ * the mark keeps a chip; but a NEUTRAL one, never the canvas colour we removed.
+ *
+ * Fail-open in both directions: no adapted asset → the original plus whatever
+ * plate was measured for it; no measurement → no chip, which is always safe.
+ */
+export function resolveDisplayLogo(src?: BrandLogoSource): {
+  logoUrl?: string;
+  logoPlate?: string;
+} {
+  if (!src) return {};
+  if (isStorageUrl(src.logoAdaptedUrl)) {
+    const inkL = src.logoInkL;
+    const vanishes =
+      typeof inkL === "number" && Math.abs(CHROME_SURFACE_L - inkL) < INK_SURFACE_MIN_DELTA_L;
+    return { logoUrl: src.logoAdaptedUrl, ...(vanishes ? { logoPlate: NEUTRAL_PLATE } : {}) };
+  }
+  if (!isStorageUrl(src.logoUrl)) return {};
+  return { logoUrl: src.logoUrl, ...(src.logoPlate ? { logoPlate: src.logoPlate } : {}) };
+}
+
 export function buildTemplateBrand(
   businessName: string,
   blocks: StoredBlock[],
   template: SiteTemplate,
-  /** Display logo (storage URL) — the caller resolves original vs adapted. */
-  logoUrl?: string,
+  /** The tenant's logo record — pass `tenant.brand` whole and let
+   *  `resolveDisplayLogo` choose. ONE door: the bare-string overload used to
+   *  bypass the storage-URL check invariant 1 exists for, and by the end it was
+   *  keeping nothing but two fixture lines compiling. */
+  logo?: BrandLogoSource,
   /** The stylesheet the model wrote for this site, stored on its page content
    *  next to the blocks it was written for. */
   wireCss?: string,
   /** The design brief stored on the SAME page content copy as `wireCss`
    *  (published vs draft) — the wrapper renders fonts/motion from it. */
   designSpec?: TemplateBrand["designSpec"],
-  /** Opaque-logo backdrop measured at import (`"none"` | hex) — see
-   *  TemplateBrand.logoPlate. Absent → the mark renders with no plate, which is
-   *  always safe: a transparent asset needs none and an opaque one merely keeps
-   *  today's look. */
-  logoPlate?: string,
 ): TemplateBrand {
+  const display = resolveDisplayLogo(logo);
   // Nav real estate is precious: a name like «DIVA | салон краси Самбір»
   // renders as just «DIVA» — the first segment before a separator. The full
   // name still lives everywhere else (SEO, footer copyright, facts).
@@ -116,8 +179,8 @@ export function buildTemplateBrand(
   return {
     brandName: words.length > 1 ? words.slice(0, -1).join(" ") + " " : name,
     brandAccent: words.length > 1 ? words[words.length - 1] : "",
-    ...(logoUrl ? { logoUrl } : {}),
-    ...(logoPlate ? { logoPlate } : {}),
+    ...(display.logoUrl ? { logoUrl: display.logoUrl } : {}),
+    ...(display.logoPlate ? { logoPlate: display.logoPlate } : {}),
     navLinks,
     allSectionLinks,
     ctaHref: "#lead_form",

@@ -5,6 +5,7 @@ import { requireMember } from "@/lib/tenant/membership";
 import { revalidateTenant } from "@/lib/cache";
 import { isStorageUrl } from "@/lib/media/media";
 import { measureLogoPlateFromUrl } from "@/lib/media/palette";
+import { ensureAdaptedLogo } from "@/lib/media/logo";
 
 /**
  * Logo control for the editor (§4.8 + H1). The logo lives on the UNVERSIONED
@@ -16,7 +17,12 @@ import { measureLogoPlateFromUrl } from "@/lib/media/palette";
 
 type LogoResult = { ok: true; logoUrl?: string } | { ok: false; error: string };
 
-type BrandRow = { logoUrl?: string; logoPlate?: string } & Record<string, unknown>;
+type BrandRow = {
+  logoUrl?: string;
+  logoAdaptedUrl?: string;
+  logoPlate?: string;
+  logoInkL?: number;
+} & Record<string, unknown>;
 
 /** A hex plate is a MEASUREMENT of the asset (lib/media/palette). "none", an
  *  unmeasurable asset and a removed logo all mean: store no plate at all. */
@@ -50,16 +56,29 @@ export async function setLogoAction(host: string, url: string | null): Promise<L
 
   const brand = { ...((t.brand ?? {}) as BrandRow) };
   delete brand.logoPlate;
+  delete brand.logoAdaptedUrl;
+  delete brand.logoInkL;
   if (url === null) delete brand.logoUrl;
   else {
     brand.logoUrl = url;
-    // O1: a mark that ships on an opaque square gets a deliberate chip in the
-    // asset's own backdrop colour instead of a black rectangle on both the
-    // light nav and the dark footer. Measured here, at the one place the logo
-    // is persisted — never guessed at render time. Fail-open: no measurement
-    // (sharp absent, slow fetch) → no plate, which is today's rendering.
-    const plate = await measureLogoPlateFromUrl(url);
-    if (plate && PLATE_HEX.test(plate)) brand.logoPlate = plate;
+    // L1: artwork baked onto a solid canvas is masked to real alpha into a
+    // sibling file; `logoUrl` above stays the owner's untouched original, so
+    // removing the logo or a future change always falls back to it.
+    const adapted = await ensureAdaptedLogo(url);
+    if (adapted) {
+      brand.logoAdaptedUrl = adapted.url;
+      // The mark's own ink, so the chrome can tell "transparent" from
+      // "invisible" — a pale mark on the light nav still needs a chip.
+      if (adapted.inkL !== undefined) brand.logoInkL = adapted.inkL;
+    } else {
+      // O1, and ONLY when nothing was cut out: a mark that still ships on an
+      // opaque square gets a deliberate chip in the asset's own backdrop colour
+      // instead of a raw rectangle on the light nav and the dark footer.
+      // Painting a plate behind an ADAPTED mark would restore the slab we just
+      // removed — hence the else. Fail-open: no measurement → no plate.
+      const plate = await measureLogoPlateFromUrl(url);
+      if (plate && PLATE_HEX.test(plate)) brand.logoPlate = plate;
+    }
   }
 
   const { error } = await sb.from("tenants").update({ brand }).eq("id", t.id);

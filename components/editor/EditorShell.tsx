@@ -323,10 +323,9 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
         initial.businessName,
         blocks,
         template,
-        initial.displayLogoUrl,
+        initial.displayLogo,
         initial.wireCss,
         initial.designSpec,
-        initial.displayLogoPlate,
       )
     : undefined;
   const sectionEls = blocks.map((block, index) => (
