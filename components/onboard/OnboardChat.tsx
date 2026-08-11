@@ -12,13 +12,10 @@ import {
   ArrowRight,
   CircleAlert,
   Paperclip,
-  PartyPopper,
-  Pencil,
   RotateCcw,
   Sparkles,
   X,
 } from "lucide-react";
-import Link from "next/link";
 import { useSmoothText } from "@/components/useSmoothText";
 import type { ChatMsg } from "@/lib/ai/onboard";
 import { hasContactChannel } from "@/lib/onboard/contact-channel";
@@ -28,7 +25,6 @@ import { CLAIMED_BY_OTHER_ERROR } from "@/lib/onboard/claim-gate";
 import {
   onboardAction,
   generateDraftAction,
-  finalizeAction,
   sessionStateAction,
 } from "@/app/app/new/actions";
 // Type-only: erased at build time, so the module's `server-only` guard never
@@ -46,14 +42,10 @@ import {
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import { MAX_PHOTOS, type SiteMedia, type PhotoMeta } from "@/lib/media/media";
 import { processImage } from "@/lib/media/client-image";
-import { Button, Card, ConfirmDialog } from "@/components/ui";
+import { Button, ConfirmDialog } from "@/components/ui";
 import { appUrl, AUTH_RESUME_KEY, shouldRestoreConversation } from "@/components/onboard/embed-helpers";
 import { GoogleIcon } from "@/components/auth/AuthShell";
 import SitePreviewPanel from "@/components/onboard/SitePreviewPanel";
-import DomainStep from "@/components/onboard/DomainStep";
-import { getTelegramConnectLinkForHost } from "@/app/app/(protected)/(shell)/sites/actions";
-import { pixelTrack } from "@/lib/analytics/pixel";
-import { phCapture } from "@/components/analytics/PostHogProvider";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -613,15 +605,6 @@ const SendArrow = ({ className = "" }: { className?: string }) => (
   </svg>
 );
 
-const TelegramMark = ({ size = 34 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-    <circle cx="12" cy="12" r="12" fill="#229ED9" />
-    <path
-      d="M5.5 11.7l11.3-4.4c.5-.2 1 .1.8.9l-1.9 9c-.1.6-.5.8-1 .5l-2.9-2.2-1.4 1.4c-.2.2-.3.3-.6.3l.2-3 5.4-4.9c.2-.2 0-.3-.3-.1l-6.7 4.2-2.9-.9c-.6-.2-.6-.6 0-.8z"
-      fill="#FFFFFF"
-    />
-  </svg>
-);
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -736,33 +719,15 @@ export function OnboardChat({
   const [resetOpen, setResetOpen] = useState(false);
 
   // --- Draft preview (04 §2): a generated draft awaiting human publish ---
-  const [draft, setDraft] = useState<{ host: string; previewUrl: string; editUrl: string } | null>(
-    null,
-  );
 
   // --- Done / error state ---
-  const [siteUrl, setSiteUrl] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-  const [copied, setCopied] = useState(false);
   // The t.me deep link for THIS site, resolved as soon as the site is live.
   // Resolved ahead of the press on purpose: a link fetched inside the click
   // handler opens a window the browser did not attribute to a user gesture,
   // and pop-up blockers eat it. `null` = not resolved yet, "" = unavailable
   // (no bot configured / not the owner) and the row says so instead of
   // pretending.
-  const [tgLink, setTgLink] = useState<string | null>(null);
-  // The in-flight (or settled) request, memoised BY HOST. Not a boolean "already
-  // asked": a flag set before the answer arrives turns a second effect pass into
-  // a permanent «Готуємо…», because the pass that owned the request has had its
-  // result discarded by its own cleanup and no pass is allowed to ask again.
-  // Holding the PROMISE instead means one request per site and every pass —
-  // StrictMode's double invoke, a remount, a phase bounce — subscribes to the
-  // same answer.
-  const tgReq = useRef<{
-    host: string;
-    promise: Promise<{ ok: true; link: string } | { ok: false; error: string }>;
-  } | null>(null);
-
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Hidden file input behind the paperclip button (chat photo upload, wave G).
@@ -885,13 +850,10 @@ export function OnboardChat({
       // member — so reaching here with a host means the viewer may open the
       // authed editor frame.
       if (fromUrl && data.host) {
-        setMessages(data.messages);
-        setDraft({
-          host: data.host,
-          previewUrl: `/edit/${data.host}/frame`,
-          editUrl: `/edit/${data.host}`,
-        });
-        setPhase("preview");
+        // A draft already exists for this conversation — its home is the
+        // editor, exactly like a fresh generation's.
+        localStorage.removeItem("vitryna_conv_id");
+        window.location.href = appUrl(`/edit/${data.host}`);
         return;
       }
       if (fromUrl && wantsResume && sameTabAuth) {
@@ -943,13 +905,6 @@ export function OnboardChat({
       document.body.style.overflow = prev;
     };
   }, [overlayActive]);
-
-  // M6: a finished conversation must never restore — on ANY host. Publish
-  // already clears the key inline; this phase-driven clear covers every other
-  // path into "done".
-  useEffect(() => {
-    if (phase === "done") localStorage.removeItem("vitryna_conv_id");
-  }, [phase]);
 
   // Generation progress clock: NO real per-step signal exists (generateDraftAction
   // is one awaited server action), so this ticks a plain elapsed-seconds counter
@@ -1102,7 +1057,6 @@ export function OnboardChat({
     setUploadError(null);
     setActiveTools([]);
     setAutoGenerate(false);
-    setDraft(null);
     setResetOpen(false);
     // Same guard as send()'s refocus: never re-open a collapsed embedded card.
     setTimeout(() => {
@@ -1117,7 +1071,6 @@ export function OnboardChat({
   const startFreshConversation = () => {
     resetChat();
     setErrorMsg("");
-    setSiteUrl("");
     setPhase("chat");
   };
 
@@ -1459,32 +1412,6 @@ export function OnboardChat({
     await runGenerate(opts);
   };
 
-  // The publish moment's ONE job after «your site is live» is the funnel:
-  // leads reach the owner through Telegram or they reach nobody. Resolve the
-  // deep link the moment the site goes live, so the button IS the connection
-  // instead of a trip to the sites list to press a differently-named button
-  // there (owner report: «too many actions»).
-  useEffect(() => {
-    const host = draft?.host;
-    if (phase !== "done" || !host) return;
-    if (tgReq.current?.host !== host) {
-      tgReq.current = { host, promise: getTelegramConnectLinkForHost(host) };
-    }
-    let cancelled = false;
-    tgReq.current.promise
-      .then((res) => {
-        if (!cancelled) setTgLink(res.ok ? res.link : "");
-      })
-      .catch(() => {
-        if (!cancelled) setTgLink("");
-      });
-    // Cancels this pass's setState only. The request itself is not abandoned —
-    // the next pass attaches to the very same promise and reads the answer.
-    return () => {
-      cancelled = true;
-    };
-  }, [phase, draft?.host]);
-
   // Consume the {t:"generate"} signal ONE render after applyResult set it —
   // by now facts/media/verticalId are flushed, so generation reads this
   // turn's saved facts, not the stale send() closure. Guarded exactly like
@@ -1714,8 +1641,17 @@ export function OnboardChat({
         }
       }
       if (result.ok) {
-        setDraft({ host: result.host, previewUrl: result.previewUrl, editUrl: result.editUrl });
-        setPhase("preview");
+        // Straight into the editor (owner decision 2026-08-11). The old preview
+        // screen rendered the SAME draft the editor renders, could change
+        // nothing, and its «Відредагувати» was a cross-host link that abandoned
+        // the flow — so the owner either published something they could not
+        // edit, or paid a navigation to edit it. The editor already carries the
+        // single human «Опублікувати» press (invariant 6) and now carries the
+        // post-publish moment too.
+        // M6: this conversation is finished — it must never restore on any host.
+        localStorage.removeItem("vitryna_conv_id");
+        window.location.href = appUrl(`/edit/${result.host}?fresh=1`);
+        return;
       } else if (result.authRequired) {
         // Session lapsed between the gate check and submit — send them to sign in.
         setPhase("gate");
@@ -1736,65 +1672,6 @@ export function OnboardChat({
     }
   };
 
-  // Preview → HUMAN publish (invariant 6): publish the draft, celebrate.
-  // Free since 2026-08-06 — nothing stands between this click and the live site.
-  // The ₴999 is sold one screen later, for the owner's own domain.
-  const handlePublish = async () => {
-    if (loading || !draft) return;
-    setLoading(true);
-    try {
-      const result = await finalizeAction(draft.host, convIdRef.current ?? undefined);
-      if (result.ok) {
-        setSiteUrl(result.url);
-        setPhase("done");
-        // Conversation is complete — clear localStorage so next visit starts fresh.
-        localStorage.removeItem("vitryna_conv_id");
-      } else if (result.authRequired) {
-        setPhase("gate");
-      } else {
-        setErrorMsg(result.error);
-        setPhase("error");
-      }
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Невідома помилка");
-      setPhase("error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ViewContent = «побачив свій сайт», the moment the funnel is really working.
-  // Fired once per session, when the preview screen first mounts.
-  const viewContentSent = useRef(false);
-  useEffect(() => {
-    if (phase !== "preview" || viewContentSent.current) return;
-    viewContentSent.current = true;
-    pixelTrack("ViewContent");
-    phCapture("ui_preview_shown");
-  }, [phase]);
-
-  // «Сайт живий», once per session. The success screen re-renders freely (the
-  // domain card below it has its own state), so «shown» has to mean «first
-  // reached», not «drawn» — one owner publishing once must not read as two.
-  const publishSuccessSent = useRef(false);
-  useEffect(() => {
-    if (phase !== "done" || publishSuccessSent.current) return;
-    publishSuccessSent.current = true;
-    phCapture("ui_publish_success", {
-      surface: "onboard",
-      ...(draft?.host ? { host: draft.host } : {}),
-    });
-  }, [phase, draft?.host]);
-
-  const copyUrl = async () => {
-    try {
-      await navigator.clipboard.writeText(siteUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard blocked — the URL is visible above, no fallback needed */
-    }
-  };
 
   const rootBase = "bg-canvas text-ink";
 
@@ -2261,89 +2138,6 @@ export function OnboardChat({
   // owner's own «Опублікувати» tap (publish is human-only, invariant 6).
   // ---------------------------------------------------------------------------
 
-  if (phase === "preview" && draft) {
-    return inEmbeddedOverlay(
-      <div className={`flex min-h-[100dvh] flex-col ${rootBase}`}>
-        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
-        <header className="border-b border-line bg-surface/85 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 py-3.5">
-            <button
-              onClick={() => setPhase("chat")}
-              disabled={loading}
-              aria-label="Назад до розмови"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-sunken hover:text-ink disabled:opacity-45"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div className="flex flex-col leading-tight">
-              <span className="font-brand text-[18px] font-semibold text-ink">
-                Ваш сайт готовий до публікації
-              </span>
-              <span className="text-[13px] font-bold text-ink-muted">
-                Перегляньте — і опублікуйте безкоштовно, коли все влаштовує
-              </span>
-            </div>
-          </div>
-        </header>
-
-        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-5">
-          {/* S4 QA tail (V4 must-fix): the owner lands HERE before any s4
-              event arrives — the note must live on this screen, not only in
-              the chat they already left. */}
-          {genQa !== null && <GenQaNote qa={genQa} />}
-          <div className="flex flex-1 flex-col overflow-hidden rounded-[24px] border border-line bg-surface p-2 shadow-card">
-            {/* Browser chrome around the live draft — the frame only; the iframe
-                renders the real tenant site and is never styled from here. */}
-            <div className="flex items-center gap-2 px-2 py-2">
-              <span className="flex gap-1.5">
-                {["#E6A5A0", "#EFC776", "#A9C9A4"].map((c) => (
-                  <span key={c} className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c }} />
-                ))}
-              </span>
-              <span className="ml-1 flex-1 truncate rounded-full bg-sunken px-3 py-1 text-[12px] font-semibold text-ink-faint">
-                {draft.host}
-              </span>
-            </div>
-            <iframe
-              // Absolute app-host URL (M3): the editor frame lives on app.<root>;
-              // a relative src from the landing would 404 on the marketing host.
-              src={appUrl(draft.previewUrl)}
-              title="Попередній перегляд сайту"
-              className="min-h-[420px] w-full flex-1 rounded-[16px] border border-line bg-canvas"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Button
-              size="lg"
-              disabled={loading}
-              onClick={() => void handlePublish()}
-              className="min-h-[60px] w-full text-[19px] shadow-[0_10px_28px_rgba(51,41,28,0.22)]"
-            >
-              {loading ? "Публікую…" : "Опублікувати сайт"}
-            </Button>
-            <div className="flex gap-2">
-              <a
-                href={appUrl(draft.editUrl)}
-                className="flex h-[52px] flex-1 items-center justify-center gap-2 rounded-[16px] border border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
-              >
-                <Pencil size={17} /> Відредагувати
-              </a>
-              <Button
-                variant="quiet"
-                size="md"
-                disabled={loading}
-                onClick={() => void runGenerate()}
-                className="flex-1"
-              >
-                Згенерувати ще раз
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // Render — login gate (journal #43): save the site behind an account
@@ -2512,124 +2306,6 @@ export function OnboardChat({
   // Render — success (design D). No "register to manage" link — flow removed.
   // ---------------------------------------------------------------------------
 
-  if (phase === "done") {
-    const displayUrl = siteUrl.replace(/^https?:\/\//, "");
-    // Editor route key = tenant host (hostname strips the dev :port).
-    let editHost = "";
-    try {
-      editHost = new URL(siteUrl).hostname;
-    } catch {
-      /* keep "" — the edit link just doesn't render */
-    }
-    return inEmbeddedOverlay(
-      <div className={`relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 ${rootBase}`}>
-        <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
-        <Confetti />
-        <div className="animate-rise flex w-full max-w-md flex-col items-center text-center">
-          <div className="animate-pop flex h-[72px] w-[72px] items-center justify-center rounded-full bg-honey text-honey-text shadow-[0_18px_40px_-14px_rgba(51,41,28,0.4)]">
-            <PartyPopper size={34} />
-          </div>
-          <h2 className="mt-6 font-brand text-[26px] font-semibold">Ваш сайт готовий!</h2>
-          <p className="mt-2.5 text-[17px] text-ink-muted">
-            Він уже працює — безкоштовно — за адресою:
-          </p>
-
-          <Card className="mt-5 flex w-full flex-col gap-3.5 p-5">
-            <span className="break-all text-center font-brand text-[18px] font-semibold text-ink">
-              {displayUrl}
-            </span>
-            <div className="flex gap-2.5">
-              <a
-                href={siteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex h-[54px] flex-[1.3] items-center justify-center rounded-[16px] bg-brand text-[16px] font-bold text-white shadow-[0_8px_22px_rgba(51,41,28,0.2)] transition-colors hover:bg-brand-hover"
-              >
-                Відкрити сайт ↗
-              </a>
-              <button
-                onClick={copyUrl}
-                className="flex h-[54px] flex-1 items-center justify-center rounded-[16px] border border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
-              >
-                {copied ? "Скопійовано ✓" : "Копіювати"}
-              </button>
-            </div>
-          </Card>
-
-          <p className="mt-3 text-[14px] text-ink-muted">
-            Перегляньте сайт — фото й зображення можна замінити в редакторі.
-          </p>
-
-          {/* Domain step — the ONE paid step (owner decision 2026-08-06).
-              Skippable: the site is already live on its subdomain. */}
-          {draft && <DomainStep host={draft.host} />}
-
-          <div className="mt-3.5 flex w-full items-center gap-3.5 rounded-[20px] border border-line bg-surface px-5 py-4 text-left shadow-card">
-            <TelegramMark />
-            <div className="min-w-0 flex-1">
-              <div className="text-[16px] font-extrabold text-ink">Наступний крок — Telegram</div>
-              <div className="text-[14px] font-semibold leading-snug text-ink-muted">
-                Підключіть Telegram, щоб заявки від клієнтів приходили прямо вам
-              </div>
-            </div>
-            {tgLink ? (
-              <a
-                href={tgLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-h-11 shrink-0 items-center justify-center rounded-full bg-tg px-5 text-[15px] font-bold text-white transition-colors hover:bg-tg-dark"
-              >
-                Відкрити Telegram
-              </a>
-            ) : tgLink === null ? (
-              <span className="flex min-h-11 shrink-0 items-center justify-center rounded-full bg-tg/60 px-5 text-[15px] font-bold text-white">
-                Готуємо…
-              </span>
-            ) : (
-              // Honest fallback: the link could not be minted (bot unset, or the
-              // membership read failed). The sites list still carries the
-              // connect button, so the owner is never stranded.
-              <a
-                href={appUrl("/sites")}
-                className="flex min-h-11 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface px-5 text-[15px] font-bold text-ink transition-colors hover:bg-sunken"
-              >
-                Мої сайти
-              </a>
-            )}
-          </div>
-
-          {/* Exits: the success screen must never be a dead end. */}
-          <div className="mt-6 flex w-full flex-col gap-2">
-            {editHost && (
-              <a
-                href={appUrl(`/edit/${editHost}`)}
-                className="flex h-[54px] w-full items-center justify-center gap-2 rounded-[16px] border border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
-              >
-                <Pencil size={17} /> Редагувати сайт
-              </a>
-            )}
-            <a
-              href={appUrl("/sites")}
-              className="flex min-h-11 items-center justify-center text-[15px] font-bold text-ink-muted transition-colors hover:text-ink"
-            >
-              Мої сайти →
-            </a>
-            {/* Embedded: every link above is cross-host — give the overlay a
-                same-origin exit back to the landing (the conversation is done
-                and its localStorage key already cleared). */}
-            {embedded && (
-              <Link
-                href="/"
-                className="flex min-h-11 items-center justify-center text-[15px] font-bold text-ink-muted transition-colors hover:text-ink"
-              >
-                На головну
-              </Link>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // Render — error
@@ -2653,7 +2329,7 @@ export function OnboardChat({
             Почати нову розмову
           </Button>
         ) : (
-          <Button size="lg" className="mt-6" onClick={() => void (draft ? handlePublish() : runGenerate())}>
+          <Button size="lg" className="mt-6" onClick={() => void runGenerate()}>
             Спробувати ще раз
           </Button>
         )}
@@ -2841,32 +2517,3 @@ function GenStep({
   );
 }
 
-function Confetti() {
-  // Warm palette only: honey, deep ink, the soft-ok green — no leftover blue.
-  const pieces = [
-    { left: "16%", color: "#E9A23B", w: 10, h: 14, delay: 0, dur: 2.6 },
-    { left: "38%", color: "#3A3128", w: 8, h: 12, delay: 0.4, dur: 3.1 },
-    { left: "58%", color: "#177E53", w: 10, h: 10, delay: 0.8, dur: 2.8, round: true },
-    { left: "80%", color: "#E9A23B", w: 8, h: 13, delay: 1.2, dur: 3.4 },
-    { left: "27%", color: "#F2CE86", w: 9, h: 9, delay: 1.6, dur: 3, round: true },
-    { left: "70%", color: "#3A3128", w: 9, h: 12, delay: 0.2, dur: 3.2 },
-  ];
-  return (
-    <div className="pointer-events-none absolute inset-x-0 top-10 h-40" aria-hidden>
-      {pieces.map((p, i) => (
-        <span
-          key={i}
-          className="absolute top-0 block"
-          style={{
-            left: p.left,
-            width: p.w,
-            height: p.h,
-            background: p.color,
-            borderRadius: p.round ? 999 : 3,
-            animation: `ob-confetti ${p.dur}s ease-in infinite ${p.delay}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}

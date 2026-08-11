@@ -26,7 +26,17 @@ const AVAILABILITY: Record<DomainAvailability, { tone: "ok" | "danger" | "neutra
   unknown: { tone: "neutral", label: "не вдалося перевірити — ми перевіримо вручну" },
 };
 
-export default function DomainStep({ host }: { host: string }) {
+export default function DomainStep({
+  host,
+  /** What «skip» means to whoever mounted this. Absent → the card collapses in
+   *  place (its original home was a page). Given → skipping is an exit from the
+   *  surface around it, so the card must not ALSO leave a second dismissal
+   *  behind: the post-publish sheet closes instead. */
+  onSkip,
+}: {
+  host: string;
+  onSkip?: () => void;
+}) {
   const [value, setValue] = useState("");
   const [checked, setChecked] = useState<{ domain: string; available: DomainAvailability } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -248,10 +258,11 @@ export default function DomainStep({ host }: { host: string }) {
           disabled={awaiting}
           onClick={() => {
             phCapture("ui_domain_skipped", { host, checked: checked !== null });
-            setSkipped(true);
+            if (onSkip) onSkip();
+            else setSkipped(true);
           }}
         >
-          Поки залишити на піддомені
+          Продовжити без власного домену
         </Button>
       </div>
     </Card>

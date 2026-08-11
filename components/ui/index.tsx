@@ -8,7 +8,7 @@
  * lucide-react — emoji only where it's conversational content, never chrome.
  */
 
-import { useEffect, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes } from "react";
+import { useEffect, useId, useRef, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes, type TextareaHTMLAttributes, type SelectHTMLAttributes } from "react";
 
 // ── Button ───────────────────────────────────────────────────────────────────
 type BtnVariant = "primary" | "secondary" | "quiet" | "telegram" | "danger";
@@ -84,24 +84,65 @@ export function Card({ className = "", children }: { className?: string; childre
 }
 
 // ── Bottom sheet ─────────────────────────────────────────────────────────────
+/** Bottom sheet. Announced as a dialog and focus-trapped: one of these carries a
+ *  payment form, and a modal a keyboard can tab out of leaves the owner typing
+ *  into the page behind it. Focus returns where it came from on close. */
 export function Sheet({ open, onClose, children, title }: { open: boolean; onClose: () => void; title?: string; children: ReactNode }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const opener = document.activeElement as HTMLElement | null;
+    const focusables = (): HTMLElement[] =>
+      Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+    // Move focus IN, so the first Tab stays inside and a screen reader starts here.
+    (focusables()[0] ?? panelRef.current)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return onClose();
+      if (e.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !panelRef.current?.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
+      opener?.focus?.();
     };
   }, [open, onClose]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
       <button aria-label="Закрити" className="absolute inset-0 h-full w-full bg-ink/40" onClick={onClose} />
-      <div className="absolute inset-x-0 bottom-0 mx-auto max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] bg-surface p-6 pb-8 shadow-card">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        {...(title ? { "aria-labelledby": titleId } : {})}
+        tabIndex={-1}
+        className="absolute inset-x-0 bottom-0 mx-auto max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] bg-surface p-6 pb-8 shadow-card"
+      >
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-line-strong" />
-        {title && <h3 className="mb-4 font-ui text-[19px] font-bold text-ink">{title}</h3>}
+        {title && (
+          <h3 id={titleId} className="mb-4 font-ui text-[19px] font-bold text-ink">
+            {title}
+          </h3>
+        )}
         {children}
       </div>
     </div>

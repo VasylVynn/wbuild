@@ -13,6 +13,9 @@ import {
 import { publicSiteUrl } from "@/lib/config";
 import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-actions";
 import { getTelegramConnectLinkForHost } from "@/app/app/(protected)/(shell)/sites/actions";
+import DomainStep from "@/components/onboard/DomainStep";
+import { pixelTrack } from "@/lib/analytics/pixel";
+import { phCapture } from "@/components/analytics/PostHogProvider";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
 import { getTemplate, type SiteTemplate, type TemplateBrand } from "@/lib/templates/registry";
@@ -107,6 +110,26 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   // «Чернетка» until a reload — the owner publishes and the page tells them
   // nothing happened.
   const [published, setPublished] = useState(initial.published);
+  // THE post-publish moment (owner decision 2026-08-11). The onboarding flow no
+  // longer has a success screen: a finished draft lands in this editor, and the
+  // one human publish press opens this sheet — live URL, the owner's own domain,
+  // and Telegram, in the order they matter. Skipping the domain is a first-class
+  // exit; the site is already live and free on its subdomain.
+  const [liveSheet, setLiveSheet] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const publishTracked = useRef(false);
+  // ViewContent = «побачив свій сайт», the moment the funnel is really working.
+  // It used to fire when the onboarding preview screen mounted; that screen is
+  // gone, and THIS is where a freshly generated site is first seen (?fresh=1 is
+  // stamped by the hand-off in OnboardChat).
+  const firstSightSent = useRef(false);
+  useEffect(() => {
+    if (firstSightSent.current) return;
+    if (!new URLSearchParams(window.location.search).has("fresh")) return;
+    firstSightSent.current = true;
+    pixelTrack("ViewContent");
+    phCapture("ui_preview_shown", { surface: "editor", host });
+  }, [host]);
   // The t.me deep link for THIS site. Held as a memoised PROMISE, not a boolean
   // "already asked": the token mint must not be raced (one call per site), and a
   // flag set before the answer arrives would leave the row stuck if React tore
@@ -232,8 +255,20 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     if (res.ok) {
       const url = publicSiteUrl(host);
       setDirty(false);
+      // FIRST publish is the moment; a later re-publish of an edit is not, and
+      // must not throw a domain offer in the owner's face every time they fix a
+      // typo. `published` still holds the pre-publish value here.
+      const firstTime = !published;
       setPublished(true);
-      notify({ text: "Опубліковано! Зміни вже на сайті", href: url });
+      if (firstTime) {
+        if (!publishTracked.current) {
+          publishTracked.current = true;
+          phCapture("ui_publish_success", { surface: "editor", host });
+        }
+        setLiveSheet(url);
+      } else {
+        notify({ text: "Опубліковано! Зміни вже на сайті", href: url });
+      }
       return true;
     }
     notify({ text: `Не вдалося опублікувати: ${res.error ?? "помилка"}` });
@@ -697,6 +732,82 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
         />
       )}
 
+
+      {/* THE post-publish moment. One sheet, three things, ranked: the site is
+          live (open it — that is what makes it real), the owner's own name for
+          it, and Telegram, without which a lead is stored and nobody is told.
+          «Продовжити без власного домену» closes it; the site already works. */}
+      <Sheet
+        open={liveSheet !== null}
+        onClose={() => setLiveSheet(null)}
+        title="Ваш сайт опубліковано"
+      >
+        <p className="text-[15px] leading-relaxed text-ink-muted">
+          Він уже працює — безкоштовно — за адресою:
+        </p>
+        <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-line bg-canvas p-4">
+          <span className="break-all text-center font-brand text-[17px] font-semibold text-ink">
+            {(liveSheet ?? "").replace(/^https?:\/\//, "")}
+          </span>
+          <div className="flex gap-2.5">
+            <a
+              href={liveSheet ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-[50px] flex-[1.3] items-center justify-center rounded-[14px] bg-brand text-[16px] font-bold text-white transition-colors hover:bg-brand-hover"
+            >
+              Відкрити сайт ↗
+            </a>
+            <button
+              onClick={() => {
+                navigator.clipboard?.writeText(liveSheet ?? "").then(
+                  () => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  },
+                  () => {
+                    /* clipboard blocked — the address is on screen */
+                  },
+                );
+              }}
+              className="flex h-[50px] flex-1 items-center justify-center rounded-[14px] border border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
+            >
+              {copied ? "Скопійовано ✓" : "Копіювати"}
+            </button>
+          </div>
+        </div>
+
+        {/* Telegram before the domain: a domain is a nicer name, Telegram is
+            whether anyone hears about a lead at all. */}
+        {!initial.telegramConnected && (
+          <div className="mt-4 flex items-center gap-3 rounded-[18px] border border-line bg-surface px-4 py-3">
+            <span aria-hidden className="text-[18px]">📩</span>
+            <div className="min-w-0 flex-1 text-[14px] font-semibold leading-snug text-ink">
+              Підключіть Telegram, щоб заявки з сайту приходили вам одразу.
+            </div>
+            {tgLink ? (
+              <a
+                href={tgLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-9 shrink-0 items-center justify-center rounded-full bg-tg px-4 text-[14px] font-bold text-white transition-colors hover:bg-tg-dark"
+              >
+                Відкрити Telegram
+              </a>
+            ) : (
+              <span className="flex min-h-9 shrink-0 items-center justify-center rounded-full bg-tg/60 px-4 text-[14px] font-bold text-white">
+                Готуємо…
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="mt-4">
+          {/* Its own «skip» IS the sheet's exit — two dismissals side by side
+              read as a trick question. */}
+          <DomainStep host={host} onSkip={() => setLiveSheet(null)} />
+        </div>
+      </Sheet>
 
       <Sheet open={customOpen} onClose={closeCustomSheet} title="Кастомні зміни">
         <p className="mb-4 text-[15px] leading-relaxed text-ink-muted">
