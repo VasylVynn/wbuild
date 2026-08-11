@@ -12,6 +12,7 @@ import {
 } from "@/app/app/(protected)/edit/actions";
 import { publicSiteUrl } from "@/lib/config";
 import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-actions";
+import { getTelegramConnectLinkForHost } from "@/app/app/(protected)/(shell)/sites/actions";
 import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
 import { getTemplate, type SiteTemplate, type TemplateBrand } from "@/lib/templates/registry";
@@ -101,6 +102,35 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   const [publishing, setPublishing] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null); // regenerate
   const [dirty, setDirty] = useState(false); // unpublished draft changes
+  // Whether the site is LIVE, in component state: publishing happens inside this
+  // component, so a chip driven by `initial.published` would keep saying
+  // «Чернетка» until a reload — the owner publishes and the page tells them
+  // nothing happened.
+  const [published, setPublished] = useState(initial.published);
+  // The t.me deep link for THIS site. Held as a memoised PROMISE, not a boolean
+  // "already asked": the token mint must not be raced (one call per site), and a
+  // flag set before the answer arrives would leave the row stuck if React tore
+  // the effect down and re-ran it. Resolved ahead of the press because a link
+  // fetched inside the handler opens a window no gesture is attributed to.
+  const [tgLink, setTgLink] = useState<string | null>(null);
+  const tgReq = useRef<Promise<{ ok: true; link: string } | { ok: false; error: string }> | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!published || initial.telegramConnected) return;
+    if (!tgReq.current) tgReq.current = getTelegramConnectLinkForHost(host);
+    let cancelled = false;
+    tgReq.current
+      .then((res) => {
+        if (!cancelled) setTgLink(res.ok ? res.link : "");
+      })
+      .catch(() => {
+        if (!cancelled) setTgLink("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [published, initial.telegramConnected, host]);
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
@@ -202,6 +232,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     if (res.ok) {
       const url = publicSiteUrl(host);
       setDirty(false);
+      setPublished(true);
       notify({ text: "Опубліковано! Зміни вже на сайті", href: url });
       return true;
     }
@@ -292,7 +323,10 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     }
   };
 
-  const statusLabel = STATUS_LABELS[initial.status] ?? STATUS_LABELS.draft;
+  // The chip answers ONE question — can a visitor see this? — so it reads the
+  // page's own published state, not the tenant row's lifecycle field.
+  const statusKey = published ? "published" : "draft";
+  const statusLabel = STATUS_LABELS[statusKey] ?? STATUS_LABELS.draft;
   const regenerating = busyLabel === "regenerate";
   const selected = selectedIndex != null ? blocks[selectedIndex] : null;
 
@@ -362,7 +396,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
                 <span className="truncate font-brand text-[17px] font-medium tracking-tight text-ink sm:text-[19px]">
                   {initial.businessName}
                 </span>
-                <Chip tone={statusTone(initial.status)} className="shrink-0">
+                <Chip tone={statusTone(statusKey)} className="shrink-0">
                   <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
                   {statusLabel}
                 </Chip>
@@ -464,6 +498,50 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           </div>
         </div>
       </header>
+
+      {/* THE two facts an owner cannot deduce from a screen that renders their
+          site beautifully: nobody can see it yet, and nobody will be told when
+          a lead arrives. Both are the difference between «I made a site» and
+          «the site works», and until now the editor knew each of them and said
+          neither — `telegramConnected` was computed and never rendered. */}
+      {!published ? (
+        <div className="mx-auto mt-3 flex w-full max-w-[1600px] items-center gap-3 rounded-[16px] border border-honey/60 bg-honey-soft px-4 py-3 sm:px-4">
+          <span aria-hidden className="text-[18px]">👀</span>
+          <div className="min-w-0 flex-1 text-[14px] font-semibold leading-snug text-honey-text">
+            Сайт ще не опубліковано — його поки ніхто не бачить. Погортайте, змініть що
+            треба, і тисніть «Опублікувати».
+          </div>
+        </div>
+      ) : !initial.telegramConnected ? (
+        <div className="mx-auto mt-3 flex w-full max-w-[1600px] items-center gap-3 rounded-[16px] border border-line-strong bg-surface px-4 py-3 sm:px-4">
+          <span aria-hidden className="text-[18px]">📩</span>
+          <div className="min-w-0 flex-1 text-[14px] font-semibold leading-snug text-ink">
+            Заявки з сайту зберігаються, але вам про них ніхто не повідомить —
+            підключіть Telegram.
+          </div>
+          {tgLink ? (
+            <a
+              href={tgLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-9 shrink-0 items-center justify-center rounded-full bg-tg px-4 text-[14px] font-bold text-white transition-colors hover:bg-tg-dark"
+            >
+              Відкрити Telegram
+            </a>
+          ) : tgLink === null ? (
+            <span className="flex min-h-9 shrink-0 items-center justify-center rounded-full bg-tg/60 px-4 text-[14px] font-bold text-white">
+              Готуємо…
+            </span>
+          ) : (
+            <Link
+              href="/sites"
+              className="flex min-h-9 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface px-4 text-[14px] font-bold text-ink transition-colors hover:bg-sunken"
+            >
+              Мої сайти
+            </Link>
+          )}
+        </div>
+      ) : null}
 
       {/* Draft preview + desktop inspector. The preview column: «Компʼютер» =
           inline editable render; tablet/mobile = real-viewport iframe of the

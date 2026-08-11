@@ -36,6 +36,12 @@ export interface EditorData {
   businessName: string;
   verticalId: string;
   status: string;
+  /** Has this site ever been published? Derived from the PAGE, not from
+   *  `tenants.status`: publishing writes `pages.published_content`, and that
+   *  row is the only thing a visitor can actually load. An owner who has not
+   *  published must be told so plainly — the editor renders the draft, which
+   *  looks exactly like a live site and says nothing about being invisible. */
+  published: boolean;
   blocks: StoredBlock[];
   telegramConnected: boolean;
   // The wireframe this draft was composed against — the preview renders through
@@ -69,7 +75,7 @@ export async function getEditorData(host: string): Promise<EditorData | null> {
 
   const { data: p } = await sb
     .from("pages")
-    .select("draft_content")
+    .select("draft_content, published_content")
     .eq("tenant_id", t.id)
     .eq("slug", "")
     .maybeSingle();
@@ -81,6 +87,7 @@ export async function getEditorData(host: string): Promise<EditorData | null> {
     businessName: (t.brand as { businessName?: string } | null)?.businessName ?? t.host,
     verticalId: vertical.id,
     status: t.status,
+    published: p?.published_content != null,
     blocks: ((p?.draft_content as { blocks?: StoredBlock[] } | null)?.blocks ?? []) as StoredBlock[],
     telegramConnected: Boolean(t.telegram_chat_id),
     templateId: (p?.draft_content as { templateId?: string } | null)?.templateId,
