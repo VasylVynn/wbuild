@@ -24,7 +24,7 @@ import {
 } from "@/lib/ai/onboard";
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
 import { validateFacts } from "@/lib/onboard/validate";
-import { selectGaps } from "@/lib/onboard/gaps";
+import { countAgentQuestions, MAX_CLARIFYING_QUESTIONS, selectGaps } from "@/lib/onboard/gaps";
 import { getVertical } from "@/lib/verticals/registry";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
 import { canonicalizeContactFacts } from "@/lib/blocks/contact-links";
@@ -387,6 +387,8 @@ export async function POST(req: Request): Promise<Response> {
             issues: validateFacts(accum.facts, vertical).map((i) => i.note),
             apifyEnabled,
             gaps,
+            // Spent budget is a different instruction from «no gaps»: say so.
+            questionsSpent: countAgentQuestions(transcript) >= MAX_CLARIFYING_QUESTIONS,
           });
           lastSystem = system;
 

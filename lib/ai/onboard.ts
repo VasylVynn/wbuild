@@ -9,7 +9,12 @@ import type { VerticalConfig } from "@/lib/verticals/types";
 import { validateFacts } from "@/lib/onboard/validate";
 import { hasContactChannel } from "@/lib/onboard/contact-channel";
 import { canonicalizeContactFacts } from "@/lib/blocks/contact-links";
-import { selectGaps, type DataGap } from "@/lib/onboard/gaps";
+import {
+  countAgentQuestions,
+  MAX_CLARIFYING_QUESTIONS,
+  selectGaps,
+  type DataGap,
+} from "@/lib/onboard/gaps";
 import { isApifyConfigured } from "@/lib/ig/apify";
 import { PHOTO_ROLES } from "@/lib/media/media";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
@@ -269,11 +274,16 @@ export function buildOnboardSystem(args: {
   dossier: Dossier | null;
   issues: string[];
   apifyEnabled: boolean;
+  /** True once the clarifying-question budget is gone. An empty `gaps` list is
+   *  ambiguous on its own — it reads as «no holes today», not «stop asking» —
+   *  and the model filled the silence with interview questions of its own
+   *  (owner, live: «Чи потрібен вам окремий розділ для адміністратора?»). */
+  questionsSpent?: boolean;
   /** Data-shaped gaps worth ONE question (lib/onboard/gaps.ts). Already budget-
    *  filtered by `selectGaps` — an empty array means «say nothing about this». */
   gaps?: DataGap[];
 }): { stable: string; dynamic: string } {
-  const { vertical, facts, dossier, issues, apifyEnabled, gaps = [] } = args;
+  const { vertical, facts, dossier, issues, apifyEnabled, gaps = [], questionsSpent = false } = args;
 
   const igLine = apifyEnabled
     ? "- Заглянути в Instagram бізнесу за посиланням чи нікнеймом — витягнути опис, категорію, контакти-кандидати й фото (інструмент scrape_instagram). Можна повторно на прохання («пошукай ще раз телефон»).\n"
@@ -290,6 +300,9 @@ export function buildOnboardSystem(args: {
   // hole is worth a question, the model decides HOW to ask. Never a script:
   // the list is empty whenever the data shows nothing, the owner already said
   // «just do it», or the 1–2-question budget is spent.
+  const spentBlock = questionsSpent
+    ? "\n\nПИТАННЯ ЗАКІНЧИЛИСЬ: ліміт уточнень вичерпано. Більше НЕ став ЖОДНОГО питання — працюй із тим, що є, і веди до створення сайту."
+    : "";
   const gapsBlock = gaps.length
     ? `\n\nПРОГАЛИНИ В ДАНИХ (побачив код за формою даних — це НЕ анкета):\n${gaps
         .map((g) => `- ${g.note}`)
@@ -304,6 +317,7 @@ export function buildOnboardSystem(args: {
 - Досить зрозуміти, ЩО за бізнес (тип + назва, або просто посилання на Instagram) і мати хоч один канал звʼязку (телефон / Instagram / Telegram / Viber) — цього достатньо, щоб запропонувати створити сайт.
 - НЕ проходь списком полів. ВИВОДЬ сам: місто — з Instagram-профілю, послуги — з постів і фото, тон — з ніші. Опис і тексти сайту — ТВОЯ робота, не питай «що написати».
 - Питай ЛИШЕ у двох випадках: (1) справді не можеш вивести щось важливе; (2) самі дані показують прогалину, від якої сайт видимо програє — рівно один елемент там, де буде сітка карток; жодного фото; невідомо, де ви працюєте. Усе, що виводиться з даних, — виводь мовчки. Такі прогалини код перелічує нижче, якщо вони є.
+- ПИТАЙ ЛИШЕ ПРО ФАКТИ, ЯКІ ПОТРАПЛЯТЬ НА САЙТ (місто, контакт, що саме робите, чи є фото). НІКОЛИ не питай про будову сайту, його функції чи внутрішні процеси бізнесу: «чи потрібен окремий розділ для адміністратора», «чи має клієнт вказувати породу під час запису», «чи потрібна вам онлайн-оплата» — це анкета про софт, а не про бізнес, і власник прийшов не за нею. Такі рішення приймаєш ти сам.
 - МАКСИМУМ 1–2 питання ЗА ВСЮ розмову і не більше одного за хід, кожне зі змогою пропустити (чип «Пропустити»). ЖОДНЕ питання не блокує створення сайту: пропустили чи змовчали — створюєш із того, що є. Короткі/нетерплячі відповіді або «просто зроби» — питання закінчились, пропонуй створення.
 - Реквізити (телефон, адреса, ціни, години) — ТІЛЬКИ з розмови чи зібраних даних, НІКОЛИ не вигадуй. Немає — значить цього рядка на сайті просто не буде: замість телефону працюють кнопки Instagram/Telegram і форма заявки, що приходить власнику в Telegram.
 
@@ -350,7 +364,7 @@ ${igToolLine}- Хочеш роздивитись фото детальніше �
 Далі — поточні зібрані факти й дані про бізнес.`;
 
   const dossierBlock = dossier ? `\n\n${formatDossierForPrompt(dossier)}` : "";
-  const dynamicPrompt = `Поточні зібрані факти (JSON): ${JSON.stringify(facts)}${issuesBlock}${gapsBlock}${dossierBlock}`;
+  const dynamicPrompt = `Поточні зібрані факти (JSON): ${JSON.stringify(facts)}${issuesBlock}${spentBlock}${gapsBlock}${dossierBlock}`;
   return { stable: staticPrompt, dynamic: dynamicPrompt };
 }
 
@@ -471,6 +485,7 @@ export async function onboardTurn(
     issues,
     apifyEnabled: isApifyConfigured(),
     gaps,
+    questionsSpent: countAgentQuestions(messages) >= MAX_CLARIFYING_QUESTIONS,
   });
 
   const client = getAnthropic();
