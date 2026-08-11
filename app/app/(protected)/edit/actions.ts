@@ -294,12 +294,24 @@ export async function regenerateSite(
     // right now. They may have arrived through the editor chat or a block form,
     // neither of which writes tenants.brand.photos — so reading brand alone
     // rebuilt the site from the onboarding import and deleted the owner's work.
-    const { data: draftRow } = await sb
+    // FAILS CLOSED. An unread draft is not «no curated photos» — it is «we do
+    // not know», and proceeding on that would rebuild the site from the stale
+    // brand list and delete the owner's photos silently: the exact loss this
+    // read exists to prevent, now with no error to see. A missing ROW is a
+    // different answer and a legitimate one (nothing generated yet).
+    const { data: draftRow, error: draftErr } = await sb
       .from("pages")
       .select("draft_content")
       .eq("tenant_id", t.id)
       .eq("slug", "")
       .maybeSingle();
+    if (draftErr) {
+      console.error("[edit/regenerate] draft read failed", host, draftErr.message);
+      return {
+        ok: false,
+        error: "Не вдалося прочитати поточну чернетку — спробуйте ще раз за хвилину.",
+      };
+    }
     const draftPhotos = draftPhotoUrls(
       (draftRow?.draft_content as { blocks?: unknown } | null)?.blocks,
     );
