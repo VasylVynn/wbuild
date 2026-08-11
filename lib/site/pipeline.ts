@@ -146,6 +146,10 @@ const S4_REGEN_MIN_REMAINING_MS = 60_000;
 
 /** Generated gallery size for photo-less sites (hero comes on top of these). */
 const GENERATED_GALLERY_COUNT = 4;
+/** The ONE heading a gallery holding generated imagery may carry. Kept next to
+ *  the count because they describe the same thing: tiles that are atmosphere,
+ *  not a portfolio. Mirrored by the code-injected fallback in lib/ai/generate.ts. */
+const GENERATED_GALLERY_TITLE = "Наша атмосфера";
 
 /** Human-readable font-pair name for the V4 progress cards («Playfair Display
  *  + Inter») — the chat shows the real S1 pick, never the raw pair id. */
@@ -864,7 +868,14 @@ async function patchGeneratedImages(opts: {
           ...gallery.map((url, i) => ({ url, alt: `Атмосферне зображення ${i + 1} — ${altBase}` })),
         ];
         const images = merged.length >= 2 ? merged : [];
-        return { ...b, props: { title: b.props.title, images } };
+        // INVARIANT 1, on the title. The alt text says «атмосферне», but the
+        // heading is what a visitor reads as the claim — and the model picks
+        // that heading. Topping «Наші роботи» up with imagery nobody made for
+        // this business turns a decorative tile into a lie about their work.
+        // A gallery that receives generated images carries the honest heading,
+        // whoever wrote the original.
+        const title = gallery.length > 0 ? GENERATED_GALLERY_TITLE : b.props.title;
+        return { ...b, props: { title, images } };
       }
       return b;
     });
