@@ -90,6 +90,15 @@ export function Card({ className = "", children }: { className?: string; childre
 export function Sheet({ open, onClose, children, title }: { open: boolean; onClose: () => void; title?: string; children: ReactNode }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  // `onClose` is an inline arrow at every call site, so its identity changes on
+  // every parent render. Keeping it in the effect's deps re-ran the whole setup
+  // each time — which MOVED FOCUS back to the first control mid-typing, and one
+  // of these sheets holds a domain field the owner types into. The handler is
+  // read through a ref so the effect depends on `open` alone.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   useEffect(() => {
     if (!open) return;
     const opener = document.activeElement as HTMLElement | null;
@@ -102,7 +111,7 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
     // Move focus IN, so the first Tab stays inside and a screen reader starts here.
     (focusables()[0] ?? panelRef.current)?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") return onClose();
+      if (e.key === "Escape") return onCloseRef.current();
       if (e.key !== "Tab") return;
       const items = focusables();
       if (items.length === 0) return;
@@ -124,7 +133,7 @@ export function Sheet({ open, onClose, children, title }: { open: boolean; onClo
       document.body.style.overflow = "";
       opener?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">

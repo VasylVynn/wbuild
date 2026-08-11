@@ -746,7 +746,10 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
           Він уже працює — безкоштовно — за адресою:
         </p>
         <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-line bg-canvas p-4">
-          <span className="break-all text-center font-brand text-[17px] font-semibold text-ink">
+          <span
+            id="live-url"
+            className="break-all text-center font-brand text-[17px] font-semibold text-ink"
+          >
             {(liveSheet ?? "").replace(/^https?:\/\//, "")}
           </span>
           <div className="flex gap-2.5">
@@ -760,15 +763,27 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
             </a>
             <button
               onClick={() => {
-                navigator.clipboard?.writeText(liveSheet ?? "").then(
-                  () => {
+                // `navigator.clipboard` is undefined outside a secure context —
+                // which includes the http://app.lvh.me dev host — so calling
+                // .then() on the optional-chained result threw and the button
+                // did nothing at all, silently. Copy when we can, and fall back
+                // to selecting the address so it can still be copied by hand.
+                void (async () => {
+                  try {
+                    await navigator.clipboard.writeText(liveSheet ?? "");
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
-                  },
-                  () => {
-                    /* clipboard blocked — the address is on screen */
-                  },
-                );
+                  } catch {
+                    const el = document.getElementById("live-url");
+                    if (el) {
+                      const range = document.createRange();
+                      range.selectNodeContents(el);
+                      const sel = window.getSelection();
+                      sel?.removeAllRanges();
+                      sel?.addRange(range);
+                    }
+                  }
+                })();
               }}
               className="flex h-[50px] flex-1 items-center justify-center rounded-[14px] border border-line-strong bg-surface text-[16px] font-bold text-ink transition-colors hover:bg-sunken"
             >
