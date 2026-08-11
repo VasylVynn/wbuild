@@ -6,7 +6,7 @@ import { parseBlockProps, type StoredBlock } from "@/lib/blocks/schema";
 import { blockPlacementSchema } from "@/lib/blocks/schema";
 import { getBlockFields } from "@/lib/blocks/fields";
 import { getVertical } from "@/lib/verticals/registry";
-import { sanitizeMedia, type PhotoMeta, type SiteMedia } from "@/lib/media/media";
+import { draftPhotoUrls, sanitizeMedia, type PhotoMeta, type SiteMedia } from "@/lib/media/media";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 import { type PageSeo } from "@/lib/tenant/types";
 import type { PageContent } from "@/lib/site/page-content";
@@ -290,6 +290,20 @@ export async function regenerateSite(
       .maybeSingle();
     if (!t) return { ok: false, error: "tenant not found" };
 
+    // What the owner has ACTUALLY curated: the photos standing in the draft
+    // right now. They may have arrived through the editor chat or a block form,
+    // neither of which writes tenants.brand.photos — so reading brand alone
+    // rebuilt the site from the onboarding import and deleted the owner's work.
+    const { data: draftRow } = await sb
+      .from("pages")
+      .select("draft_content")
+      .eq("tenant_id", t.id)
+      .eq("slug", "")
+      .maybeSingle();
+    const draftPhotos = draftPhotoUrls(
+      (draftRow?.draft_content as { blocks?: unknown } | null)?.blocks,
+    );
+
     // Real uploaded photos survive regeneration (§4.8: never fabricate
     // imagery), and the vetting written at generation time rides along so the
     // hero fallback and gallery keep ranking by quality. The generated hero is
@@ -303,8 +317,14 @@ export async function regenerateSite(
     };
     const media: SiteMedia = sanitizeMedia({
       logoUrl: brand.logoUrl,
-      photos: brand.photos ?? [],
+      // Draft FIRST, then whatever else the brand still knows about. The order
+      // is load-bearing: sanitizeMedia truncates at MAX_PHOTOS, so the tail that
+      // gets dropped must be the stale import, never the owner's own pick.
+      photos: [...draftPhotos, ...(brand.photos ?? [])],
       generatedHero: brand.generatedHero,
+      // Vetting rides along by URL, so a harvested photo that WAS vetted at
+      // generation keeps its ranking; one the owner added later simply has none
+      // and is ranked on benefit of the doubt.
       photoMeta: brand.photoMeta,
     });
 

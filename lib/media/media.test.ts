@@ -1,5 +1,11 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { MAX_PHOTOS, sanitizeMedia, siteScopedPhotoMeta, type PhotoMeta } from "./media";
+import {
+  draftPhotoUrls,
+  MAX_PHOTOS,
+  sanitizeMedia,
+  siteScopedPhotoMeta,
+  type PhotoMeta,
+} from "./media";
 
 /**
  * sanitizeMedia drops PER ITEM (plan «якість генерації» §1.4). The regression it
@@ -136,5 +142,28 @@ describe("siteScopedPhotoMeta", () => {
     expect(siteScopedPhotoMeta({ photos: [], logoUrl: good("logo"), photoMeta: meta })).toHaveLength(1);
     expect(siteScopedPhotoMeta({ photos: [good("a")] })).toEqual([]);
     expect(siteScopedPhotoMeta(undefined)).toEqual([]);
+  });
+});
+
+describe("draftPhotoUrls — the owner's curated photos win a regeneration", () => {
+  const stored = (n: string) => `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/photos/${n}.jpg`;
+
+  it("finds every storage image the draft shows, in document order, once each", () => {
+    const blocks = [
+      { type: "hero", props: { imageUrl: stored("a"), title: "x" } },
+      { type: "gallery", props: { items: [{ url: stored("b") }, { url: stored("a") }] } },
+      { type: "services", props: { items: [{ name: "s", photo: stored("c") }] } },
+    ];
+    expect(draftPhotoUrls(blocks)).toEqual([stored("a"), stored("b"), stored("c")]);
+  });
+
+  it("refuses foreign URLs (invariant 1) and survives junk", () => {
+    const blocks = [
+      { type: "hero", props: { imageUrl: "https://cdn.example.com/x.jpg" } },
+      { type: "text", props: { body: "просто текст", n: 4, ok: true, nested: null } },
+    ];
+    expect(draftPhotoUrls(blocks)).toEqual([]);
+    expect(draftPhotoUrls(undefined)).toEqual([]);
+    expect(draftPhotoUrls("nonsense")).toEqual([]);
   });
 });

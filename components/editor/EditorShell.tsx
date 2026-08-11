@@ -10,6 +10,7 @@ import {
   customRequestAction,
   type EditorData,
 } from "@/app/app/(protected)/edit/actions";
+import { useRouter } from "next/navigation";
 import { publicSiteUrl } from "@/lib/config";
 import { getLogoAction, setLogoAction } from "@/app/app/(protected)/edit/logo-actions";
 import { getTelegramConnectLinkForHost } from "@/app/app/(protected)/(shell)/sites/actions";
@@ -98,6 +99,7 @@ function patchBlock(
 
 export default function EditorShell({ initial }: { initial: EditorData }) {
   const { host } = initial;
+  const router = useRouter();
   const [blocks, setBlocks] = useState<StoredBlock[]>(initial.blocks);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [regenConfirmOpen, setRegenConfirmOpen] = useState(false);
@@ -239,6 +241,14 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       setBlocks(res.blocks);
       setDirty(true);
       setFrameVersion((v) => v + 1);
+      // The DESIGN lives in props captured at page load (initial.wireCss /
+      // initial.designSpec), and regenerateSite returns blocks only — so
+      // without this the owner got new content poured into the OLD stylesheet
+      // and reported «стилі, кнопки лишились ті самі… а що воно тоді
+      // перегенерувало? Контент?». Literally: content was all the client
+      // updated. setBlocks above keeps the change instant; the refresh brings
+      // the new sheet a moment later.
+      router.refresh();
       notify({ text: "Сайт зібрано наново" });
     } else {
       notify({ text: `Не вдалося перегенерувати: ${res.error ?? "помилка"}` });
@@ -386,7 +396,8 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   // typography/motion from its designSpec — the owner previews the styled
   // site, not a grey wireframe with product fonts. Recomputed from the LIVE
   // blocks so nav/contacts track edits; wireCss/designSpec are the draft's
-  // (regeneration remounts the whole editor page with fresh EditorData).
+  // (a regeneration calls router.refresh(), which re-runs the page and hands
+  //  this component the new sheet — it does NOT remount by itself).
   const brand: TemplateBrand | undefined = template
     ? buildTemplateBrand(
         initial.businessName,

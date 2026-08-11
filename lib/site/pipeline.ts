@@ -400,6 +400,7 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         motionLevel: seeded.motionLevel,
         direction: seeded.direction,
         sectionVariants: { hero: seeded.tuple.heroVariant },
+        hue: seeded.hue,
       },
       wireframeCapabilities: capabilities,
       signal: stageSignal(S1_BUDGET_MS),

@@ -297,6 +297,44 @@ export const mediaSchema = z.object({
  * Only input that is not an object at all, or whose every field is invalid,
  * still ends up empty.
  */
+/**
+ * Every storage image the CURRENT draft actually shows, in document order.
+ *
+ * The product had two disconnected photo inventories: `tenants.brand.photos`,
+ * written only by onboarding, and `draft_content.blocks`, which is what the
+ * editor and its agent write. Regeneration read the first one, so an owner who
+ * replaced the photos through the chat («Заміни фото на ті, що я кину») and then
+ * pressed «Перегенерувати» watched the onboarding import come back and their own
+ * photos disappear. The draft is what the owner curated — it wins.
+ *
+ * Deliberately schema-agnostic: it walks the props tree instead of naming block
+ * fields, so a new block type with images needs no change here (invariant 4 —
+ * the registry drives everything, and nothing may need a second list).
+ */
+export function draftPhotoUrls(blocks: unknown): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (node: unknown, depth: number) => {
+    if (depth > 8 || node == null) return;
+    if (typeof node === "string") {
+      if (isStorageUrl(node) && !seen.has(node)) {
+        seen.add(node);
+        out.push(node);
+      }
+      return;
+    }
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item, depth + 1);
+      return;
+    }
+    if (typeof node === "object") {
+      for (const value of Object.values(node as Record<string, unknown>)) walk(value, depth + 1);
+    }
+  };
+  walk(blocks, 0);
+  return out;
+}
+
 export function sanitizeMedia(input: unknown): SiteMedia {
   // Happy path: fully valid input skips the per-item work entirely.
   const parsed = mediaSchema.safeParse(input);

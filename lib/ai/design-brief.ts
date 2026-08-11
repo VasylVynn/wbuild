@@ -49,6 +49,13 @@ export interface SeededProposals {
   direction: string;
   /** Seeded per-section layout defaults, e.g. { hero: "mirror" }. */
   sectionVariants?: Record<string, string>;
+  /** The seeded HUE anchor, 0–359 (lib/design/seed.ts — invariant 7's single
+   *  seeded axis). It used to be passed to the stylesheet leg and dropped there
+   *  whenever a designSpec existed, while S1 — which actually decides the
+   *  colour world — was never told about it. Both regenerations of one business
+   *  then saw byte-identical inputs and produced the same palette, which is the
+   *  «дизайн лишився той самий» the owner reported. */
+  hue?: number;
 }
 
 /** One plannable wireframe section — id, one-line label, registered variants.
@@ -215,6 +222,11 @@ function proposalsDoc(seeded: SeededProposals): string {
     `- рівень motion: ${seeded.motionLevel}`,
     `- кут подачі позиціонування: ${seeded.direction}`,
   ];
+  if (typeof seeded.hue === "number") {
+    lines.push(
+      `- відтінок-якір: ${Math.round(seeded.hue)}° — БЕРИ ЙОГО ЗА ОСНОВУ палітри (акцент або близький до нього), а не як пораду; саме він робить кожну генерацію іншою`,
+    );
+  }
   const variants = Object.entries(seeded.sectionVariants ?? {});
   if (variants.length) {
     lines.push(`- варіанти секцій: ${variants.map(([s, v]) => `${s} → ${v}`).join("; ")}`);
