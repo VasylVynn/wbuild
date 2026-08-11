@@ -76,20 +76,24 @@ A tenant is a **DB row, never a deploy**. Data-driven render: content is data
    live in our Supabase Storage `photos` bucket. `validateBlocks` (in
    `app/app/(protected)/edit/actions.ts`, via `stripForeignImages`) strips non-storage URLs on
    draft save; `sanitizeMedia` (`lib/media/media.ts`) enforces the storage-URL schema. **Models
-   never see photo URLs during generation** — grounding is deterministic. The line is drawn by
-   the SLOT, not by the pixels (owner decision 2026-08-11):
-   - **Claim slots** — `gallery.images`, `services[].imageUrl`, `switchback[].imageUrl` — take
-     GENUINE photos only (AI enhancement of light/color/crop OK). These read as «our work».
-   - **Decoration slots** — `hero.imageUrl` and section backgrounds — may carry generated
-     imagery OF THE BUSINESS'S OWN SUBJECT (a small dog for a grooming studio, a crust for a
-     bakery). Purely abstract textures produced beautiful pictures of nothing, which is what
-     owners actually complained about.
+   never see photo URLs during generation** — grounding is deterministic. What may be generated
+   is decided by the SLOT and by what its HEADING claims (owner decision 2026-08-11):
+   - **Owner photos only** — `services[].imageUrl`, `switchback[].imageUrl`. The model picks a
+     `photoId`, and `assemble` (`lib/ai/generate.ts`) resolves it against the owner's own
+     eligible photos; generated imagery never enters that map. A row whose id does not resolve
+     loses its photo (services) or is dropped whole (switchback) — never filled with something
+     else.
+   - **`hero.imageUrl`** — decoration. May be generated, and the subject SHOULD be the
+     business's own (a small dog for a grooming studio, a crust for a bakery): purely abstract
+     textures produced beautiful pictures of nothing, which is what owners complained about.
+   - **`gallery.images`** — mixed, and the ONLY slot where the heading does the work. The
+     owner's own photos come first and are never displaced; generated tiles may top it up when
+     there are too few (`GENERATED_GALLERY_COUNT`), and a gallery that receives any is
+     force-titled «Наша атмосфера» (`GENERATED_GALLERY_TITLE`, `lib/site/pipeline.ts`). A
+     model-chosen «Наші роботи» must never head imagery nobody made for this business — that
+     retitle is the precondition for generating into a gallery at all.
    - Never, in any slot: people's faces, text/prices/logos, or an interior or facade that could
      be mistaken for their real venue.
-   - A gallery that receives generated tiles is force-titled «Наша атмосфера»
-     (`GENERATED_GALLERY_TITLE`, `lib/site/pipeline.ts`) — a model-chosen «Наші роботи» must
-     never head imagery nobody made for this business. That guard is what makes the decoration
-     slot safe.
 2. **`canonicalHostname` is the source of ALL absolute URLs** (canonical, `og:url`, JSON-LD,
    sitemap, `metadataBase`) — never the request host, never a global platform domain. In the
    render path, host comes from rewrite **`params`**, not `headers()` (which kills ISR).
