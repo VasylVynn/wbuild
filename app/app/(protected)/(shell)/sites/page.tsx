@@ -4,6 +4,7 @@ import { myTenantIds } from "@/lib/tenant/membership";
 import { getVertical } from "@/lib/verticals/registry";
 import { ROOT_DOMAIN } from "@/lib/config";
 import TelegramConnect from "@/components/dashboard/TelegramConnect";
+import DomainRow from "@/components/dashboard/DomainRow";
 import SiteCard from "@/components/dashboard/SiteCard";
 import { Globe, Plus } from "lucide-react";
 import { EmptyState } from "@/components/ui";
@@ -19,6 +20,9 @@ interface SiteRow {
   brand: { businessName?: string } | null;
   created_at: string;
   telegram_chat_id: string | null;
+  custom_domain: string | null;
+  requested_domain: string | null;
+  domain_status: string | null;
 }
 
 async function listSites(): Promise<SiteRow[]> {
@@ -32,7 +36,9 @@ async function listSites(): Promise<SiteRow[]> {
   const sb = getServiceClient();
   let query = sb
     .from("tenants")
-    .select("id, host, status, vertical, brand, created_at, telegram_chat_id")
+    .select(
+      "id, host, status, vertical, brand, created_at, telegram_chat_id, custom_domain, requested_domain, domain_status",
+    )
     .order("created_at", { ascending: false });
   if (ids !== null) query = query.in("id", ids);
   const { data, error } = await query;
@@ -99,7 +105,21 @@ export default async function SitesPage() {
                   statusLabel={status.label}
                   statusTone={status.tone}
                   verticalLabel={getVertical(s.vertical).label}
-                  footer={<TelegramConnect tenantId={s.id} connected={!!s.telegram_chat_id} />}
+                  footer={
+                    <div className="flex flex-col gap-2">
+                      <TelegramConnect tenantId={s.id} connected={!!s.telegram_chat_id} />
+                      {/* The ₴999 domain had exactly ONE mount in the product —
+                          the post-publish moment — and skipping it there was
+                          final: no route could offer it again. A site the owner
+                          keeps coming back to is where the offer belongs. */}
+                      <DomainRow
+                        host={s.host!}
+                        status={s.domain_status}
+                        customDomain={s.custom_domain}
+                        requestedDomain={s.requested_domain}
+                      />
+                    </div>
+                  }
                 />
               </li>
             );
