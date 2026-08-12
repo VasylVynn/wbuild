@@ -508,26 +508,31 @@ export async function runDraftQualityLoop(opts: {
    *  produced nothing AND there was no previous sheet). The audit spends its
    *  one regen trying to replace it with real work. */
   styleFellBack?: boolean;
-}): Promise<void> {
+}): Promise<{
+  /** The sheet as this loop LEFT it. S4 can replace the S3 sheet with a
+   *  corrective regeneration, so the caller's own S3 copy is stale the moment
+   *  that happens — and the editor renders from what the caller returns. */
+  wireCss?: string;
+}> {
   const { host, facts, dossier } = opts;
   const textRounds = opts.textRounds ?? 2;
   try {
     const sb = getServiceClient();
     const { data: tenant } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
-    if (!tenant) return;
+    if (!tenant) return {};
     const { data: page } = await sb
       .from("pages")
       .select("id, draft_content")
       .eq("tenant_id", tenant.id)
       .eq("slug", "")
       .maybeSingle();
-    if (!page) return;
+    if (!page) return {};
     // Read as PageContent and re-save by SPREAD: this loop only rewrites the
     // blocks, so every other field (design, genToken, seo, pocket) must survive
     // untouched. Listing them by hand is how templateId/wireCss got lost here.
     const draft = (page.draft_content ?? {}) as PageContent;
     let blocks = draft.blocks ?? [];
-    if (!blocks.length) return;
+    if (!blocks.length) return {};
     // Every write below is CAS'd on genToken (identity) + contentRev (version,
     // spec §9): the old naked block write could resurrect a stale draft over a
     // concurrent generation's — and never even checked its error.
@@ -649,7 +654,7 @@ export async function runDraftQualityLoop(opts: {
               ? `[inspect] ${host}: stale contentRev/genToken — newer writer won, loop aborted`
               : `[inspect] ${host}: draft save failed, loop aborted: ${cas.error}`,
           );
-          return;
+          return {};
         }
         rev = cas.nextRev;
         dirty = false;
@@ -686,9 +691,14 @@ export async function runDraftQualityLoop(opts: {
       if (style.report.flagged) {
         console.warn(`[style-audit] ${host} FLAGGED: ${style.report.correctiveNote ?? "final fail"}`);
       }
+      // What the caller must render. When the audit's corrective regen won,
+      // this is NOT the sheet S3 compiled — and the editor shows whatever the
+      // pipeline hands back.
+      return { ...(style.css && { wireCss: style.css }) };
     }
   } catch (e) {
     // Fail-open by contract: the loop must never take generation down.
     console.warn(`[inspect] quality loop failed (fail-open): ${e instanceof Error ? e.message : e}`);
   }
+  return {};
 }

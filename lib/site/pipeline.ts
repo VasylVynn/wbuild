@@ -783,13 +783,15 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
     // of the request wall clock (§6: the handler must never outlive maxDuration
     // — 240s chain + a fixed 150s S4 could run to 390s against the 300s cap).
     const s4Budget = Math.min(S4_BUDGET_MS, REQUEST_WALL_MS - (Date.now() - runStart));
+    // Set when the QA loop leaves a DIFFERENT sheet than S3 compiled.
+    let qaWireCss: string | undefined;
     if (s4Budget <= 0) {
       await emit({ stage: "s4_qa", status: "skipped", detail: { reason: "qa_skipped_deadline" } });
     } else {
       await emit({ stage: "s4_qa", status: "start" });
       const s4Start = Date.now();
       const s4Signal = AbortSignal.timeout(s4Budget);
-      await runDraftQualityLoop({
+      const qa = await runDraftQualityLoop({
         host,
         facts,
         verticalId: vertical.id,
@@ -824,14 +826,20 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         // head-start window that the verdict call alone always outlived.
         canRegenStyle: () => s4Budget - (Date.now() - s4Start) >= S4_REGEN_MIN_REMAINING_MS,
       });
+      qaWireCss = qa.wireCss;
       await emit({ stage: "s4_qa", status: "done" });
     }
 
+    // S4 can REPLACE the sheet S3 compiled (the audit's corrective regen), and
+    // the editor renders whatever comes back from here — so the post-QA sheet
+    // wins when there is one. `draftContent` is the S3 copy and is stale the
+    // moment that regen lands (review catch).
+    const shippedCss = qaWireCss ?? draftContent.wireCss;
     return {
       ok: true,
       host,
       blocks: draftContent.blocks,
-      ...(draftContent.wireCss && { wireCss: draftContent.wireCss }),
+      ...(shippedCss && { wireCss: shippedCss }),
       ...(draftContent.designSpec && { designSpec: draftContent.designSpec }),
     };
   } catch (e) {
