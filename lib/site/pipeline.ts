@@ -2,7 +2,7 @@ import "server-only";
 import { after } from "next/server";
 import { getServiceClient } from "@/lib/supabase/server";
 import { revalidateTenant } from "@/lib/cache";
-import { generateSite, heroVariantForSeed } from "@/lib/ai/generate";
+import { generateSite, heroVariantForSeed, sectionVariantForRoll } from "@/lib/ai/generate";
 import { buildWireframeCapabilities, generateDesignBrief } from "@/lib/ai/design-brief";
 import { generateSiteImages, isImageGenConfigured } from "@/lib/media/generate-image";
 import { getVertical } from "@/lib/verticals/registry";
@@ -411,6 +411,10 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
     await emit({ stage: "s1_brief", status: "start" });
     const s1At = Date.now();
     const capabilities = buildWireframeCapabilities();
+    const seededCtaVariant = sectionVariantForRoll(
+      template?.sections.cta,
+      rollAxis(host, designNonce, "variant:cta"),
+    );
     const brief = await generateDesignBrief({
       dossier,
       verticalId: vertical.id,
@@ -419,7 +423,16 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         fontPairId: seeded.tuple.font,
         motionLevel: seeded.motionLevel,
         direction: seeded.direction,
-        sectionVariants: { hero: seeded.tuple.heroVariant },
+        // cta gets a seeded proposal for the same reason hero did: it is the
+        // one CONTENT-FREE variant choice in the plan, and with nothing to
+        // reason from the model took the first-described layout every time —
+        // measured across every live tenant: cta:band on all of them, three
+        // registered variants never shown. Same roll stream as the fallback
+        // (`variant:cta`), so a plan that omits cta lands on the same answer.
+        sectionVariants: {
+          hero: seeded.tuple.heroVariant,
+          ...(seededCtaVariant && { cta: seededCtaVariant }),
+        },
         hue: seeded.hue,
       },
       wireframeCapabilities: capabilities,
