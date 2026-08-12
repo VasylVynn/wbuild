@@ -523,6 +523,11 @@ export async function runDraftQualityLoop(opts: {
 }> {
   const { host, facts, dossier } = opts;
   const textRounds = opts.textRounds ?? 2;
+  // Flipped BEFORE each swap, never after: a throw inside the call can land on
+  // either side of the row actually changing, so from the moment we ask,
+  // «nothing changed» stops being something this function may claim. Lives
+  // outside the try because the catch is exactly where it matters.
+  let attemptedWrite = false;
   try {
     const sb = getServiceClient();
     const { data: tenant } = await sb.from("tenants").select("id").eq("host", host).maybeSingle();
@@ -650,6 +655,7 @@ export async function runDraftQualityLoop(opts: {
         // Stale → a newer writer (regeneration, image job) owns the row now —
         // ABORT the whole loop, polishing a dead draft helps no one. An error
         // aborts too: the old code swallowed it and kept "fixing" unsaved state.
+        attemptedWrite = true;
         const cas = await casUpdateDraft(
           sb,
           { pageId: page.id, genToken: draft.genToken, contentRev: rev },
@@ -688,6 +694,7 @@ export async function runDraftQualityLoop(opts: {
           ...(opts.compileNotes?.length && { compileNotes: opts.compileNotes }),
         },
       };
+      attemptedWrite = true;
       const cas = await casUpdateDraft(
         sb,
         { pageId: page.id, genToken: draft.genToken, contentRev: rev },
@@ -718,6 +725,11 @@ export async function runDraftQualityLoop(opts: {
   } catch (e) {
     // Fail-open by contract: the loop must never take generation down.
     console.warn(`[inspect] quality loop failed (fail-open): ${e instanceof Error ? e.message : e}`);
+    // But fail-open is about not throwing, NOT about inventing certainty. If a
+    // swap had already been attempted when this blew up, the row may hold a
+    // write this function never saw confirmed — and reporting «nothing
+    // changed» would send the caller's stale S3 sheet to the screen.
+    if (attemptedWrite) return { unknown: true };
   }
   return {};
 }
