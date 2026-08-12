@@ -1,5 +1,12 @@
-// scripts/setup-telegram.mjs — one-time webhook registration for the central bot.
-// Usage: node scripts/setup-telegram.mjs https://wizz-app.net
+// scripts/setup-telegram.mjs — webhook registration for the central bot.
+// Usage: node scripts/setup-telegram.mjs https://app.3minsite.com.ua
+//
+// NOT one-time: re-run it whenever the platform host changes. Telegram stores
+// ONE absolute URL and does NOT follow redirects — after the wizz-app.net →
+// 3minsite.com.ua move it kept calling the old host, got a 307, and treated
+// every /start as a failed delivery. Nothing in the product could see it: the
+// owner pressed Start, Telegram answered nothing, and the site simply never
+// bound a chat. `getWebhookInfo` is the only place that says so.
 // Reads TELEGRAM_BOT_TOKEN + TELEGRAM_WEBHOOK_SECRET from .env.local.
 import { readFileSync } from "node:fs";
 
