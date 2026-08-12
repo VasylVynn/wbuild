@@ -444,21 +444,16 @@ export async function regenerateSite(
       mode: "editor",
     });
     if (!res.ok) return { ok: false, error: res.error };
-    // Re-read the design the run just wrote. The pipeline returns blocks only,
-    // and the editor renders the sheet from a server prop — so a regeneration
-    // showed new content in the OLD stylesheet until the page was reloaded.
-    const { data: after } = await sb
-      .from("pages")
-      .select("draft_content")
-      .eq("tenant_id", t.id)
-      .eq("slug", "")
-      .maybeSingle();
-    const fresh = (after?.draft_content ?? {}) as PageContent;
+    // The design comes back from the pipeline itself, not from a second read of
+    // the row. A re-read is one more thing that can fail, and its failure would
+    // be indistinguishable from «the design did not change»: the editor holds
+    // the sheet in state now, so anything it is not handed here it cannot show
+    // until a reload (review catch).
     return {
       ok: true,
       blocks: res.blocks,
-      ...(fresh.wireCss && { wireCss: fresh.wireCss }),
-      ...(fresh.designSpec && { designSpec: fresh.designSpec }),
+      ...(res.wireCss && { wireCss: res.wireCss }),
+      ...(res.designSpec && { designSpec: res.designSpec }),
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

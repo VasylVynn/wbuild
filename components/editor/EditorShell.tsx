@@ -245,9 +245,15 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     setBusyLabel(null);
     setRegenConfirmOpen(false);
     if (res.ok && res.blocks) {
+      // The whole point of «Перегенерувати» is a different LOOK. If the design
+      // did not come back, the draft still changed — and state cannot be
+      // re-seeded from props, so showing the old sheet would be a lie. Reload.
+      if (!res.wireCss) {
+        window.location.reload();
+        return;
+      }
       setBlocks(res.blocks);
-      // The whole point of «Перегенерувати» is a different LOOK — apply it.
-      if (res.wireCss) setWireCss(res.wireCss);
+      setWireCss(res.wireCss);
       if (res.designSpec) setDesignSpec(res.designSpec);
       setDirty(true);
       setFrameVersion((v) => v + 1);
@@ -395,10 +401,17 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
         // Apply it here and now. `router.refresh()` alone was not enough: the
         // preview read the sheet from a prop captured at mount, so the owner
         // watched the agent report success and saw nothing change.
-        if (css) setWireCss(css);
         setDirty(true);
-        setFrameVersion((v) => v + 1);
-        router.refresh();
+        if (css) {
+          setWireCss(css);
+          setFrameVersion((v) => v + 1);
+          router.refresh();
+          return;
+        }
+        // The sheet changed and we were not handed it. State cannot be
+        // re-seeded from props, so a refresh would leave the OLD design on
+        // screen and call it done — reload instead. Rare, and honest.
+        window.location.reload();
       }}
       onClose={() => setChatOpen(false)}
     />

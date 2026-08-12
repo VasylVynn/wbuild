@@ -36,6 +36,7 @@ import { buildFallbackWireCss } from "@/lib/design/fallback-style";
 import { generateWireStyle, WIRE_TEMPLATE_ID } from "@/lib/design/wire-style";
 import { getTemplate } from "@/lib/templates/registry";
 import type { StoredBlock } from "@/lib/blocks/schema";
+import type { DesignSpec } from "@/lib/site/design-spec";
 import { publishedFromDraft, type PageContent } from "@/lib/site/page-content";
 import { casUpdateDraft, readContentRev } from "@/lib/site/draft-cas";
 import {
@@ -109,6 +110,13 @@ export interface PipelineResult {
   host: string;
   /** The S3 (shipped) blocks — the editor updates its UI from these. */
   blocks?: StoredBlock[];
+  /** The S3 (shipped) DESIGN, for the same reason and by the same route. The
+   *  editor holds the sheet in state, so anything it is not handed here it
+   *  cannot show until the page is reloaded. Returned from memory rather than
+   *  re-read from the row: a second read is a second thing that can fail, and
+   *  its failure would look exactly like «the design did not change». */
+  wireCss?: string;
+  designSpec?: DesignSpec;
   error?: string;
 }
 
@@ -819,7 +827,13 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
       await emit({ stage: "s4_qa", status: "done" });
     }
 
-    return { ok: true, host, blocks: draftContent.blocks };
+    return {
+      ok: true,
+      host,
+      blocks: draftContent.blocks,
+      ...(draftContent.wireCss && { wireCss: draftContent.wireCss }),
+      ...(draftContent.designSpec && { designSpec: draftContent.designSpec }),
+    };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await emit({ stage, status: "error", detail: { error: message } });
