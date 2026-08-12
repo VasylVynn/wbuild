@@ -56,4 +56,19 @@ describe("buildFallbackWireCss — a model failure must not cost the whole desig
     expect(buildFallbackWireCss({ hue: 90, motionLevel: 0 })).not.toContain("transition");
     expect(buildFallbackWireCss({ hue: 90, motionLevel: 1 })).toContain("transition");
   });
+
+  it("wears S1's palette when only the stylist failed — the common brownout", () => {
+    // avtomaister-2, live: S1 chose a deep dark premium palette, S2а timed out,
+    // and the floor dressed the site in pastel defaults with the good palette
+    // sitting unused in the draft.
+    const css = buildFallbackWireCss({
+      hue: 200,
+      palette: { bg: "#14181c", surface: "#1d2328", ink: "#e8eaea", accent: "#2290c3", accentInk: "#0d1417" },
+    });
+    expect(css).toContain("background: #14181c");
+    expect(css).toContain("background: #2290c3");
+    expect(css).toContain("color: #0d1417");
+    expect(css).not.toContain("oklch(0.97");
+    expect(lintWireCss(css).violations).toEqual([]);
+  });
 });

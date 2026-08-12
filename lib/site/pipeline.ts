@@ -577,6 +577,9 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         hue: seeded.hue,
         pairId: brief?.spec.typography.pairId ?? seeded.tuple.font,
         motionLevel: brief?.spec.motion.level ?? seeded.motionLevel,
+        // The usual brownout shape is S1 fine + S2а dead: the good palette is
+        // already IN the brief — the floor must wear it, not pastel defaults.
+        palette: brief?.spec.palette,
       });
       compiled.lintNotes.push("style leg produced nothing — shipped the seeded fallback sheet");
       log.warn("no model stylesheet — using the seeded fallback", { host });
@@ -760,18 +763,21 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
       detail: { preview: true, sections: draftContent.blocks.length },
     });
 
-    // Deferred image batch — post-response, never a streamed stage (spec §7:
-    // the chat learns about it by polling the draft row on genToken).
-    // Registered BEFORE S4 (review must-fix): nothing in S4 feeds this job —
-    // imageSubject/altBase/genToken are all known at S3, and the draft patch is
-    // genToken+contentRev CAS'd, so running alongside S4 writers is safe. If it
-    // were registered after the QA loop, a platform kill mid-S4 would strand
-    // the shimmer placeholders in draft_content forever.
+    // Image batch — STARTED at S3, awaited by after() (live death, avtomaister-2
+    // 2026-08-12). `after()` callbacks only begin once the response has been
+    // sent, i.e. AFTER S4 — and on a slow-provider day the chain plus S4 ran to
+    // the 300s wall, leaving the job seconds before the platform killed the
+    // function. The pending gallery then sat in DRAFT AND PUBLISHED as shimmer
+    // tiles forever. Starting the promise HERE runs the ~60-90s of image work
+    // concurrently with S4's 150s window, so it is normally finished long
+    // before the response ends; after(() => job) still guarantees the runtime
+    // waits for it when it is not. The patch stays safe next to S4's writers —
+    // it CASes on genToken + contentRev like every other async draft writer.
     if (needGeneratedImages) {
       const subjects = site.imageSubjects;
       const verticalIdForGen = vertical.id;
       const altBase = facts.city ? `${facts.businessName}, ${facts.city}` : facts.businessName;
-      after(async () => {
+      const imageJob = (async () => {
         let hero: string | null = null;
         let gallery: string[] = [];
         try {
@@ -796,7 +802,8 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         } catch (e) {
           log.warn("deferred image patch failed", { host, error: e });
         }
-      });
+      })();
+      after(() => imageJob);
     }
 
     // ── S4: QA — after the preview, on its OWN budget, clamped to what's left
