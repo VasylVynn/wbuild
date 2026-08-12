@@ -1,0 +1,24 @@
+[
+  {
+    "created_at": "2026-08-12T11:08:57.178243Z",
+    "display_name": "Seedream 5.0 Pro",
+    "id": "459bc1b3-cc02-4ef5-a79a-ddb41290c0f3",
+    "job_type": "seedream_v5_pro",
+    "min_result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3AaXy6ovJBzbtmGvQw55i3XvUwD/hf_20260812_110857_459bc1b3-cc02-4ef5-a79a-ddb41290c0f3_min.webp",
+    "params": {
+      "aspect_ratio": "16:9",
+      "batch_size": 1,
+      "height": 1536,
+      "is_inpaint": false,
+      "medias": [],
+      "prompt": "Abstract minimal brand backdrop, wide banner: smooth warm cream paper background (#FAF5EB tone), one large soft radial glow of warm golden honey light (#FBBB2D tone) blooming from the left side and fading gently into the cream, a few very subtle translucent rounded organic shapes in deeper cream and pale amber near the far edges, extremely soft diffuse lighting, fine paper grain, wide clean negative space across the center, premium warm tech aesthetic, calm and airy. No text, no objects, no flowers, no people, no logo.",
+      "reference_elements": [],
+      "remove_bg": false,
+      "resolution": "2k",
+      "seed": 495688,
+      "width": 2720
+    },
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3AaXy6ovJBzbtmGvQw55i3XvUwD/hf_20260812_110857_459bc1b3-cc02-4ef5-a79a-ddb41290c0f3.png",
+    "status": "completed"
+  }
+]
