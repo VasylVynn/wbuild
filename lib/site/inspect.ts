@@ -691,10 +691,14 @@ export async function runDraftQualityLoop(opts: {
       if (style.report.flagged) {
         console.warn(`[style-audit] ${host} FLAGGED: ${style.report.correctiveNote ?? "final fail"}`);
       }
-      // What the caller must render. When the audit's corrective regen won,
-      // this is NOT the sheet S3 compiled — and the editor shows whatever the
-      // pipeline hands back.
-      return { ...(style.css && { wireCss: style.css }) };
+      // What the caller must render — and ONLY when it actually landed. The
+      // CAS above can lose: a newer writer (the deferred image patch races this
+      // loop) bumps the rev and our write is dropped. Returning `style.css`
+      // anyway would put a sheet on screen that exists nowhere but this
+      // function's memory, and it would vanish on the next reload — the exact
+      // «changes are not visible until reload» complaint, inverted. On a lost
+      // write the caller falls back to its own S3 copy, which IS persisted.
+      return { ...(cas.ok && style.css ? { wireCss: style.css } : {}) };
     }
   } catch (e) {
     // Fail-open by contract: the loop must never take generation down.
