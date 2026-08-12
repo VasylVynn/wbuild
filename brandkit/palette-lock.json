@@ -1,0 +1,10 @@
+{
+  "source_summary": "Official 3minsite palette from app/globals.css design tokens (oklch resolved to sRGB): warm cream canvas, deep warm ink, sunflower honey accent.",
+  "palette": {
+    "colors": [
+      { "hex": "#FAF5EB", "name": "Cream Canvas", "role": "background" },
+      { "hex": "#221811", "name": "Warm Ink", "role": "primary" },
+      { "hex": "#FBBB2D", "name": "Sunflower Honey", "role": "accent" }
+    ]
+  }
+}

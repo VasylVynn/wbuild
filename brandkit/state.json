@@ -1,0 +1,41 @@
+{
+  "brandbookElements": [],
+  "essentialKitApproved": false,
+  "logo": {
+    "approvalSummary": "User selected candidate 1 (stacked-sections numeral 3 with honey dot) as the primary mark; candidate 3 (stopwatch wedge) kept as auxiliary chatbot icon.",
+    "asset": {
+      "id": "2f4d33d1-e7b6-4c84-9a42-9892a5e4bffe",
+      "path": "/Users/vasyl/Documents/GitHub/wbuild/brandkit/logo/candidate-1.svg",
+      "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3AaXy6ovJBzbtmGvQw55i3XvUwD/hf_20260812_070124_2f4d33d1-e7b6-4c84-9a42-9892a5e4bffe.svg"
+    },
+    "geometryFingerprint": "970e4372690778a89003c89adeda7d81b34042aa04c305dc730d756b024c9aae",
+    "name": "3minsite section-stack 3",
+    "origin": "brandkit_generated",
+    "paletteRevision": 1,
+    "revision": 1
+  },
+  "palette": {
+    "approvalSummary": "Official 3minsite palette from app/globals.css design tokens (oklch resolved to sRGB): warm cream canvas, deep warm ink, sunflower honey accent.",
+    "colors": [
+      {
+        "hex": "#faf5eb",
+        "name": "Cream Canvas",
+        "role": "background"
+      },
+      {
+        "hex": "#221811",
+        "name": "Warm Ink",
+        "role": "primary"
+      },
+      {
+        "hex": "#fbbb2d",
+        "name": "Sunflower Honey",
+        "role": "accent"
+      }
+    ],
+    "gradients": [],
+    "origin": "user_supplied",
+    "revision": 1
+  },
+  "version": 2
+}

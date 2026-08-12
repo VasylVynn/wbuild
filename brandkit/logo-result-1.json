@@ -1,0 +1,25 @@
+[
+  {
+    "created_at": "2026-08-12T07:01:24.511433Z",
+    "display_name": "Recraft V4.1",
+    "id": "2f4d33d1-e7b6-4c84-9a42-9892a5e4bffe",
+    "job_type": "recraft_v4_1",
+    "min_result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3AaXy6ovJBzbtmGvQw55i3XvUwD/hf_20260812_070124_2f4d33d1-e7b6-4c84-9a42-9892a5e4bffe_min.webp",
+    "params": {
+      "aspect_ratio": "1:1",
+      "background_color": "#FAF5EB",
+      "batch_size": 1,
+      "colors": [
+        "#221811",
+        "#FBBB2D"
+      ],
+      "height": 1024,
+      "model_type": "vector",
+      "prompt": "Minimal lettermark logo of the numeral three, where the numeral is constructed from three identical stacked horizontal rounded bars like tidy rows of a webpage, each bar's right end curling into the numeral's two open bowls so the stack itself reads as the digit. Bold uniform stroke weight, generous rounded terminals, geometric grid construction with soft corners. Warm confident modern tech register, friendly not corporate. Two colors only: the numeral in the deep primary color, one small circular accent dot floating at the upper right of the numeral like a notification, in the accent color; solid flat fills, no gradients, plain background. Single centered mark with even clear space on all sides. Flat vector design, clean lines, no shadows, no texture, no text. Clean editable vector paths, SVG-friendly, minimal anchor points.",
+      "resolution": "2k",
+      "width": 1024
+    },
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3AaXy6ovJBzbtmGvQw55i3XvUwD/hf_20260812_070124_2f4d33d1-e7b6-4c84-9a42-9892a5e4bffe.svg",
+    "status": "completed"
+  }
+]

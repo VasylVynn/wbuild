@@ -1,0 +1,25 @@
+[
+  {
+    "created_at": "2026-08-12T07:01:24.473737Z",
+    "display_name": "Recraft V4.1",
+    "id": "52c535ab-7966-4e9a-bad1-a789185a0885",
+    "job_type": "recraft_v4_1",
+    "min_result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3AaXy6ovJBzbtmGvQw55i3XvUwD/hf_20260812_070124_52c535ab-7966-4e9a-bad1-a789185a0885_min.webp",
+    "params": {
+      "aspect_ratio": "1:1",
+      "background_color": "#FAF5EB",
+      "batch_size": 1,
+      "colors": [
+        "#221811",
+        "#FBBB2D"
+      ],
+      "height": 1024,
+      "model_type": "vector",
+      "prompt": "Abstract minimal logo of a stopwatch dial reduced to its essence: one perfect thick-stroke circle with a small filled pie wedge inside sweeping a narrow sector clockwise from the top center, marking a brief span of time, and exactly three short rounded tick marks along the swept edge of the circle. Bold even stroke weight, geometric compass construction, rounded line caps everywhere. Energetic yet calm modern register, precise and optimistic. Two colors only: the circle outline and tick marks in the deep primary color, the filled wedge in the accent color; solid flat fills, no gradients, plain background. Single centered mark with even clear space on all sides. Flat vector design, clean lines, no shadows, no texture, no text. Clean editable vector paths, SVG-friendly, minimal anchor points.",
+      "resolution": "2k",
+      "width": 1024
+    },
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3AaXy6ovJBzbtmGvQw55i3XvUwD/hf_20260812_070124_52c535ab-7966-4e9a-bad1-a789185a0885.svg",
+    "status": "completed"
+  }
+]

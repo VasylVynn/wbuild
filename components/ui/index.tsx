@@ -207,8 +207,12 @@ export function EmptyState({ icon, title, children }: { icon: ReactNode; title: 
 // ── Wordmark ─────────────────────────────────────────────────────────────────
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
-    <span className={`select-none font-brand text-[20px] font-semibold tracking-tight text-ink ${className}`}>
-      <span className="text-honey">3</span>minsite
+    <span className={`inline-flex select-none items-center gap-2 font-brand text-[20px] font-semibold tracking-tight text-ink ${className}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/mark.svg" alt="" aria-hidden className="h-[1.2em] w-[1.2em]" />
+      <span>
+        3min<span className="text-ink-muted">site</span>
+      </span>
     </span>
   );
 }
