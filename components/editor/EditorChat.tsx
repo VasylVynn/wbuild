@@ -36,6 +36,9 @@ type StreamEvent =
        *  page has to be re-read — otherwise a pure design change looks like
        *  nothing happened until the owner reloads. */
       styleChanged?: boolean;
+      /** The stylesheet as it now stands — applied straight to state so the
+       *  design changes on screen without a page reload. */
+      wireCss?: string;
       blocks: StoredBlock[];
     }
   | { t: "error"; message: string }
@@ -122,8 +125,8 @@ export default function EditorChat({
   onApply: (blocks: StoredBlock[]) => void;
   /** Snapshot the shell can restore via «Скасувати». */
   onUndoAvailable: (snapshot: StoredBlock[]) => void;
-  /** The stylesheet changed — the shell re-reads the page to pick it up. */
-  onStyleChanged: () => void;
+  /** The stylesheet changed — the shell renders the new one immediately. */
+  onStyleChanged: (wireCss?: string) => void;
   onClose: () => void;
 }) {
   const [items, setItems] = useState<ChatItem[]>([]);
@@ -315,7 +318,7 @@ export default function EditorChat({
           onUndoAvailable(snapshot);
           onApply(final.blocks);
         }
-        if (final.styleChanged) onStyleChanged();
+        if (final.styleChanged) onStyleChanged(final.wireCss);
       }
     } catch {
       busyPaintRef.current = false;

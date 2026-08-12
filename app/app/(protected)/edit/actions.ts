@@ -245,7 +245,7 @@ function validateBlocks(blocks: StoredBlock[]): StoredBlock[] {
 export async function saveDraftStyle(
   host: string,
   instruction: string,
-): Promise<{ ok: boolean; notes?: string[]; error?: string }> {
+): Promise<{ ok: boolean; wireCss?: string; notes?: string[]; error?: string }> {
   try {
     const gate = await requireMember({ host }); // §3.1
     if (!gate.ok) return { ok: false, error: gate.error };
@@ -300,7 +300,10 @@ export async function saveDraftStyle(
       { ...draft, wireCss: compiled.wireCss },
     );
     if (!cas.ok) return { ok: false, error: cas.stale ? STALE_DRAFT_ERROR : cas.error };
-    return { ok: true, notes: compiled.lintNotes };
+    // Hand the sheet back. The editor renders the design from a SERVER prop, so
+    // without this the owner watched the agent report success and saw nothing
+    // change until they reloaded the page.
+    return { ok: true, wireCss: compiled.wireCss, notes: compiled.lintNotes };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -362,7 +365,16 @@ export async function saveDraftBlocks(
  */
 export async function regenerateSite(
   host: string,
-): Promise<{ ok: boolean; blocks?: StoredBlock[]; error?: string }> {
+): Promise<{
+  ok: boolean;
+  blocks?: StoredBlock[];
+  /** The regenerated design, returned for the same reason as the blocks: the
+   *  editor holds it in state, and a regeneration that only sent back blocks
+   *  poured new content into the old stylesheet on screen. */
+  wireCss?: string;
+  designSpec?: DesignSpec;
+  error?: string;
+}> {
   try {
     const gate = await requireMember({ host }); // §3.1
     if (!gate.ok) return { ok: false, error: gate.error };
@@ -431,9 +443,23 @@ export async function regenerateSite(
       media,
       mode: "editor",
     });
-    return res.ok
-      ? { ok: true, blocks: res.blocks }
-      : { ok: false, error: res.error };
+    if (!res.ok) return { ok: false, error: res.error };
+    // Re-read the design the run just wrote. The pipeline returns blocks only,
+    // and the editor renders the sheet from a server prop — so a regeneration
+    // showed new content in the OLD stylesheet until the page was reloaded.
+    const { data: after } = await sb
+      .from("pages")
+      .select("draft_content")
+      .eq("tenant_id", t.id)
+      .eq("slug", "")
+      .maybeSingle();
+    const fresh = (after?.draft_content ?? {}) as PageContent;
+    return {
+      ok: true,
+      blocks: res.blocks,
+      ...(fresh.wireCss && { wireCss: fresh.wireCss }),
+      ...(fresh.designSpec && { designSpec: fresh.designSpec }),
+    };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

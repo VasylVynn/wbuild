@@ -196,6 +196,9 @@ export async function POST(req: Request): Promise<Response> {
   // to re-read the draft — otherwise a pure design change looks like nothing
   // happened until a reload.
   let styleChanged = false;
+  /** The sheet as it now stands, sent with the final event so the editor can
+   *  render it immediately — it lives on a server prop otherwise. */
+  let wireCss: string | undefined;
   const actions: string[] = [];
 
   const label = (i: number) =>
@@ -363,6 +366,7 @@ export async function POST(req: Request): Promise<Response> {
         const res = await saveDraftStyle(host, a.instruction as string);
         if (!res.ok) return { ok: false, summary: `Не вдалося змінити стиль: ${res.error ?? "помилка"}` };
         styleChanged = true;
+        if (res.wireCss) wireCss = res.wireCss;
         actions.push("Оновив вигляд сайту");
         // The compile's own notes matter to the agent: a stripped declaration
         // means the wireframe refused that particular change, and repeating it
@@ -525,7 +529,7 @@ export async function POST(req: Request): Promise<Response> {
             .then(() => undefined, () => undefined);
         }
 
-        send({ t: "final", message, actions, blocksChanged, styleChanged, blocks, seo });
+        send({ t: "final", message, actions, blocksChanged, styleChanged, wireCss, blocks, seo });
       } catch {
         send({ t: "error", message: "Щось пішло не так. Спробуйте ще раз." });
       } finally {

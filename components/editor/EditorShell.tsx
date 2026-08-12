@@ -112,6 +112,13 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   // «Чернетка» until a reload — the owner publishes and the page tells them
   // nothing happened.
   const [published, setPublished] = useState(initial.published);
+  // The DESIGN lives in state, not in the server prop it arrived on. Rendering
+  // straight from `initial` meant every design change — the agent's style tool,
+  // a regeneration — was invisible until the owner reloaded the page: the
+  // pipeline had written the new sheet, and the screen was still showing the
+  // one React was handed at mount.
+  const [wireCss, setWireCss] = useState(initial.wireCss);
+  const [designSpec, setDesignSpec] = useState(initial.designSpec);
   // THE post-publish moment (owner decision 2026-08-11). The onboarding flow no
   // longer has a success screen: a finished draft lands in this editor, and the
   // one human publish press opens this sheet — live URL, the owner's own domain,
@@ -239,6 +246,9 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
     setRegenConfirmOpen(false);
     if (res.ok && res.blocks) {
       setBlocks(res.blocks);
+      // The whole point of «Перегенерувати» is a different LOOK — apply it.
+      if (res.wireCss) setWireCss(res.wireCss);
+      if (res.designSpec) setDesignSpec(res.designSpec);
       setDirty(true);
       setFrameVersion((v) => v + 1);
       // The DESIGN lives in props captured at page load (initial.wireCss /
@@ -381,10 +391,11 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       getSnapshot={() => blocks}
       onApply={applyAgentResult}
       onUndoAvailable={(snapshot) => setAgentUndo(snapshot)}
-      onStyleChanged={() => {
-        // The sheet is a SERVER prop (initial.wireCss) — refetch the page, and
-        // bump the frame so the device previews pick it up too. Without this a
-        // pure design change looks like nothing happened until a reload.
+      onStyleChanged={(css) => {
+        // Apply it here and now. `router.refresh()` alone was not enough: the
+        // preview read the sheet from a prop captured at mount, so the owner
+        // watched the agent report success and saw nothing change.
+        if (css) setWireCss(css);
         setDirty(true);
         setFrameVersion((v) => v + 1);
         router.refresh();
@@ -412,8 +423,8 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
         blocks,
         template,
         initial.displayLogo,
-        initial.wireCss,
-        initial.designSpec,
+        wireCss,
+        designSpec,
       )
     : undefined;
   const sectionEls = blocks.map((block, index) => (
