@@ -116,6 +116,38 @@ ${css.slice(0, CSS_SIZE_LIMIT)}
   };
 }
 
+/** Below this a "stylesheet" is not one — a few stray rules cannot dress a
+ *  site, and accepting them over a working sheet is a downgrade. */
+const MIN_SHEET_CHARS = 400;
+
+/**
+ * PURE. Whether the one corrective regeneration replaces the sheet on the page.
+ *
+ * Two ways to be wrong here, and the second one is newer than the first:
+ *  - keep a bad sheet when a better one exists;
+ *  - overwrite a WORKING sheet with an empty or rejected one. A model call can
+ *    succeed and still return almost nothing, and the fallback path made that
+ *    lethal: it accepted the regen unconditionally, so a hollow answer would
+ *    put the site back to the grey wireframe the fallback exists to prevent.
+ *
+ * So: a regen must first BE a sheet. Then, against a stylist's sheet it wins on
+ * a passing verdict or on strictly fewer deterministic violations; against the
+ * code-written FLOOR only a passing verdict counts — the floor has no
+ * violations to beat, and a sheet the art director rejected is not an
+ * improvement on a plain one that works.
+ */
+export function shouldAcceptRegen(args: {
+  verdict: "pass" | "fail";
+  regenChars: number;
+  regenIssues: number;
+  origIssues: number;
+  fellBack: boolean;
+}): boolean {
+  if (args.regenChars < MIN_SHEET_CHARS) return false;
+  if (args.verdict === "pass") return true;
+  return !args.fellBack && args.regenIssues < args.origIssues;
+}
+
 export async function runStyleAudit(opts: {
   css: string | undefined;
   sectionDigest: string;
@@ -230,9 +262,15 @@ export async function runStyleAudit(opts: {
       // counting it here inflated the original by one and accepted a regen
       // that was not actually cleaner.
       const origDetIssues = lint.violations.length;
-      // A real sheet replaces the fallback unless it is itself judged bad: the
-      // floor's own «pass» must not keep a stylist's work out.
-      if (second.verdict === "pass" || regenDetIssues < origDetIssues || opts.fellBack) {
+      if (
+        shouldAcceptRegen({
+          verdict: second.verdict,
+          regenChars: reclamp.css.trim().length,
+          regenIssues: regenDetIssues,
+          origIssues: origDetIssues,
+          fellBack: Boolean(opts.fellBack),
+        })
+      ) {
         css = reclamp.css;
         report.lintViolations = [...relint.violations, ...(reclamp.note ? [reclamp.note] : [])];
         report.contrastFixes = recontrast.fixes;
