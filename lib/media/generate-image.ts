@@ -34,43 +34,105 @@ type GeminiResponse = { candidates?: { content?: { parts?: GeminiPart[] } }[] };
 
 /**
  * Background site-image batch (owner decision, «сайт має бути гарний і без
- * фото»): ONE hero + `galleryCount` atmospheric gallery images, generated in
- * parallel off the critical path. Same honesty bounds as the hero (§4.8):
- * abstractions/textures only — the prompt list varies angle/composition so the
- * gallery doesn't read as one repeated image. Fail-open per image: nulls are
- * dropped, a partial set is fine.
+ * фото»): ONE hero + `galleryCount` atmospheric images, generated in parallel
+ * off the critical path. Same honesty bounds as the hero (§4.8) — the suffix is
+ * appended in code, per image.
+ *
+ * ONE SUBJECT PER IMAGE. The previous version took a single subject and varied
+ * the CAMERA — "extreme close-up", "flat-lay", "angled light" — which changes
+ * the framing and not the content, so a site got five pictures of the same
+ * thing and owners reported «картинки майже однакові». Different pictures need
+ * different subjects, which is why the composition model now proposes a list.
+ *
+ * Whatever the list does not cover falls back to the vertical's own pool, drawn
+ * WITHOUT REPLACEMENT and seeded per site: the old code picked with
+ * Math.random() from two prompts, so a four-image gallery routinely drew the
+ * same one twice, and two different businesses in one niche got the same
+ * background. Fail-open per image: nulls are dropped, a partial set is fine.
  */
 export async function generateSiteImages(opts: {
   verticalId?: string;
-  subject?: string;
+  /** Distinct subjects, best first — index 0 is the hero. */
+  subjects?: string[];
   galleryCount: number;
+  /** Per-site seed (brand.designNonce) so the fallback draw differs between
+   *  sites and between regenerations instead of being random each call. */
+  seed?: number;
 }): Promise<{ hero: string | null; gallery: string[] }> {
-  const { verticalId, subject, galleryCount } = opts;
-  // Distinct composition twists keep N images from one subject visually varied.
-  const twists = [
-    "extreme close-up detail, macro texture",
-    "wide soft-focus composition with negative space",
-    "angled light and long soft shadows",
-    "overhead flat-lay perspective",
-  ];
-  // With a business subject: vary it by twist. Without one: undefined lets
-  // generateHeroImage draw from the vertical's own prompt pool (already
-  // suffix-bounded — passing it back as `subject` would double the suffix).
-  const gallerySubjects = Array.from({ length: Math.max(0, galleryCount) }, (_, i) =>
-    subject ? `${subject}, ${twists[i % twists.length]}` : undefined,
+  const { verticalId, galleryCount, seed = 0 } = opts;
+  const prompts = planImagePrompts({
+    subjects: opts.subjects,
+    pool: getVertical(verticalId).imagePrompts,
+    wanted: 1 + Math.max(0, galleryCount),
+    seed,
+  });
+  const results = await Promise.all(
+    prompts.map((prompt) => (prompt === null ? null : generateHeroImage({ verticalId, prompt }))),
   );
+  const [hero, ...gallery] = results;
+  return { hero: hero ?? null, gallery: gallery.filter((u): u is string => Boolean(u)) };
+}
 
-  const [hero, ...gallery] = await Promise.all([
-    generateHeroImage({ verticalId, subject }),
-    ...gallerySubjects.map((s) => generateHeroImage({ verticalId, subject: s })),
-  ]);
-  return { hero, gallery: gallery.filter((u): u is string => Boolean(u)) };
+/**
+ * PURE. Decide the exact prompt for each image, in order — index 0 is the hero.
+ *
+ * The rules, all of them about not repeating yourself:
+ *  - a model-proposed subject is used at most ONCE, in the order given;
+ *  - what the subjects do not cover comes from the vertical pool, shuffled by
+ *    the seed and consumed without replacement;
+ *  - when both run out the slot is `null` — an absent tile beats a duplicate,
+ *    and the gallery hides itself below two.
+ */
+export function planImagePrompts(args: {
+  subjects?: string[];
+  pool: readonly string[];
+  wanted: number;
+  seed: number;
+}): (string | null)[] {
+  const subjects = (args.subjects ?? [])
+    .map((s) => s.replace(/[\n\r"«»]/g, " ").trim().slice(0, 140))
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const distinct = subjects.filter((s) => {
+    const key = s.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const pool = shuffled(args.pool, args.seed);
+  let poolAt = 0;
+  return Array.from({ length: Math.max(0, args.wanted) }, (_, i) => {
+    if (i < distinct.length) return `${distinct[i]}, ${HERO_PROMPT_SUFFIX}`;
+    return poolAt < pool.length ? pool[poolAt++] : null;
+  });
+}
+
+/** Deterministic shuffle — same seed, same order; different seed, different
+ *  order. Mulberry32, the same generator the design axes are seeded with. */
+function shuffled<T>(items: readonly T[], seed: number): T[] {
+  let a = (seed >>> 0) + 0x6d2b79f5;
+  const rand = () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const out = items.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
 
 export async function generateHeroImage(opts: {
   verticalId?: string;
   /** Model-proposed atmospheric subject for THIS business (English, sanitized here). */
   subject?: string;
+  /** A ready-made, already suffix-bounded prompt from the vertical pool. Takes
+   *  precedence over `subject` and is never re-suffixed (that would double it). */
+  prompt?: string;
 }): Promise<string | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -81,10 +143,11 @@ export async function generateHeroImage(opts: {
   // Subject comes from the site-generation model; the honesty suffix and palette
   // are appended IN CODE, so bounds never depend on the subject's wording.
   const subject = opts.subject?.replace(/[\n\r"«»]/g, " ").trim().slice(0, 140);
-  const fallbacks = getVertical(opts.verticalId).imagePrompts;
   const prompt = subject
     ? `${subject}, ${HERO_PROMPT_SUFFIX}`
-    : fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    : (opts.prompt ??
+      // No subject and no pool pick handed in (single-image callers): draw one.
+      getVertical(opts.verticalId).imagePrompts[0]);
   if (!prompt) return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);

@@ -724,7 +724,7 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
     // were registered after the QA loop, a platform kill mid-S4 would strand
     // the shimmer placeholders in draft_content forever.
     if (needGeneratedImages) {
-      const subject = site.imageSubject;
+      const subjects = site.imageSubjects;
       const verticalIdForGen = vertical.id;
       const altBase = facts.city ? `${facts.businessName}, ${facts.city}` : facts.businessName;
       after(async () => {
@@ -733,8 +733,12 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         try {
           const gen = await generateSiteImages({
             verticalId: verticalIdForGen,
-            subject,
+            subjects,
             galleryCount: GENERATED_GALLERY_COUNT,
+            // Same nonce the design axes are seeded from: two sites in one
+            // niche — and two regenerations of one site — draw a different
+            // fallback order instead of the same random two.
+            seed: designNonce,
           });
           hero = gen.hero;
           gallery = gen.gallery;

@@ -160,10 +160,15 @@ const generationSchema = z.object({
   // What it decides here is the composition: which blocks, in what order, with
   // what copy.
   blocks: z.array(genBlockSchema),
-  // Atmospheric hero-image subject proposed by the model FOR THIS business —
-  // consumed by generateHeroImage (§4.8 suffix + palette are appended in code,
-  // so the honesty bounds never depend on the model remembering them).
-  imageSubject: z.string().max(140).optional(),
+  // Atmospheric image subjects proposed by the model FOR THIS business — one
+  // per image we may generate. §4.8's suffix and palette are appended in code,
+  // so the honesty bounds never depend on the model remembering them.
+  //
+  // A LIST, not one string: the batch used to re-shoot a single subject with
+  // four camera "twists", which varies the framing and not the content — five
+  // near-identical pictures, which is exactly what owners reported («картинки
+  // майже однакові»). Different images need different SUBJECTS.
+  imageSubjects: z.array(z.string().max(140)).max(6).optional(),
   // D1: model-written SEO meta for the home page. Target lengths (≤60/≤150)
   // live in the prompt, NOT as zod caps — a few chars of overshoot must not
   // fail the whole generation; clampSeo() truncates deterministically instead.
@@ -202,7 +207,7 @@ export interface GeneratedSite {
   // Always the wireframe; kept on the shape because the render path and the
   // editor still resolve a template to get its section components.
   templateId: string;
-  imageSubject?: string;
+  imageSubjects?: string[];
   // Model-written page meta (D1) — persisted with the page content (draft →
   // published), consumed by generateMetadata/OG/JSON-LD on the public render.
   seo?: { title?: string; description?: string };
@@ -397,12 +402,12 @@ SEO В ТЕКСТАХ СТОРІНКИ (де він живе — і де йог�
 - Місто згадай природно у 2–3 місцях сторінки (hero-підзаголовок, опис послуг, одна відповідь у FAQ) — НЕ в кожному заголовку, НЕ списком міст і НЕ склейками («Львівтеніс»).
 - Жодних латинських чи транслітерованих дублів українських слів «для пошуку» — сторінка українською, і пошук це розуміє.
 
-HERO-ЗОБРАЖЕННЯ: заповни imageSubject — короткий опис АНГЛІЙСЬКОЮ (до 15 слів) атмосферного ФОНОВОГО зображення для ЦЬОГО бізнесу.
-- Назви КОНКРЕТНИЙ предмет цієї справи, а не абстракцію «взагалі»: грумінг маленьких порід → "small fluffy dog after grooming, soft warm light"; пекарня на заквасці → "rustic sourdough loaf crust close-up"; теніс → "clay court surface and tennis ball in low sun". Загальна текстура без предмета дає гарну, але порожню картинку — саме на це скаржаться власники.
-- Бери предмет із зібраних фактів (що саме роблять, для кого, з чим працюють) — не вигадуй асортименту, якого в них немає.
+ЗОБРАЖЕННЯ: заповни imageSubjects — ДО 5 РІЗНИХ сюжетів АНГЛІЙСЬКОЮ (кожен до 15 слів) для фонових зображень цього бізнесу. Перший піде в hero, решта — в галерею.
+- Вони мають бути РІЗНІ ПО ЗМІСТУ, а не один сюжет під різними ракурсами: різні предмети, матеріали, поверхні, пора дня. Один сюжет, знятий п'ять разів, дає п'ять майже однакових картинок — власники скаржаться саме на це.
+- Кожен сюжет — конкретний предмет цієї справи, узятий із зібраних фактів: грумінг маленьких порід → "small fluffy dog after grooming, soft warm light"; пекарня на заквасці → "rustic sourdough loaf crust close-up"; теніс → "clay court surface and tennis ball in low sun". Не вигадуй асортименту, якого в них немає.
 - Це ФОН, а не портфоліо: зображення ніколи не подається як «наша робота» (за це відповідає код).
 - ЗАБОРОНЕНО: люди й обличчя, будь-який текст/ціни/логотипи, приміщення, фасади й вітрини, які можна прийняти за їхнє реальне місце.
-Приклад для хімчистки: "soft folded fresh linen textures in airy light".`;
+Приклад для хімчистки: ["soft folded fresh linen textures in airy light", "steam rising over a pressed collar, backlit", "row of garment covers in shallow focus", "detergent foam macro on white fabric", "wooden hangers against a pale wall"].`;
 }
 
 // Strict mode (`strict: true`) is deliberately NOT enabled on this tool: strict
@@ -569,7 +574,7 @@ ${buildSectionDoc(template)}`;
     templateId: template.id,
     blocks,
     shippedPlan: shippedSectionPlan(blocks),
-    imageSubject: parsed.data.imageSubject,
+    imageSubjects: parsed.data.imageSubjects,
     seo: clampSeo(parsed.data.seo),
   };
 }

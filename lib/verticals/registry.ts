@@ -51,6 +51,10 @@ export const verticals: Record<string, VerticalConfig> = {
     imagePrompts: [
       heroPrompt("extreme macro of soft rose and peony petals with dewy bokeh, delicate pastel botanicals"),
       heroPrompt("blurred abstract garden of out-of-focus wildflowers and greenery in gentle morning light"),
+      heroPrompt("eucalyptus and fern leaves layered against pale linen, cool green shadows"),
+      heroPrompt("dried lavender and craft paper wrapping textures in dusty warm light"),
+      heroPrompt("scattered petals on a wet stone surface after rain, deep saturated colour"),
+      heroPrompt("bundles of raffia twine and stem clippings on a worn wooden bench, top-down"),
     ],
     // Petal pinks/magentas, or the stem-and-leaf greens they sit against.
     hueRanges: [
@@ -72,6 +76,10 @@ export const verticals: Record<string, VerticalConfig> = {
     imagePrompts: [
       heroPrompt("warm flour-dust light drifting over rustic wheat stalks and golden grain textures"),
       heroPrompt("soft out-of-focus glow over linen and baked-dough textures in cozy warm morning tones"),
+      heroPrompt("cracked caramel sugar surface catching low light, deep amber tones"),
+      heroPrompt("scattered poppy seeds and coarse flour on dark slate, overhead macro"),
+      heroPrompt("steam and warm haze over cooling racks, soft golden backlight"),
+      heroPrompt("folded parchment and twine on a floury wooden board, muted morning light"),
     ],
     // Crust, grain, caramel, butter — the warm end, nothing cold.
     hueRanges: [{ from: 20, to: 70 }],
@@ -90,6 +98,10 @@ export const verticals: Record<string, VerticalConfig> = {
     imagePrompts: [
       heroPrompt("calm abstract architectural light falling across clean stone columns and paper textures"),
       heroPrompt("muted geometric play of soft window light on layered paper and marble surfaces"),
+      heroPrompt("close-up of embossed paper grain and a wax seal texture in low raking light"),
+      heroPrompt("stacked document edges in shallow focus, cool neutral tones and long shadows"),
+      heroPrompt("polished dark wood surface with a single band of window light across it"),
+      heroPrompt("abstract blue-grey glass reflections layered over stone, quiet and formal"),
     ],
     // Deep blues into indigo — the trust colours; the seed picks the shade.
     hueRanges: [{ from: 210, to: 260 }],
@@ -108,6 +120,10 @@ export const verticals: Record<string, VerticalConfig> = {
     imagePrompts: [
       heroPrompt("dark metallic bokeh with faint silhouettes of tools receding into shadow, brushed-steel highlights"),
       heroPrompt("abstract reflections on polished metal surfaces under cool industrial light and depth"),
+      heroPrompt("tyre tread rubber texture in raking light, deep black with blue highlights"),
+      heroPrompt("oil sheen on wet concrete floor under cool overhead lamps, abstract"),
+      heroPrompt("coiled steel cable and bolt heads on a workbench, shallow depth of field"),
+      heroPrompt("scratched brushed-aluminium panel with condensation, cold industrial tone"),
     ],
     // Steel and slate through to workshop blue — cool, technical, never pastel.
     hueRanges: [{ from: 195, to: 250 }],
@@ -127,6 +143,10 @@ export const verticals: Record<string, VerticalConfig> = {
     imagePrompts: [
       heroPrompt("soft pastel towels and gentle foam bubbles in warm cozy light, fluffy textures"),
       heroPrompt("out-of-focus soft fur textures and pastel grooming ribbons in airy morning light"),
+      heroPrompt("water droplets beading on soft fibres, macro, bright airy background"),
+      heroPrompt("folded waffle-weave towels stacked in soft mint light, overhead"),
+      heroPrompt("gentle foam swirl on a pale ceramic surface, high-key and clean"),
+      heroPrompt("brush bristles and comb teeth in extreme macro against a pastel backdrop"),
     ],
     // Soft mint/aqua, or the pink→peach band that wraps past 360°.
     hueRanges: [
@@ -148,6 +168,10 @@ export const verticals: Record<string, VerticalConfig> = {
     imagePrompts: [
       heroPrompt("soft brand-colored abstract gradient with gentle flowing light and subtle grain texture"),
       heroPrompt("minimal out-of-focus abstract shapes in warm neutral tones with soft diffused light"),
+      heroPrompt("crumpled paper texture in raking light, deep folds and quiet shadow"),
+      heroPrompt("smooth stone surface with a single sweep of light across it, calm neutral"),
+      heroPrompt("woven linen weave in extreme macro, natural fibre detail"),
+      heroPrompt("blurred window light through frosted glass, soft geometric bands"),
     ],
     // Unknown trade — no defensible narrowing, so the whole wheel stays open.
     hueRanges: [{ from: 0, to: 360 }],
