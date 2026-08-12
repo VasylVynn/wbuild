@@ -31,6 +31,12 @@ export interface StyleAuditReport {
    *  replaced the sheet with one generated against this run's spec. The admin
    *  chip reads «попереднє оформлення» off this flag. */
   carriedOver?: boolean;
+  /** The audited sheet is the code-written FALLBACK (`buildFallbackWireCss`) —
+   *  the style leg produced nothing and there was no previous sheet to carry.
+   *  The site IS styled, but by a floor rather than by a stylist: adherence is
+   *  meaningless against it, the report is flagged so the admin column says so,
+   *  and the audit spends its one regen trying to replace it. */
+  fellBack?: boolean;
   /** Honest log of every code-side repair validateDesignSpec applied to the S1
    *  brief (pipeline v2 §3) — rides the audit so the admin surface sees it. */
   briefRepairs?: string[];

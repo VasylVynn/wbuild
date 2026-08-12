@@ -504,6 +504,10 @@ export async function runDraftQualityLoop(opts: {
    *  pipeline-compile shipped `prevWireCss`), not this generation's output —
    *  the style audit must not judge brief adherence on it (review must-fix). */
   styleCarryOver?: boolean;
+  /** The draft's wireCss is the code-written fallback sheet (the style leg
+   *  produced nothing AND there was no previous sheet). The audit spends its
+   *  one regen trying to replace it with real work. */
+  styleFellBack?: boolean;
 }): Promise<void> {
   const { host, facts, dossier } = opts;
   const textRounds = opts.textRounds ?? 2;
@@ -542,6 +546,7 @@ export async function runDraftQualityLoop(opts: {
             designSpec: opts.designSpec,
             canRegen: opts.canRegenStyle,
             carryOver: opts.styleCarryOver,
+            fellBack: opts.styleFellBack,
             signal: opts.signal,
           }).catch((e) => {
             console.warn(`[style-audit] failed (fail-open): ${e instanceof Error ? e.message : e}`);

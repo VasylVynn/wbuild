@@ -27,7 +27,17 @@ type StreamEvent =
   | { t: "d"; text: string }
   | { t: "tool"; label: string }
   | { t: "tooldone"; summary: string; ok: boolean }
-  | { t: "final"; message: string; actions: string[]; blocksChanged: boolean; blocks: StoredBlock[] }
+  | {
+      t: "final";
+      message: string;
+      actions: string[];
+      blocksChanged: boolean;
+      /** The agent rewrote the STYLESHEET. It lives outside `blocks`, so the
+       *  page has to be re-read — otherwise a pure design change looks like
+       *  nothing happened until the owner reloads. */
+      styleChanged?: boolean;
+      blocks: StoredBlock[];
+    }
   | { t: "error"; message: string }
   | { t: "refusal"; message: string };
 
@@ -102,6 +112,7 @@ export default function EditorChat({
   getSnapshot,
   onApply,
   onUndoAvailable,
+  onStyleChanged,
   onClose,
 }: {
   host: string;
@@ -111,6 +122,8 @@ export default function EditorChat({
   onApply: (blocks: StoredBlock[]) => void;
   /** Snapshot the shell can restore via «Скасувати». */
   onUndoAvailable: (snapshot: StoredBlock[]) => void;
+  /** The stylesheet changed — the shell re-reads the page to pick it up. */
+  onStyleChanged: () => void;
   onClose: () => void;
 }) {
   const [items, setItems] = useState<ChatItem[]>([]);
@@ -302,6 +315,7 @@ export default function EditorChat({
           onUndoAvailable(snapshot);
           onApply(final.blocks);
         }
+        if (final.styleChanged) onStyleChanged();
       }
     } catch {
       busyPaintRef.current = false;

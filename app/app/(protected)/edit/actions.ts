@@ -14,6 +14,9 @@ import type { DesignSpec } from "@/lib/site/design-spec";
 import type { BrandLogoSource } from "@/lib/templates/brand";
 import { publishDraft } from "@/lib/site/publish";
 import { runPipeline } from "@/lib/site/pipeline";
+import { compileWireCss } from "@/lib/site/pipeline-compile";
+import { buildStyleBrief } from "@/lib/design/style-brief";
+import { generateWireStyle } from "@/lib/design/wire-style";
 import { casUpdateDraft, readContentRev } from "@/lib/site/draft-cas";
 import { trackFunnel } from "@/lib/analytics/funnel";
 
@@ -220,6 +223,84 @@ function validateBlocks(blocks: StoredBlock[]): StoredBlock[] {
     });
     return { type: parsed.type, props: parsed.props, ...placement } as StoredBlock;
   });
+}
+
+/**
+ * Rewrite the site's stylesheet from a plain-language instruction (owner
+ * decision 2026-08-12: «edit website chatbot should be able to change design
+ * and css»).
+ *
+ * Until now the editor agent had no tool that could touch the design at all,
+ * so it answered «Крутий візуальний вигляд кнопки я змінити не можу — це
+ * частина загального дизайн-шаблону». That was honest and useless.
+ *
+ * The instruction is NOT css. The same stylist that writes the sheet during
+ * generation rewrites it, with the CURRENT sheet in the brief so a change is an
+ * edit rather than a fresh start, and the result goes through the SAME door as
+ * every other sheet — `compileWireCss`: lint (geometry and identity locks),
+ * contrast repair, and the 60k clamp (invariant 10). Nothing here can persist
+ * raw model css, and the write CASes on contentRev like every other async
+ * writer (invariant 9).
+ */
+export async function saveDraftStyle(
+  host: string,
+  instruction: string,
+): Promise<{ ok: boolean; notes?: string[]; error?: string }> {
+  try {
+    const gate = await requireMember({ host }); // §3.1
+    if (!gate.ok) return { ok: false, error: gate.error };
+    const sb = getServiceClient();
+    const { data: t } = await sb
+      .from("tenants")
+      .select("id, facts, vertical")
+      .eq("host", host)
+      .maybeSingle();
+    if (!t) return { ok: false, error: "tenant not found" };
+    const { data: p, error: readErr } = await sb
+      .from("pages")
+      .select("id, draft_content")
+      .eq("tenant_id", t.id)
+      .eq("slug", "")
+      .maybeSingle();
+    if (readErr) return { ok: false, error: "не вдалося прочитати чернетку" };
+    if (!p) return { ok: false, error: "page not found" };
+
+    const draft = (p.draft_content ?? {}) as PageContent;
+    const vertical = getVertical(t.vertical as string);
+    const wanted = instruction.trim().slice(0, 400);
+    if (!wanted) return { ok: false, error: "порожня інструкція" };
+
+    // The current sheet rides in the brief so the stylist EDITS instead of
+    // starting over — clamped, because the prompt already carries wire.css and
+    // the section source and a 60k tail would crowd them out.
+    const current = typeof draft.wireCss === "string" ? draft.wireCss.slice(0, 20_000) : "";
+    const brief =
+      buildStyleBrief({ facts: (t.facts ?? {}) as BusinessFacts, vertical }) +
+      (current
+        ? `\n\nПОТОЧНИЙ СТИЛЬ САЙТУ — зміни саме його, зберігши все, про що не просять:\n${current}`
+        : "") +
+      `\n\nЩО ПРОСИТЬ ВЛАСНИК (виконай це, решту не ламай): ${wanted}`;
+
+    const generated = await generateWireStyle(brief, {
+      ...(draft.designSpec && { designSpec: draft.designSpec }),
+    });
+    const compiled = compileWireCss(generated.css, draft.wireCss);
+    if (!compiled.wireCss) return { ok: false, error: "стиль не згенерувався, спробуйте ще раз" };
+
+    const cas = await casUpdateDraft(
+      sb,
+      {
+        pageId: p.id as string,
+        ...(draft.genToken && { genToken: draft.genToken }),
+        contentRev: readContentRev(draft),
+      },
+      { ...draft, wireCss: compiled.wireCss },
+    );
+    if (!cas.ok) return { ok: false, error: cas.stale ? STALE_DRAFT_ERROR : cas.error };
+    return { ok: true, notes: compiled.lintNotes };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export async function saveDraftBlocks(

@@ -15,6 +15,7 @@ import {
   getEditorData,
   saveDraftBlocks,
   saveDraftSeo,
+  saveDraftStyle,
 } from "@/app/app/(protected)/edit/actions";
 import { requireMember } from "@/lib/tenant/membership";
 import { getServiceClient, isSupabaseConfigured } from "@/lib/supabase/server";
@@ -49,7 +50,7 @@ import { inspectDraft } from "@/lib/site/inspect";
  *
  * SSE events: {t:"think"} · {t:"d",text} · {t:"tool",label} tool started
  * (label is a Ukrainian per-tool phrase, TOOL_LABELS) ·
- * {t:"tooldone",summary,ok} · {t:"final",message,actions,blocksChanged,
+ * {t:"tooldone",summary,ok} · {t:"final",message,actions,blocksChanged,styleChanged,
  * blocks,theme,seo} · {t:"error",message}. Refusals come back as plain JSON.
  *
  * Persistence (editor_chats, migration 0006) is best-effort: pre-migration the
@@ -190,6 +191,10 @@ export async function POST(req: Request): Promise<Response> {
   let blocks: StoredBlock[] = site.blocks;
   let seo = site.seo;
   let blocksChanged = false;
+  // The stylesheet lives outside `blocks`, so the client needs its own signal
+  // to re-read the draft — otherwise a pure design change looks like nothing
+  // happened until a reload.
+  let styleChanged = false;
   const actions: string[] = [];
 
   const label = (i: number) =>
@@ -330,6 +335,24 @@ export async function POST(req: Request): Promise<Response> {
         const summary = `Проаналізував фото (${analysis.kind})`;
         actions.push(summary);
         return { ok: true, summary, detail: formatPhotoAnalysis(analysis) };
+      }
+      case "update_style": {
+        // The design tool. One rewrite per call — the stylist re-writes the
+        // whole sheet, so batching every wish into one instruction is the
+        // difference between a coherent design and five overlapping ones.
+        const res = await saveDraftStyle(host, a.instruction as string);
+        if (!res.ok) return { ok: false, summary: `Не вдалося змінити стиль: ${res.error ?? "помилка"}` };
+        styleChanged = true;
+        actions.push("Оновив вигляд сайту");
+        // The compile's own notes matter to the agent: a stripped declaration
+        // means the wireframe refused that particular change, and repeating it
+        // will not help.
+        return {
+          ok: true,
+          summary: res.notes?.length
+            ? `Оновив вигляд сайту. Частину правок каркас не прийняв: ${res.notes.slice(0, 3).join("; ")}`
+            : "Оновив вигляд сайту",
+        };
       }
       case "inspect_site": {
         try {
@@ -482,7 +505,7 @@ export async function POST(req: Request): Promise<Response> {
             .then(() => undefined, () => undefined);
         }
 
-        send({ t: "final", message, actions, blocksChanged, blocks, seo });
+        send({ t: "final", message, actions, blocksChanged, styleChanged, blocks, seo });
       } catch {
         send({ t: "error", message: "Щось пішло не так. Спробуйте ще раз." });
       } finally {

@@ -381,6 +381,14 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       getSnapshot={() => blocks}
       onApply={applyAgentResult}
       onUndoAvailable={(snapshot) => setAgentUndo(snapshot)}
+      onStyleChanged={() => {
+        // The sheet is a SERVER prop (initial.wireCss) — refetch the page, and
+        // bump the frame so the device previews pick it up too. Without this a
+        // pure design change looks like nothing happened until a reload.
+        setDirty(true);
+        setFrameVersion((v) => v + 1);
+        router.refresh();
+      }}
       onClose={() => setChatOpen(false)}
     />
   ) : null;

@@ -148,6 +148,11 @@ export async function runStyleAudit(opts: {
    *  stylist never wrote against the NEW brief) and the report is marked so
    *  the admin chip stays honest. The gross-defect verdict still runs. */
   carryOver?: boolean;
+  /** The css is the code-written fallback sheet, not a stylist's work. Same
+   *  suppression of adherence as `carryOver`, plus the regen is spent
+   *  UNCONDITIONALLY: a floor that passes the eye test is still a floor, and
+   *  this is the one chance to get a real design onto the site. */
+  fellBack?: boolean;
   /** Caller's deadline — covers both verdicts AND the regen call. */
   signal?: AbortSignal;
 }): Promise<{ css: string | undefined; report: StyleAuditReport }> {
@@ -159,8 +164,20 @@ export async function runStyleAudit(opts: {
     flagged: false,
     checkedAt: new Date().toISOString(),
   };
-  if (!opts.css) return { css: opts.css, report }; // grey wireframe — nothing to audit
+  if (!opts.css) {
+    // NOT a pass. A site with no stylesheet renders as the bare grey wireframe,
+    // and reporting that as healthy is how one silently shipped: an absent
+    // sheet has no violations, so the gate that exists to catch bad design
+    // called the total absence of design «pass» (owner report, tepla-pich
+    // 2026-08-12). The pipeline now ships a fallback so this should be
+    // unreachable — and if it is ever reached again, it says so.
+    report.verdict = "fail";
+    report.flagged = true;
+    report.correctiveNote = "Сайт без згенерованого стилю — показано голий каркас.";
+    return { css: opts.css, report };
+  }
   if (opts.carryOver) report.carriedOver = true;
+  if (opts.fellBack) report.fellBack = true;
 
   // Phase 1: deterministic, always. Size clamp (spec §9.3): the compile step
   // already enforces the 60k contract on fresh sheets — this belt catches
@@ -180,14 +197,19 @@ export async function runStyleAudit(opts: {
     report.correctiveNote = first.note;
     // Adherence only for a sheet THIS run's stylist wrote — a carry-over sheet
     // answered a different brief and its "violation" would be a fabrication.
-    if (first.adherence && !opts.carryOver) report.adherence = first.adherence;
-    if (first.verdict === "fail" && opts.canRegen && !opts.canRegen()) {
+    if (first.adherence && !opts.carryOver && !opts.fellBack) report.adherence = first.adherence;
+    // A fallback sheet earns the regen whatever the eye test said: it is a
+    // deterministic floor with one accent, and «not ugly» is not the bar.
+    const wantsRegen = first.verdict === "fail" || Boolean(opts.fellBack);
+    if (wantsRegen && opts.canRegen && !opts.canRegen()) {
       // Budget spent (§6): the regen wouldn't fit — keep the failing verdict
       // honest, `flagged` below surfaces it in the admin QA column.
       console.warn(`[style-audit] corrective regen skipped: S4 budget too low`);
-    } else if (first.verdict === "fail") {
+    } else if (wantsRegen) {
       report.regenerated = true;
-      const correctedBrief = `${opts.brief}\nПопередня версія стилю мала ваду — обов'язково уникни її: ${first.note ?? "нечитабельний, конфліктний стиль"}.`;
+      const correctedBrief = opts.fellBack
+        ? `${opts.brief}\nПопередня спроба стилю не повернула нічого — зараз на сайті лише технічний запасний аркуш. Напиши повноцінний стиль.`
+        : `${opts.brief}\nПопередня версія стилю мала ваду — обов'язково уникни її: ${first.note ?? "нечитабельний, конфліктний стиль"}.`;
       const regen = await generateWireStyle(correctedBrief, {
         hue: opts.altHue ?? opts.hue,
         designSpec: opts.designSpec,
@@ -208,7 +230,9 @@ export async function runStyleAudit(opts: {
       // counting it here inflated the original by one and accepted a regen
       // that was not actually cleaner.
       const origDetIssues = lint.violations.length;
-      if (second.verdict === "pass" || regenDetIssues < origDetIssues) {
+      // A real sheet replaces the fallback unless it is itself judged bad: the
+      // floor's own «pass» must not keep a stylist's work out.
+      if (second.verdict === "pass" || regenDetIssues < origDetIssues || opts.fellBack) {
         css = reclamp.css;
         report.lintViolations = [...relint.violations, ...(reclamp.note ? [reclamp.note] : [])];
         report.contrastFixes = recontrast.fixes;
@@ -218,6 +242,7 @@ export async function runStyleAudit(opts: {
         // its adherence is legitimate and the sheet is no longer a carry-over.
         if (second.adherence) report.adherence = second.adherence;
         if (opts.carryOver) report.carriedOver = false;
+        if (opts.fellBack) report.fellBack = false;
       }
     }
   } catch (e) {
@@ -230,7 +255,11 @@ export async function runStyleAudit(opts: {
   // deliberately NOT a flag input (§3-S4: advisory) — the admin column shows
   // it as its own chip.
   report.flagged =
-    report.verdict === "fail" || report.contrastFixes.some((f) => f.startsWith("unresolved:"));
+    report.verdict === "fail" ||
+    // Still on the floor after the regen — the site is styled, but nobody
+    // designed it, and the admin column must not pretend otherwise.
+    Boolean(report.fellBack) ||
+    report.contrastFixes.some((f) => f.startsWith("unresolved:"));
 
   return { css, report };
 }

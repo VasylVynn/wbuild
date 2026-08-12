@@ -802,7 +802,11 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         // S2а leg produced nothing (review must-fix): the audit then skips the
         // adherence judgement — the stylist never wrote that css against this
         // brief — and marks the report for the admin chip.
-        styleCarryOver: rawCss === undefined,
+        styleCarryOver: rawCss === undefined && Boolean(prevWireCss),
+      // Nothing from the stylist AND nothing to carry — the site is running on
+      // the deterministic floor, and S4's one regen is its only chance at a
+      // real design.
+      styleFellBack: rawCss === undefined && !prevWireCss,
         // S3 compile notes ride the persisted audit report (spec §9.3): the
         // audit re-lints an already clean sheet, so without these the admin
         // would see an empty log while compile stripped/truncated plenty.
