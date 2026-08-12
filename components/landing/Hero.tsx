@@ -33,26 +33,46 @@ export function Hero({ igImportEnabled }: { igImportEnabled: boolean }) {
         <div className="text-center lg:text-left">
           {/* Badge is sm+ only — on phones every vertical px above the chat
               delays the real CTA; the claims strip below the chat carries the
-              same free/999 message. */}
+              free/999 message. IG copy is gated by igImportEnabled everywhere:
+              without APIFY the chat cannot import, so the landing must not
+              promise it (copy review 2026-08-12). */}
           <span className="hidden animate-rise items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-[12px] font-semibold text-ink-muted shadow-card sm:inline-flex">
             <Sparkles size={14} className="text-honey-text" />
-            Сайт безкоштовно · Власний домен — 999 грн/рік
+            {igImportEnabled
+              ? "Посилання на Instagram → готовий сайт"
+              : "Сайт безкоштовно · Власний домен — 999 грн/рік"}
           </span>
 
           <h1 className="animate-rise text-balance font-brand text-[30px] font-semibold leading-[1.1] tracking-tight sm:mt-5 sm:text-[40px] lg:text-[46px]">
-            Клієнти з інтернету — прямо у ваш{" "}
-            <span className="relative whitespace-nowrap">
-              <span className="relative z-10">Telegram</span>
-              <span
-                aria-hidden
-                className="absolute inset-x-0 bottom-1 z-0 h-3 rounded-full bg-honey sm:h-3.5"
-              />
-            </span>
+            {igImportEnabled ? (
+              <>
+                Сайт із вашого Instagram — щоб вас знаходили в{" "}
+                <span className="relative whitespace-nowrap">
+                  <span className="relative z-10">Google</span>
+                  <span
+                    aria-hidden
+                    className="absolute inset-x-0 bottom-1 z-0 h-3 rounded-full bg-honey sm:h-3.5"
+                  />
+                </span>
+              </>
+            ) : (
+              <>
+                Клієнти з інтернету — прямо у ваш{" "}
+                <span className="relative whitespace-nowrap">
+                  <span className="relative z-10">Telegram</span>
+                  <span
+                    aria-hidden
+                    className="absolute inset-x-0 bottom-1 z-0 h-3 rounded-full bg-honey sm:h-3.5"
+                  />
+                </span>
+              </>
+            )}
           </h1>
 
           <p className="mx-auto mt-4 hidden max-w-md text-pretty text-[17px] leading-relaxed text-ink-muted sm:block sm:text-[18px] lg:mx-0">
-            Розкажіть про свою справу прямо тут — помічник збере сайт, а заявки від клієнтів
-            прилетять у ваш месенджер.
+            {igImportEnabled
+              ? "Надішліть посилання на профіль — помічник збере сайт із ваших фото, послуг і контактів. А заявки клієнтів прилітатимуть прямо у ваш Telegram."
+              : "Розкажіть про свою справу прямо тут — помічник збере сайт, який можна знайти в Google, а заявки від клієнтів прилетять у ваш месенджер."}
           </p>
 
           {/* The chat replaces the CTA buttons (§3.4). id="chat" is the anchor
@@ -62,7 +82,10 @@ export function Hero({ igImportEnabled }: { igImportEnabled: boolean }) {
           </div>
 
           <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-[13px] text-ink-muted lg:justify-start">
-            {["Публікація безкоштовна", "Власний домен — 999 грн/рік", "Без коду"].map((claim) => (
+            {/* «Заявки в Telegram» is load-bearing here: the subtitle is
+                hidden on phones, so this strip is the only above-the-fold
+                carrier of the core promise on mobile. */}
+            {["Публікація безкоштовна", "Власний домен — 999 грн/рік", "Заявки в Telegram"].map((claim) => (
               <span key={claim} className="flex items-center gap-1.5">
                 <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-honey" />
                 {claim}

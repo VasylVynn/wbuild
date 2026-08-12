@@ -41,15 +41,14 @@ export function HeroChat({ igImportEnabled }: { igImportEnabled: boolean }) {
  */
 function ChatCardPlaceholder() {
   const greeting = placeholderIg
-    ? "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові. Надішліть посилання на Instagram-сторінку — і я витягну все звідти. Або просто розкажіть, що у вас за бізнес."
-    : "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові. Розкажіть, що у вас за бізнес — для початку досить назви.";
+    ? "Вітаю! 👋 Надішліть посилання на свою Instagram-сторінку — і я зберу з неї сайт прямо в цій розмові, щоб вас знаходили не лише в Instagram, а й у Google. Візьму звідти фото, послуги й контакти — а ви підтвердите. Або просто розкажіть, що у вас за бізнес."
+    : "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові — опублікований сайт можна знайти в Google. Розкажіть, що у вас за бізнес — для початку досить назви.";
   return (
     <div className="relative flex h-[min(560px,72dvh)] flex-col overflow-hidden rounded-[24px] border border-line bg-canvas text-ink shadow-card">
       <header className="border-b border-line bg-surface/85 backdrop-blur">
         <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-2.5">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-honey font-brand text-[19px] font-semibold text-honey-text">
-            3
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/clock.svg" alt="" aria-hidden className="h-11 w-11 shrink-0" />
           <div className="flex flex-col leading-tight">
             <span className="font-brand text-[17px] font-semibold text-ink">Помічник</span>
             <span className="flex items-center gap-1.5 text-[13px] font-bold text-ok">

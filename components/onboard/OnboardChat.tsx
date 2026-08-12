@@ -57,19 +57,25 @@ type Phase = "chat" | "gate" | "generating" | "preview" | "done" | "error";
 // what it can and asks at most 1–2 things itself. Genderless, ≤1 emoji (C4/C5).
 // The last sentence honestly announces the auth gate (M9) — registration must
 // never be a surprise at the end of the conversation.
+// «опублікований сайт можна знайти в Google» — indexability of a PUBLISHED
+// site only; tenant pages are noindex until the owner publishes, so the
+// greeting must not claim Google sees the site before that (copy review
+// 2026-08-12). Any change here must be mirrored in HeroChat's placeholder.
 const GREETING: ChatMsg = {
   role: "assistant",
   content:
-    "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові. Розкажіть, що у вас за бізнес — для початку досить назви. У кінці попрошу пошту, щоб сайт лишився вашим.",
+    "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові — опублікований сайт можна знайти в Google. Розкажіть, що у вас за бізнес — для початку досить назви.",
 };
 
 // Instagram-first greeting (wave E) — shown only when the Apify scrape is
 // configured server-side (igImportEnabled prop), so the promise is never empty.
 // A pasted IG link is now a normal message: the agent calls scrape_instagram itself.
+// Ask-first; «а ви підтвердите» keeps the facts-grounding invariant honest —
+// imported requisites are confirmed by the owner, never just trusted.
 const IG_GREETING: ChatMsg = {
   role: "assistant",
   content:
-    "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові. Надішліть посилання на Instagram-сторінку — і я витягну все звідти. Або просто розкажіть, що у вас за бізнес. У кінці попрошу пошту, щоб сайт лишився вашим.",
+    "Вітаю! 👋 Надішліть посилання на свою Instagram-сторінку — і я зберу з неї сайт прямо в цій розмові, щоб вас знаходили не лише в Instagram, а й у Google. Візьму звідти фото, послуги й контакти — а ви підтвердите. Або просто розкажіть, що у вас за бізнес.",
 };
 
 // The questionnaire progress chips are GONE (W0, plan §0.5) — the agent-status
@@ -341,10 +347,10 @@ function routeBatch(
 // the seconds before the first event, cards still advance — but a clock-driven
 // resolve never claims DATA (no counts, no font names), only the base label.
 const GEN_MESSAGES = [
-  // «до 5 хвилин» = the actual server budget (maxDuration 300 on /new) — a
-  // promise shorter than the timeout reads as a hang exactly when generation
-  // is slowest and the user is most nervous.
-  "Зазвичай це до 3 хвилин, максимум 5 — нікуди не йдіть, ми вже працюємо.",
+  // Owner decision 2026-08-12: promise «близько 3 хвилин» only — no «максимум
+  // 5», even though the server budget is 300s (maxDuration on /new). The
+  // slow-path hang risk is accepted for the stronger 3-minute brand promise.
+  "Зазвичай це близько 3 хвилин — нікуди не йдіть, ми вже працюємо.",
   "Пишемо тексти й підбираємо кольори під ваш бізнес.",
   "Ще трохи — готуємо фото та збираємо сторінку.",
   "Майже готово — фінальні перевірки перед показом.",
@@ -1751,9 +1757,8 @@ export function OnboardChat({
                 <ArrowLeft size={20} />
               </a>
             )}
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-honey font-brand text-[19px] font-semibold text-honey-text">
-              3
-            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/clock.svg" alt="" aria-hidden className="h-11 w-11 shrink-0" />
             <div className="flex flex-col leading-tight">
               <span className="font-brand text-[17px] font-semibold text-ink">Помічник</span>
               {/* Static — the tool/typing indicator below the messages is the
@@ -2181,9 +2186,8 @@ export function OnboardChat({
       <div className={`flex min-h-[100dvh] flex-col items-center justify-center px-6 py-10 ${rootBase}`}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
         <div className="animate-rise flex w-full max-w-md flex-col items-center text-center">
-          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-honey font-brand text-[36px] font-semibold text-honey-text shadow-[0_18px_40px_-14px_rgba(51,41,28,0.4)]">
-            3
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/mark.svg" alt="" aria-hidden className="h-20 w-20" />
           <h2 className="mt-6 font-brand text-[24px] font-semibold leading-tight">
             {gateBiz ? `Сайт для «${gateBiz}» майже готовий` : "Ваш сайт майже готовий"}
           </h2>
