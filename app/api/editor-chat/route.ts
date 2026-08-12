@@ -5,6 +5,7 @@ import { stripLoneSurrogates, sanitizeMessages } from "@/lib/ai/sanitize";
 import {
   buildEditorSystem,
   buildTools,
+  INSTRUCTION_MAX,
   toolInputSchemas,
   TOOL_LABELS,
   type EditorChatMsg,
@@ -201,8 +202,27 @@ export async function POST(req: Request): Promise<Response> {
     `«${blockLibrary[blocks[i]?.type]?.label ?? blocks[i]?.type ?? "?"}»`;
 
   async function runTool(name: ToolName, input: unknown): Promise<ToolOutcome> {
-    const parsed = toolInputSchemas[name].safeParse(input);
-    if (!parsed.success) return { ok: false, summary: `Некоректні аргументи: ${parsed.error.message}` };
+    // Over-long free text is TRIMMED, not refused. A design instruction that
+    // runs past the cap is still a usable instruction, and the owner who asked
+    // for «щось приголомшливе» got a raw zod dump in English instead of a site.
+    const raw =
+      name === "update_style" && typeof (input as { instruction?: unknown })?.instruction === "string"
+        ? {
+            ...(input as Record<string, unknown>),
+            instruction: ((input as { instruction: string }).instruction).slice(0, INSTRUCTION_MAX),
+          }
+        : input;
+    const parsed = toolInputSchemas[name].safeParse(raw);
+    if (!parsed.success) {
+      // The model needs to know WHICH field it got wrong; the owner needs a
+      // sentence. One line that serves both, and never a JSON dump.
+      const first = parsed.error.issues[0];
+      console.warn(`[editor-chat] bad args for ${name}:`, parsed.error.message);
+      return {
+        ok: false,
+        summary: `Не вдалося виконати дію: некоректне поле «${first?.path.join(".") || "?"}» (${first?.message ?? "невірний формат"}).`,
+      };
+    }
     const a = parsed.data as Record<string, unknown>;
 
     const persist = async (next: StoredBlock[], summary: string): Promise<ToolOutcome> => {

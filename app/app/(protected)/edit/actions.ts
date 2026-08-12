@@ -267,7 +267,10 @@ export async function saveDraftStyle(
 
     const draft = (p.draft_content ?? {}) as PageContent;
     const vertical = getVertical(t.vertical as string);
-    const wanted = instruction.trim().slice(0, 400);
+    // Same ceiling as the tool schema (lib/ai/editor-agent INSTRUCTION_MAX):
+    // two different caps on one value is how a request gets silently cut in
+    // half between the door and the room.
+    const wanted = instruction.trim().slice(0, 2_000);
     if (!wanted) return { ok: false, error: "порожня інструкція" };
 
     // The current sheet rides in the brief so the stylist EDITS instead of

@@ -28,6 +28,12 @@ export type EditorChatMsg = { role: "user" | "assistant"; content: string };
 
 const idx = z.number().int().min(0).describe("Номер блоку зі списку ПОТОЧНІ БЛОКИ (0-based).");
 
+/** Room for a whole design direction. The first cap was 400 characters, next to
+ *  an instruction telling the agent to describe everything in ONE call — the two
+ *  contradicted each other, and the owner's «зроби як вважаєш за потрібне, it
+ *  should be stunning» produced a schema rejection instead of a site. */
+export const INSTRUCTION_MAX = 2_000;
+
 export const toolInputSchemas = {
   update_block: z.object({
     index: idx,
@@ -57,9 +63,10 @@ export const toolInputSchemas = {
   update_style: z.object({
     instruction: z
       .string()
-      .max(400)
+      .min(1)
+      .max(INSTRUCTION_MAX)
       .describe(
-        "Що змінити у вигляді сайту, словами: колір акценту, форма й колір кнопок, фон секцій, відступи, тіні, заокруглення, розміри заголовків. Пиши як дизайнеру, не CSS.",
+        "Що змінити у вигляді сайту, словами: настрій, колір акценту, форма й колір кнопок, фон секцій, відступи, тіні, заокруглення, розміри заголовків. Пиши як дизайнеру, не CSS. Один виклик переписує стиль цілком, тож опиши напрям повністю — місця вистачить.",
       ),
   }),
   // D5: page SEO meta. Draft-only like every other tool — goes live on publish.
