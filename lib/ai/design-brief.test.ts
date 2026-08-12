@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   allowedVariantsFrom,
   buildWireframeCapabilities,
+  COMPOSITION_ARCHETYPE_DOCS,
   parseDesignBriefPayload,
 } from "./design-brief";
+import { COMPOSITION_ARCHETYPES } from "@/lib/design/axes";
 import { getTemplate } from "@/lib/templates/registry";
 import type { DesignSpecContext } from "@/lib/site/design-spec";
 
@@ -108,5 +110,13 @@ describe("parseDesignBriefPayload", () => {
       ctx,
     );
     expect(result).toBeNull();
+  });
+});
+
+describe("composition archetype docs", () => {
+  it("documents every seeded archetype exactly once — no drift, no unknowns", () => {
+    expect(Object.keys(COMPOSITION_ARCHETYPE_DOCS).sort()).toEqual(
+      [...COMPOSITION_ARCHETYPES].sort(),
+    );
   });
 });

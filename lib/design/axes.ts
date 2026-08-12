@@ -113,6 +113,40 @@ export function directionForSeed(roll: number): BriefDirection {
 }
 
 // ---------------------------------------------------------------------------
+// Axis: composition archetype («кістяк» сторінки)
+// ---------------------------------------------------------------------------
+
+/**
+ * The seeded composition archetype — the answer to structural convergence
+ * (measured: every live tenant shipped hero → services → values → faq → cta,
+ * the model's «safe» conversion set, while story/gallery variants and the
+ * fact-gated sections stayed untouched). Like the hue anchor, it seeds a
+ * STARTING POINT for the S1 sectionPlan — which section opens the middle and
+ * where services sit — while the model keeps deciding the details. Uniform,
+ * no vertical weighting: every lead is a legitimate story for every trade.
+ */
+export const COMPOSITION_ARCHETYPES = [
+  /** Послуги/ціни одразу за hero; історія мінімальна. */
+  "offer-first",
+  /** Історія/«про нас» одразу за hero; послуги — у середині. */
+  "story-first",
+  /** Доказ: галерея/відгуки ближче до верху; послуги далі. */
+  "proof-first",
+  /** «Як усе відбувається» одразу за hero. */
+  "process-first",
+  /** Редакційний ритм: hero → story → галерея → послуги. */
+  "editorial",
+] as const;
+
+export type CompositionArchetype = (typeof COMPOSITION_ARCHETYPES)[number];
+
+/** Seeded composition-archetype proposal — uniform, no vertical weighting:
+ *  every lead is a legitimate story for every trade. */
+export function compositionArchetypeForSeed(roll: number): CompositionArchetype {
+  return COMPOSITION_ARCHETYPES[Math.floor(clampRoll(roll) * COMPOSITION_ARCHETYPES.length)];
+}
+
+// ---------------------------------------------------------------------------
 // Tuple guard (spec §4): «differ from the previous generation»
 // ---------------------------------------------------------------------------
 
@@ -137,6 +171,7 @@ export interface DesignTuple {
   font: string;
   heroVariant: string;
   hueBucket: number;
+  archetype: string;
 }
 
 /** Parse a stored tuple out of untyped brand JSON; anything malformed reads as
@@ -148,16 +183,22 @@ export function readDesignTuple(value: unknown): DesignTuple | undefined {
     typeof v.font === "string" &&
     typeof v.heroVariant === "string" &&
     typeof v.hueBucket === "number" &&
-    Number.isFinite(v.hueBucket)
+    Number.isFinite(v.hueBucket) &&
+    typeof v.archetype === "string"
   ) {
-    return { font: v.font, heroVariant: v.heroVariant, hueBucket: v.hueBucket };
+    return {
+      font: v.font,
+      heroVariant: v.heroVariant,
+      hueBucket: v.hueBucket,
+      archetype: v.archetype,
+    };
   }
   return undefined;
 }
 
 /**
  * Should this generation take ONE extra roll? Only when the new seeded
- * proposals repeat the previous generation on ALL THREE axes — a repeat on
+ * proposals repeat the previous generation on ALL FOUR axes — a repeat on
  * one axis is legitimate variety (A→B→A is allowed by design). Never loops:
  * the caller rolls exactly once more and takes whatever comes.
  */
@@ -169,7 +210,8 @@ export function shouldReroll(
   return (
     prev.font === next.font &&
     prev.heroVariant === next.heroVariant &&
-    prev.hueBucket === next.hueBucket
+    prev.hueBucket === next.hueBucket &&
+    prev.archetype === next.archetype
   );
 }
 

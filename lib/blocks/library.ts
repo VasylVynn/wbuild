@@ -74,7 +74,9 @@ export const blockLibrary: Record<BlockType, BlockLibraryEntry> = {
     description:
       "Рядки, де фото й текст чергуються ліворуч/праворуч. Для сторітелінгу: майстерня, процес роботи, індивідуальні замовлення, переваги.",
     role: "middle",
-    maxPerPage: 2,
+    // Mirrors the wireframe's non-repeatable `story` section: a second story
+    // block would be silently dropped by assemble (sectionRepeatCap=1).
+    maxPerPage: 1,
     inNav: false,
   },
   services: {

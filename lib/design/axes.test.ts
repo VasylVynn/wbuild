@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { rollAxis } from "./seed";
 import {
   BRIEF_DIRECTIONS,
+  COMPOSITION_ARCHETYPES,
+  compositionArchetypeForSeed,
   directionForSeed,
   fontPairForSeed,
   hueBucketOf,
@@ -25,7 +27,7 @@ describe("rollAxis", () => {
   });
 
   it("keeps purposes independent: different purpose → different stream", () => {
-    const purposes = ["hue", "hue-alt", "variant", "font", "motion", "direction"];
+    const purposes = ["hue", "hue-alt", "variant", "font", "motion", "direction", "archetype"];
     const rolls = purposes.map((p) => rollAxis("kvity.lvh.me", 3, p));
     expect(new Set(rolls).size).toBe(purposes.length);
   });
@@ -140,6 +142,23 @@ describe("directionForSeed", () => {
   });
 });
 
+describe("compositionArchetypeForSeed", () => {
+  it("returns a listed archetype, deterministically, and reaches all of them", () => {
+    const seen = new Set<string>();
+    for (const roll of SWEEP) {
+      const a = compositionArchetypeForSeed(roll);
+      expect(COMPOSITION_ARCHETYPES).toContain(a);
+      expect(compositionArchetypeForSeed(roll)).toBe(a);
+      seen.add(a);
+    }
+    expect(seen.size).toBe(COMPOSITION_ARCHETYPES.length);
+  });
+
+  it("tolerates NaN", () => {
+    expect(COMPOSITION_ARCHETYPES).toContain(compositionArchetypeForSeed(Number.NaN));
+  });
+});
+
 describe("hueBucketOf", () => {
   it("buckets into 0–11 and wraps", () => {
     expect(hueBucketOf(0)).toBe(0);
@@ -157,6 +176,7 @@ describe("tuple guard", () => {
     font: "playfair-inter",
     heroVariant: "split",
     hueBucket: 4,
+    archetype: "offer-first",
     ...over,
   });
 
@@ -165,11 +185,12 @@ describe("tuple guard", () => {
     expect(shouldReroll(null, tuple())).toBe(false);
   });
 
-  it("rerolls ONLY when all three axes repeat", () => {
+  it("rerolls ONLY when all four axes repeat", () => {
     expect(shouldReroll(tuple(), tuple())).toBe(true);
     expect(shouldReroll(tuple(), tuple({ font: "manrope-inter" }))).toBe(false);
     expect(shouldReroll(tuple(), tuple({ heroVariant: "banner" }))).toBe(false);
     expect(shouldReroll(tuple(), tuple({ hueBucket: 5 }))).toBe(false);
+    expect(shouldReroll(tuple(), tuple({ archetype: "story-first" }))).toBe(false);
   });
 
   it("readDesignTuple parses stored JSON and rejects malformed shapes", () => {
@@ -179,5 +200,8 @@ describe("tuple guard", () => {
     expect(readDesignTuple("playfair-inter")).toBeUndefined();
     expect(readDesignTuple({ font: "x", heroVariant: "split" })).toBeUndefined();
     expect(readDesignTuple({ font: "x", heroVariant: "split", hueBucket: "4" })).toBeUndefined();
+    // Pre-archetype tuples (older generations) must not half-parse: the guard
+    // has no archetype to compare, so the whole tuple reads as absent.
+    expect(readDesignTuple({ font: "x", heroVariant: "split", hueBucket: 4 })).toBeUndefined();
   });
 });

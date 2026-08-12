@@ -9,7 +9,7 @@ import { getVertical } from "@/lib/verticals/registry";
 import { getTemplate, type SiteTemplate } from "@/lib/templates/registry";
 import { WIRE_TEMPLATE_ID } from "@/lib/design/wire-style";
 import { FONT_FAMILIES, FONT_PAIRS } from "@/lib/design/font-pairs";
-import type { MotionLevel } from "@/lib/design/axes";
+import type { CompositionArchetype, MotionLevel } from "@/lib/design/axes";
 import {
   designSpecSchema,
   validateDesignSpec,
@@ -47,6 +47,10 @@ export interface SeededProposals {
   motionLevel: MotionLevel;
   /** directionForSeed(...) — the «кут подачі» the positioning starts from. */
   direction: string;
+  /** compositionArchetypeForSeed(...) — the seeded sectionPlan lead: which
+   *  section opens the middle and where services sit (see buildSystem's
+   *  АРХЕТИПИ КОМПОЗИЦІЇ doc for the meanings). */
+  archetype: string;
   /** Seeded per-section layout defaults, e.g. { hero: "mirror" }. */
   sectionVariants?: Record<string, string>;
   /** The seeded HUE anchor, 0–359 (lib/design/seed.ts — invariant 7's single
@@ -167,6 +171,33 @@ export function parseDesignBriefPayload(
 // Prompt
 // ---------------------------------------------------------------------------
 
+/**
+ * The archetype doc the S1 system prompt carries — ONE record per seeded
+ * archetype (lib/design/axes.ts), keyed by the same names. Exported for the
+ * drift vitest: the prompt must never describe an archetype the seed cannot
+ * roll, or a seeded proposal lands as an unknown term (the same failure the
+ * «reaches all of them» tests prevent on the code side).
+ */
+export const COMPOSITION_ARCHETYPE_DOCS: Record<CompositionArchetype, string> = {
+  "offer-first": "послуги/ціни одразу за hero (перша середня секція); історія мінімальна.",
+  "story-first":
+    "одразу за hero йде історія/«про нас» (story або текстова секція); послуги — у середині сторінки.",
+  "proof-first":
+    "одразу за hero йде доказ: галерея чи відгуки (коли для них є реальні фото/факти); послуги — далі.",
+  "process-first": "одразу за hero йде «як усе відбувається» (process); послуги — далі.",
+  editorial: "повільний редакційний ритм: hero → story → галерея → послуги; більше прози, менше карток.",
+};
+
+function archetypesDoc(): string {
+  return (
+    "АРХЕТИПИ КОМПОЗИЦІЇ (обраний у СІДОВАНИХ ПРОПОЗИЦІЯХ — дефолтний КІСТЯК сторінки; дотримуйся його, коли бізнес не просить іншого):\n" +
+    Object.entries(COMPOSITION_ARCHETYPE_DOCS)
+      .map(([id, doc]) => `- ${id} — ${doc}`)
+      .join("\n") +
+    "\nАрхетип визначає ПЕРШУ середню секцію і місце послуг — а не повний сценарій: решту секцій (переваги, FAQ, заклик) добирай за потребою бізнесу."
+  );
+}
+
 function buildSystem(verticalId: string | undefined): string {
   const vertical = getVertical(verticalId);
   // The anti-invention block mirrors generateSite's GROUNDING rules (spec §3
@@ -187,6 +218,8 @@ GROUNDING (критично для довіри):
 - Дефіцит даних покривай секціями, які живуть із чесної ПРОЗИ (послуги з розгорнутими описами, «як усе відбувається», питання-відповіді, переваги, заклик до дії), а НЕ секціями, що вимагають фактів, яких немає: цифри (stats), преса, відгуки — плануй їх ЛИШЕ коли відповідні факти справді є, бо копірайтеру заборонено їх вигадувати, а код прибирає порожні секції.
 - Не плануй секцію-сітку, для якої бізнес має один пункт (напр. команда з однієї людини — це нормально й секція лишиться, але сітки з однієї картки не буде: код подасть її іншим макетом). Ніколи не розраховуй на «доберемо вигадкою».
 - Секція переваг (values) — це КОРОТКІ ТЕЗИ ПРО КОРИСТЬ для клієнта, а не ключові слова: жодних тегів, хештегів, назв міст і англійських дублів. Видимий keyword stuffing шкодить і людям, і пошуку — SEO живе у зв'язному тексті, заголовках і меті.
+
+${archetypesDoc()}
 
 ПРАВИЛА ПО ПОЛЯХ:
 - positioning: promise — одна коротка обіцянка бренду; painPoints — 2–4 реальні болі клієнта цієї ніші; tone — 3–6 слів про подачу; voiceNotes — як звертатися до читача (напр. на «ви», тепло). Жива українська, без канцеляриту й кальок з російської.
@@ -223,6 +256,7 @@ function proposalsDoc(seeded: SeededProposals): string {
     `- шрифтова пара: ${seeded.fontPairId}`,
     `- рівень motion: ${seeded.motionLevel}`,
     `- кут подачі позиціонування: ${seeded.direction}`,
+    `- архетип композиції: ${seeded.archetype} — БЕРИ ЙОГО ЗА ОСНОВУ sectionPlan (перша середня секція і місце послуг); саме він робить кожну генерацію структурно іншою`,
   ];
   if (typeof seeded.hue === "number") {
     lines.push(

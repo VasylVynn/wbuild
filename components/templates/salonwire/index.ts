@@ -77,6 +77,11 @@ export const salonwireSections: Record<string, TemplateSectionDef> = {
     label: "Історія",
     description: "Каркас зиг-загу: рядки текст+фото, сторона фото чергується через --wire-split-order.",
     component: WireSwitchback,
+    // A registered variant opens the switchback type on the generation surface
+    // (computeUnreachableTypes keys off variants.length > 0 — see
+    // lib/ai/generate.ts). zigzag is the one layout; the split side is the
+    // stylist's --wire-split-order, not a second component.
+    variants: { zigzag: WireSwitchback },
   },
   process: {
     block: "timeline",

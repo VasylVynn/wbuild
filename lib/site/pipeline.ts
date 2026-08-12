@@ -21,6 +21,7 @@ import { runDraftQualityLoop } from "@/lib/site/inspect";
 import { advanceDesignNonce, nonceForBrandWrite, rollAxis } from "@/lib/design/seed";
 import { hueForVertical } from "@/lib/design/hue";
 import {
+  compositionArchetypeForSeed,
   directionForSeed,
   fontPairForSeed,
   hueBucketOf,
@@ -230,16 +231,17 @@ interface SeededDesign {
   variantRoll: number;
   motionLevel: MotionLevel;
   direction: string;
+  archetype: string;
   tuple: DesignTuple;
 }
 
 /**
  * Tuple-guarded seeded proposals (spec §4) — the ONE implementation the two
  * old paths used to fork: one extra roll when font AND hero variant AND hue
- * bucket all repeat the previous generation (A→B→A stays legal; never loops).
- * `heroVariant` compares the SEEDED proposal (banner veto ignored — stable
- * across photo changes), never the model's final choice: pre-S1 proposals are
- * cheap, a second model call is not.
+ * bucket AND archetype all repeat the previous generation (A→B→A stays legal;
+ * never loops). `heroVariant` compares the SEEDED proposal (banner veto
+ * ignored — stable across photo changes), never the model's final choice:
+ * pre-S1 proposals are cheap, a second model call is not.
  */
 function seededDesignWithGuard(
   host: string,
@@ -250,16 +252,19 @@ function seededDesignWithGuard(
   const roll = (suffix: "" | "-reroll"): SeededDesign => {
     const hue = hueForVertical(rollAxis(host, nonce, `hue${suffix}`), verticalId);
     const variantRoll = rollAxis(host, nonce, `variant${suffix}`);
+    const archetype = compositionArchetypeForSeed(rollAxis(host, nonce, `archetype${suffix}`));
     return {
       hue,
       altHue: hueForVertical(rollAxis(host, nonce, `hue-alt${suffix}`), verticalId),
       variantRoll,
       motionLevel: motionLevelForSeed(rollAxis(host, nonce, `motion${suffix}`), verticalId),
       direction: directionForSeed(rollAxis(host, nonce, `direction${suffix}`)),
+      archetype,
       tuple: {
         font: fontPairForSeed(rollAxis(host, nonce, `font${suffix}`), verticalId).id,
         heroVariant: heroVariantForSeed(variantRoll, true),
         hueBucket: hueBucketOf(hue),
+        archetype,
       } satisfies DesignTuple,
     };
   };
@@ -423,6 +428,7 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
         fontPairId: seeded.tuple.font,
         motionLevel: seeded.motionLevel,
         direction: seeded.direction,
+        archetype: seeded.archetype,
         // cta gets a seeded proposal for the same reason hero did: it is the
         // one CONTENT-FREE variant choice in the plan, and with nothing to
         // reason from the model took the first-described layout every time —
