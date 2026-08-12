@@ -954,35 +954,60 @@ async function patchGeneratedImages(opts: {
       return b;
     });
 
-  const { data: page } = await sb
-    .from("pages")
-    .select("id, draft_content")
-    .eq("tenant_id", tenant.id)
-    .eq("slug", "")
-    .maybeSingle();
-  if (!page) return;
+  // READ → PATCH → CAS, retried on a lost swap (review catch). The job now
+  // starts at S3 and runs BESIDE S4's writers, which bump contentRev with the
+  // SAME genToken several times per run — so «stale» here usually means «S4
+  // saved between my read and my write», not «a regeneration owns the row».
+  // Surrendering on it permanently dropped the paid images and left the
+  // shimmer tiles on the live site. Each retry re-reads and re-applies the
+  // patch to the FRESH blocks (patchBlocks is a pure function of them); a
+  // CHANGED genToken is still a full stop — that row belongs to a newer
+  // generation, whose own job will bring its own images.
+  const ATTEMPTS = 5;
+  let resolved: PageContent | undefined;
+  let pageId: string | undefined;
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    const { data: page } = await sb
+      .from("pages")
+      .select("id, draft_content")
+      .eq("tenant_id", tenant.id)
+      .eq("slug", "")
+      .maybeSingle();
+    if (!page) return;
 
-  const draft = (page.draft_content ?? {}) as PageContent;
-  if (!Array.isArray(draft.blocks) || draft.genToken !== genToken) return;
+    const draft = (page.draft_content ?? {}) as PageContent;
+    if (!Array.isArray(draft.blocks) || draft.genToken !== genToken) return;
 
-  // Everything but the blocks (and the hero this job produced) carries over
-  // untouched — design included.
-  const resolved: PageContent = {
-    ...draft,
-    blocks: patchBlocks(draft.blocks),
-    ...(hero && { generatedHero: hero }),
-  };
+    // Everything but the blocks (and the hero this job produced) carries over
+    // untouched — design included.
+    const candidate: PageContent = {
+      ...draft,
+      blocks: patchBlocks(draft.blocks),
+      ...(hero && { generatedHero: hero }),
+    };
 
-  // 1) DRAFT — CAS on genToken + the contentRev we just read.
-  const cas = await casUpdateDraft(
-    sb,
-    { pageId: page.id as string, genToken, contentRev: readContentRev(draft) },
-    resolved,
-  );
-  if (!cas.ok) {
-    if (cas.error) log.warn("draft image patch failed", { host, error: cas.error });
-    return; // stale: a newer writer won — nothing more to do.
+    const cas = await casUpdateDraft(
+      sb,
+      { pageId: page.id as string, genToken, contentRev: readContentRev(draft) },
+      candidate,
+    );
+    if (cas.ok) {
+      resolved = candidate;
+      pageId = page.id as string;
+      break;
+    }
+    if (!cas.stale) {
+      log.warn("draft image patch failed", { host, error: cas.error });
+      return;
+    }
+    if (attempt === ATTEMPTS) {
+      log.warn("draft image patch lost every swap", { host, attempts: ATTEMPTS });
+      return;
+    }
+    // S4's writes are seconds apart, not milliseconds — give the row a moment.
+    await new Promise((r) => setTimeout(r, 800 * attempt));
   }
+  if (!resolved || !pageId) return;
 
   // 2) PUBLISHED — write the RESOLVED content gated by CAS on the published
   // token, through the same draft→published projection publish uses.
@@ -990,7 +1015,7 @@ async function patchGeneratedImages(opts: {
   const { data: pRows, error: pErr } = await sb
     .from("pages")
     .update({ published_content: publishedContent })
-    .eq("id", page.id)
+    .eq("id", pageId)
     .eq("published_content->>genToken", genToken)
     .select("id");
   if (pErr) {
