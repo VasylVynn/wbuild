@@ -367,8 +367,15 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
     // exists): with too few usable photos the site ships IMMEDIATELY with
     // shimmer placeholders, and the images arrive via after() below.
     const usable = media ? usablePhotoCount(media) : 0;
+    // ANY mode, deliberately (live loss, avtomaister 2026-08-12): the owner
+    // regenerated from the editor ~30 minutes after onboarding, BEFORE the
+    // deferred image job had patched the shimmer gallery — and the editor run,
+    // gated to onboard-only, armed nothing. The new draft had no gallery, no
+    // hero, nothing pending; the orphaned job lost its CAS; the naked site got
+    // published. A photo-less site needs the imagery whichever path rebuilt it.
+    // `!media?.generatedHero` still stops double-paying: an editor run carries
+    // the already-generated hero in, and a site that HAS one keeps it.
     const needGeneratedImages =
-      mode === "onboard" &&
       usable < MIN_USABLE_PHOTOS &&
       !media?.generatedHero &&
       isImageGenConfigured();
