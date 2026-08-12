@@ -2,7 +2,6 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
-import { Cormorant_Garamond } from "next/font/google";
 import "./ferri.css";
 import FerriNav from "./FerriNav";
 import FerriFooter from "./FerriFooter";
@@ -22,14 +21,6 @@ import FerriFooter from "./FerriFooter";
  * `--ferri-display` indirection (ferri.css), which prefers a shell-injected
  * design-DNA pair and falls back to Cormorant when no pair is rolled.
  */
-const cormorant = Cormorant_Garamond({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  style: ["normal", "italic"],
-  variable: "--font-cormorant",
-  display: "swap",
-});
-
 type Theme = "dark" | "light";
 const STORE_KEY = "fs-tpl-theme";
 
@@ -68,7 +59,7 @@ export default function FerriWrapper({
     });
 
   return (
-    <div className={`tpl-ferri ${cormorant.variable}`} data-theme={theme}>
+    <div className="tpl-ferri" style={{ "--font-cormorant": "'Cormorant Garamond'" } as React.CSSProperties} data-theme={theme}>
       <FerriNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}

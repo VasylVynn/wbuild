@@ -2,7 +2,6 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
-import { Playfair_Display, Poppins } from "next/font/google";
 import SalonNav from "./SalonNav";
 import SalonFooter from "./SalonFooter";
 
@@ -15,20 +14,6 @@ import SalonFooter from "./SalonFooter";
  * next/font as --font-playfair / --font-poppins. `?theme=dark` forces a theme for
  * preview screenshots; a floating toggle lets a visitor switch.
  */
-const playfair = Playfair_Display({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "600", "700"],
-  style: ["normal", "italic"],
-  variable: "--font-playfair",
-  display: "swap",
-});
-const poppins = Poppins({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600"],
-  variable: "--font-poppins",
-  display: "swap",
-});
-
 type Theme = "light" | "dark";
 const STORE_KEY = "salon-tpl-theme";
 
@@ -68,7 +53,7 @@ export default function SalonWrapper({
     });
 
   return (
-    <div className={`tpl-salon ${playfair.variable} ${poppins.variable}`} data-theme={theme}>
+    <div className="tpl-salon" style={{ "--font-playfair": "'Playfair Display'", "--font-poppins": "'Poppins'" } as React.CSSProperties} data-theme={theme}>
       <SalonNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}

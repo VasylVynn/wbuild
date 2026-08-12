@@ -59,3 +59,6 @@ roxybo*
 
 # Playwright/audit screenshots taken at the repo root during live verification
 /*.png
+
+# verification builds (NEXT_DIST_DIR) — never the dev server's own .next
+/.next-build/

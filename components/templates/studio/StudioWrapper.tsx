@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
-import { Inter } from "next/font/google";
 import "./studio.css";
 import StudioNav from "./StudioNav";
 import StudioFooter from "./StudioFooter";
@@ -20,12 +19,6 @@ import StudioFooter from "./StudioFooter";
  * Server component on purpose: it holds no state, so the next/font call stays
  * on the server and the animated (client) sections mount underneath it.
  */
-const inter = Inter({
-  subsets: ["latin", "cyrillic"],
-  variable: "--font-inter",
-  display: "swap",
-});
-
 export default function StudioWrapper({
   children,
   brand,
@@ -34,7 +27,7 @@ export default function StudioWrapper({
   brand?: TemplateBrand;
 }) {
   return (
-    <div className={`tpl-studio ${inter.variable}`}>
+    <div className="tpl-studio" style={{ "--font-inter": "'Inter'" } as React.CSSProperties}>
       <div className="noise-overlay" aria-hidden="true" />
       <StudioNav
         brandName={brand?.brandName}

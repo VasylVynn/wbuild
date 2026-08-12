@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
-import { Inter, Playfair_Display } from "next/font/google";
 import PortfolioNav from "./PortfolioNav";
 import PortfolioFooter from "./PortfolioFooter";
 
@@ -12,19 +11,6 @@ import PortfolioFooter from "./PortfolioFooter";
  * Playfair Display (serif accent), both with Cyrillic, exposed as
  * --font-portfolio-sans / --font-portfolio-serif.
  */
-const inter = Inter({
-  subsets: ["latin", "cyrillic"],
-  variable: "--font-portfolio-sans",
-  display: "swap",
-});
-const playfair = Playfair_Display({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600", "700"],
-  style: ["normal", "italic"],
-  variable: "--font-portfolio-serif",
-  display: "swap",
-});
-
 export default function PortfolioWrapper({
   children,
   brand,
@@ -33,7 +19,7 @@ export default function PortfolioWrapper({
   brand?: TemplateBrand;
 }) {
   return (
-    <div className={`tpl-portfolio ${inter.variable} ${playfair.variable}`}>
+    <div className="tpl-portfolio" style={{ "--font-portfolio-sans": "'Inter'", "--font-portfolio-serif": "'Playfair Display'" } as React.CSSProperties}>
       <PortfolioNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}

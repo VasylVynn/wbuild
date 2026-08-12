@@ -2,7 +2,6 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
-import { Inter } from "next/font/google";
 import NextlyNav from "./NextlyNav";
 import NextlyFooter from "./NextlyFooter";
 
@@ -15,13 +14,6 @@ import NextlyFooter from "./NextlyFooter";
  * --font-nextly. `?theme=dark` forces a theme for preview screenshots; a floating
  * toggle lets a visitor switch.
  */
-const inter = Inter({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-nextly",
-  display: "swap",
-});
-
 type Theme = "light" | "dark";
 const STORE_KEY = "nextly-tpl-theme";
 
@@ -59,7 +51,7 @@ export default function NextlyWrapper({
     });
 
   return (
-    <div className={`tpl-nextly ${inter.variable}`} data-theme={theme}>
+    <div className="tpl-nextly" style={{ "--font-nextly": "'Inter'" } as React.CSSProperties} data-theme={theme}>
       <NextlyNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}

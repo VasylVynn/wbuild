@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { getEditorData } from "@/app/app/(protected)/edit/actions";
 import { getTemplate } from "@/lib/templates/registry";
 import { buildTemplateBrand } from "@/lib/templates/brand";
-import { TENANT_FONT_CLASSES } from "@/lib/fonts";
 import { PageRenderer } from "@/components/PageRenderer";
 
 /**
@@ -35,7 +34,7 @@ export default async function EditorFramePage({
   if (!template) notFound();
 
   return (
-    <div className={TENANT_FONT_CLASSES}>
+    <div>
       <PageRenderer
         blocks={data.blocks}
         templateId={data.templateId}

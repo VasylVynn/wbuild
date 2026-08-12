@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
-import { Quicksand } from "next/font/google";
 import AiSaasNav from "./AiSaasNav";
 import AiSaasFooter from "./AiSaasFooter";
 
@@ -11,13 +10,6 @@ import AiSaasFooter from "./AiSaasFooter";
  * Quicksand typeface (exposed as --font-aisaas) and hosts Nav/Footer. Single
  * light theme → a plain server component.
  */
-const quicksand = Quicksand({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-aisaas",
-  display: "swap",
-});
-
 export default function AiSaasWrapper({
   children,
   brand,
@@ -26,7 +18,7 @@ export default function AiSaasWrapper({
   brand?: TemplateBrand;
 }) {
   return (
-    <div className={`tpl-aisaas ${quicksand.variable}`}>
+    <div className="tpl-aisaas" style={{ "--font-aisaas": "'Quicksand'" } as React.CSSProperties}>
       <AiSaasNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}

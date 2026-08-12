@@ -21,7 +21,6 @@ import { blockRegistry } from "@/lib/blocks/registry";
 import { blockLibrary } from "@/lib/blocks/library";
 import { getTemplate, type SiteTemplate, type TemplateBrand } from "@/lib/templates/registry";
 import { buildTemplateBrand } from "@/lib/templates/brand";
-import { TENANT_FONT_CLASSES } from "@/lib/fonts";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import { Button, Card, Chip, ConfirmDialog, Sheet, Textarea, Toast } from "@/components/ui";
 import EditableSection from "./EditableSection";
@@ -655,7 +654,6 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
                 // Tenant font parity (v2 §11-V3): the same font-variable classes
                 // the frame route and the public layout attach, so the draft's
                 // designSpec `--font-*` vars resolve to real families inline too.
-                className={TENANT_FONT_CLASSES}
                 // The preview's Nav uses `position: fixed`; a transform here makes
                 // this the containing block for it so it stays INSIDE the framed
                 // preview instead of floating over the editor chrome.

@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
-import { Rubik } from "next/font/google";
 import React2021Nav from "./React2021Nav";
 import React2021Footer from "./React2021Footer";
 
@@ -11,13 +10,6 @@ import React2021Footer from "./React2021Footer";
  * so the wrapper only loads the Rubik typeface (exposed as --font-react2021) and
  * hosts Nav/Footer. Single light theme → a plain server component (no toggle).
  */
-const rubik = Rubik({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-react2021",
-  display: "swap",
-});
-
 export default function React2021Wrapper({
   children,
   brand,
@@ -26,7 +18,7 @@ export default function React2021Wrapper({
   brand?: TemplateBrand;
 }) {
   return (
-    <div className={`tpl-react2021 ${rubik.variable}`}>
+    <div className="tpl-react2021" style={{ "--font-react2021": "'Rubik'" } as React.CSSProperties}>
       <React2021Nav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}

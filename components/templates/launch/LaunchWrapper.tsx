@@ -2,7 +2,6 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
-import { Manrope, Inter } from "next/font/google";
 import "./launch.css";
 import LaunchNav from "./LaunchNav";
 import LaunchFooter from "./LaunchFooter";
@@ -18,21 +17,6 @@ import LaunchFooter from "./LaunchFooter";
  * `?theme=` forces a theme for preview screenshots; a floating toggle lets a
  * visitor switch; the seeded brand.dnaTheme is the initial default.
  */
-const manrope = Manrope({
-  subsets: ["latin", "cyrillic"],
-  weight: ["500", "600", "700", "800"],
-  variable: "--font-launch-display",
-  display: "swap",
-  preload: false,
-});
-const inter = Inter({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-launch-body",
-  display: "swap",
-  preload: false,
-});
-
 type Theme = "light" | "dark";
 const STORE_KEY = "launch-tpl-theme";
 
@@ -70,7 +54,7 @@ export default function LaunchWrapper({
     });
 
   return (
-    <div className={`tpl-launch ${manrope.variable} ${inter.variable}`} data-theme={theme}>
+    <div className="tpl-launch" style={{ "--font-launch-display": "'Manrope'", "--font-launch-body": "'Inter'" } as React.CSSProperties} data-theme={theme}>
       <LaunchNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}

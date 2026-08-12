@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
-import { Lora, Inter } from "next/font/google";
 import RestaurantNav from "./RestaurantNav";
 import RestaurantFooter from "./RestaurantFooter";
 
@@ -13,19 +12,6 @@ import RestaurantFooter from "./RestaurantFooter";
  * scope) and Inter (body → --font-restaurant-body) — and hosts Nav/Footer. Single
  * light theme → a plain server component (no toggle).
  */
-const lora = Lora({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-restaurant-display",
-  display: "swap",
-});
-const inter = Inter({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-restaurant-body",
-  display: "swap",
-});
-
 export default function RestaurantWrapper({
   children,
   brand,
@@ -34,7 +20,7 @@ export default function RestaurantWrapper({
   brand?: TemplateBrand;
 }) {
   return (
-    <div className={`tpl-restaurant ${lora.variable} ${inter.variable}`}>
+    <div className="tpl-restaurant" style={{ "--font-restaurant-display": "'Lora'", "--font-restaurant-body": "'Inter'" } as React.CSSProperties}>
       <RestaurantNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}

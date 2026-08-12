@@ -1,20 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Manrope, Unbounded } from "next/font/google";
 import { isApifyConfigured } from "@/lib/ig/apify";
 import "./globals.css";
-
-const manrope = Manrope({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-manrope",
-});
-
-const unbounded = Unbounded({
-  subsets: ["latin", "cyrillic"],
-  weight: ["500", "600"],
-  variable: "--font-unbounded",
-});
+// Self-hosted fonts (scripts/vendor-fonts.mjs): every @font-face the product
+// uses plus the :root --font-* variables the design system reads. Replaces the
+// next/font/google loaders that broke the build whenever Google rotated files.
+import "./fonts.css";
 
 export const viewport: Viewport = {
   colorScheme: "light",
@@ -38,7 +29,7 @@ export const metadata: Metadata = isApifyConfigured()
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="uk" className={`${manrope.variable} ${unbounded.variable}`}>
+    <html lang="uk">
       <body className="antialiased">{children}</body>
     </html>
   );

@@ -4,17 +4,22 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_FONT_PAIR_ID, FONT_FAMILIES, FONT_PAIRS, getFontPair } from "./font-pairs";
 
 /**
- * `lib/fonts.ts` cannot be imported here — next/font loaders are Next-compiler
- * magic and throw under plain node — so the loaded-family invariant is checked
- * against the SOURCE: every family the whitelist references must have a loader
- * literal (`variable: "--font-…"`) in lib/fonts.ts or app/layout.tsx
- * (Manrope/Unbounded live on the root <html>).
+ * Fonts are SELF-HOSTED (scripts/vendor-fonts.mjs → app/fonts.css) since the
+ * Google fetch broke two deploys and local dev in one week. The invariant this
+ * suite holds is unchanged — every family the whitelist references must
+ * actually be loadable — but the artifact it checks moved: app/fonts.css must
+ * declare the @font-face AND map the family's --font-* variable in :root.
  */
 const fontsSource = readFileSync(join(process.cwd(), "lib/fonts.ts"), "utf8");
-const layoutSource = readFileSync(join(process.cwd(), "app/layout.tsx"), "utf8");
+const fontsCss = readFileSync(join(process.cwd(), "app/fonts.css"), "utf8");
 
-const loaderVars = (source: string): Set<string> =>
-  new Set([...source.matchAll(/variable:\s*"(--font-[a-z0-9-]+)"/g)].map((m) => m[1]));
+/** --font-x → family name, from the generated :root block. */
+const rootVars = new Map(
+  [...fontsCss.matchAll(/^\s{2}(--font-[a-z0-9-]+):\s*"([^"]+)";$/gm)].map((m) => [m[1], m[2]]),
+);
+const declaredFamilies = new Set(
+  [...fontsCss.matchAll(/font-family:\s*'([^']+)';/g)].map((m) => m[1]),
+);
 
 describe("font-pair whitelist integrity", () => {
   it("has ~10 pairs with unique ids shaped <heading>-<body>", () => {
@@ -45,24 +50,40 @@ describe("font-pair whitelist integrity", () => {
   });
 });
 
-describe("whitelist ↔ loaded fonts (source check)", () => {
-  const loaded = new Set([...loaderVars(fontsSource), ...loaderVars(layoutSource)]);
-
-  it("every referenced family's CSS variable has a next/font loader", () => {
+describe("whitelist ↔ vendored fonts (app/fonts.css)", () => {
+  it("every referenced family has a :root variable AND real @font-face blocks", () => {
     for (const [id, family] of Object.entries(FONT_FAMILIES)) {
-      expect(loaded.has(family.cssVar), `${id} → ${family.cssVar}`).toBe(true);
+      const name = rootVars.get(family.cssVar);
+      expect(name, `${id} → ${family.cssVar} missing from :root`).toBeDefined();
+      expect(declaredFamilies.has(name!), `${id} → no @font-face for "${name}"`).toBe(true);
     }
   });
 
-  it("TENANT_FONT_VARIABLES export mirrors the loader literals in lib/fonts.ts", () => {
-    const block = fontsSource.match(/TENANT_FONT_VARIABLES = \[([^\]]+)\]/)?.[1] ?? "";
-    const exported = new Set([...block.matchAll(/"(--font-[a-z0-9-]+)"/g)].map((m) => m[1]));
-    expect(exported).toEqual(loaderVars(fontsSource));
+  it("every WHITELIST family is cyrillic-capable (ґ/є/і/ї live in this range)", () => {
+    // One block per family must carry the cyrillic unicode-range — a family
+    // without it silently renders Ukrainian in the fallback font. Scoped to
+    // the whitelist: fonts.css also vendors legacy-template extras (Poppins et
+    // al, "-vendored" suffix) that genuinely lack Cyrillic — those templates
+    // are porting source material and never generated into (CLAUDE.md §7).
+    const whitelisted = new Map(
+      Object.values(FONT_FAMILIES).map((f) => [f.cssVar, rootVars.get(f.cssVar)!]),
+    );
+    for (const [, name] of whitelisted) {
+      const block = new RegExp(
+        `font-family: '${name}';[^}]*unicode-range:[^}]*U\\+0400-045F`,
+      );
+      expect(block.test(fontsCss), `${name} has no cyrillic subset`).toBe(true);
+    }
   });
 
-  it("PLATFORM_FONT_VARIABLES export mirrors the root-layout loaders", () => {
-    const block = fontsSource.match(/PLATFORM_FONT_VARIABLES = \[([^\]]+)\]/)?.[1] ?? "";
-    const exported = new Set([...block.matchAll(/"(--font-[a-z0-9-]+)"/g)].map((m) => m[1]));
-    expect(exported).toEqual(loaderVars(layoutSource));
+  it("the exported variable lists mirror the :root block", () => {
+    const listed = (block: string) =>
+      new Set([...(fontsSource.match(new RegExp(`${block} = \\[([^\\]]+)\\]`, "s"))?.[1] ?? "").matchAll(/"(--font-[a-z0-9-]+)"/g)].map((m) => m[1]));
+    for (const v of listed("TENANT_FONT_VARIABLES")) {
+      expect(rootVars.has(v), `${v} exported but not in fonts.css`).toBe(true);
+    }
+    for (const v of listed("PLATFORM_FONT_VARIABLES")) {
+      expect(rootVars.has(v), `${v} exported but not in fonts.css`).toBe(true);
+    }
   });
 });

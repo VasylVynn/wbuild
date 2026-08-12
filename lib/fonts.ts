@@ -1,58 +1,33 @@
-import {
-  Inter,
-  Montserrat,
-  Rubik,
-  Lora,
-  Source_Sans_3,
-  Literata,
-  Cormorant_Garamond,
-  Nunito,
-  Nunito_Sans,
-  Playfair_Display,
-  Jost,
-  Onest,
-} from "next/font/google";
-
 /**
- * next/font loaders for the curated pairs (lib/design/font-pairs.ts). Imported
- * ONLY by tenant-rendering layouts (public shell + editor frame) — attaching
- * TENANT_FONT_CLASSES registers every family's @font-face + CSS variable.
+ * Font registry — SELF-HOSTED since 2026-08-12.
  *
- * `preload: false` everywhere: the browser downloads a family's woff2 ONLY
- * when applied CSS actually references its variable, so a tenant pays bytes
- * for its chosen pair alone; unused families cost just the @font-face rules.
- * The platform's own pair (Manrope/Unbounded in the root layout) keeps its
- * preloading behavior there. Trade-off (research doc, addendum #5): the
- * chosen pair swaps in after first paint (FOUT) — accepted, measured in E2E.
+ * This module used to hold fourteen next/font/google loaders. Google rotates
+ * the files behind fonts.gstatic.com, and any warm cache that remembered the
+ * old URLs then requested 404s: the Vercel deploy failed twice (Playfair) and
+ * local dev broke once (Nunito) inside one week, each time looking like a
+ * different bug («Module not found», 500s on the tenant root). The fonts now
+ * live in the repo — `scripts/vendor-fonts.mjs` downloads them into
+ * public/fonts/ and writes app/fonts.css, which the root layout imports.
+ *
+ * app/fonts.css owns BOTH halves of the old loaders' job:
+ *   - @font-face blocks (Google's own css2 output, unicode-range subsetting
+ *     intact, URLs rewritten to /fonts/…);
+ *   - a :root block mapping every --font-* variable to its family name, which
+ *     is why no per-layout className attachment exists any more — the
+ *     variables are global, and only pages whose CSS actually references a
+ *     family download its files.
+ *
+ * The lists below are the CONTRACT the rest of the product reads: the
+ * font-pair whitelist (lib/design/font-pairs.ts) may only reference these
+ * variables, and lib/design/font-pairs.test.ts checks them against
+ * app/fonts.css — a family removed from the css without leaving these lists
+ * (or vice versa) fails the suite.
  *
  * All families verified to ship a true `cyrillic` subset (ґ/є/і/ї —
  * U+0490-0491 + U+0400-045F are inside Google's cyrillic unicode-range).
  */
 
-// Manrope and Unbounded are NOT declared here: the root layout already
-// registers --font-manrope/--font-unbounded on <html> (global), and pairs
-// reference those variables directly.
-const inter = Inter({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-inter" });
-const montserrat = Montserrat({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-montserrat" });
-const rubik = Rubik({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-rubik" });
-const lora = Lora({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-lora" });
-const sourceSans = Source_Sans_3({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-source-sans" });
-const literata = Literata({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-literata" });
-const cormorant = Cormorant_Garamond({ subsets: ["latin", "cyrillic"], weight: ["400", "500", "600", "700"], display: "swap", preload: false, variable: "--font-cormorant" });
-const nunito = Nunito({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-nunito" });
-const nunitoSans = Nunito_Sans({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-nunito-sans" });
-const playfair = Playfair_Display({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-playfair" });
-const jost = Jost({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-jost" });
-const onest = Onest({ subsets: ["latin", "cyrillic"], display: "swap", preload: false, variable: "--font-onest" });
-
-/**
- * CSS custom properties the loaders above register — kept as LITERALS because
- * next/font loader options must be statically analyzable, so nothing here can
- * be derived from a shared constant. The whitelist (lib/design/font-pairs.ts)
- * may only reference these plus the two root-layout globals; the vitest in
- * lib/design/font-pairs.test.ts source-checks both mirrors, since this module
- * cannot be imported outside the Next compiler.
- */
+/** Families a tenant's designSpec may pick (lib/design/font-pairs.ts). */
 export const TENANT_FONT_VARIABLES = [
   "--font-inter",
   "--font-montserrat",
@@ -68,23 +43,5 @@ export const TENANT_FONT_VARIABLES = [
   "--font-onest",
 ] as const;
 
-/** Registered globally by app/layout.tsx on <html> — see header note. */
+/** The platform's own brand pair (landing, dashboard chrome). */
 export const PLATFORM_FONT_VARIABLES = ["--font-manrope", "--font-unbounded"] as const;
-
-/** Attach on every tenant-rendering shell (public layout + editor frame). */
-export const TENANT_FONT_CLASSES = [
-  inter,
-  montserrat,
-  rubik,
-  lora,
-  sourceSans,
-  literata,
-  cormorant,
-  nunito,
-  nunitoSans,
-  playfair,
-  jost,
-  onest,
-]
-  .map((f) => f.variable)
-  .join(" ");

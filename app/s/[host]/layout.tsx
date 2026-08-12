@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { getTenantByHost } from "@/lib/tenant/data";
-import { TENANT_FONT_CLASSES } from "@/lib/fonts";
 import { Beacon } from "@/components/site/Beacon";
 
 /**
@@ -25,7 +24,7 @@ export default async function TenantLayout({
   if (!tenant) notFound();
 
   return (
-    <div className={`flex min-h-screen flex-col ${TENANT_FONT_CLASSES}`}>
+    <div className="flex min-h-screen flex-col">
       <main className="flex-1">{children}</main>
       <Beacon />
     </div>

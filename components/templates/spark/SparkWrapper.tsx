@@ -2,7 +2,6 @@
 
 import { useState, useEffect, type ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
-import { Inter, JetBrains_Mono } from "next/font/google";
 import SparkNav from "./SparkNav";
 import SparkFooter from "./SparkFooter";
 import "./spark.css";
@@ -19,21 +18,6 @@ import "./spark.css";
  * --font-spark-mono. Both preload:false, display swap, latin+cyrillic. The
  * scope's --spark-display/--spark-body indirections prefer a DNA-injected pair.
  */
-const inter = Inter({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600"],
-  variable: "--font-spark-sans",
-  display: "swap",
-  preload: false,
-});
-const mono = JetBrains_Mono({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500"],
-  variable: "--font-spark-mono",
-  display: "swap",
-  preload: false,
-});
-
 type Theme = "light" | "dark";
 const STORE_KEY = "spark-tpl-theme";
 
@@ -72,7 +56,7 @@ export default function SparkWrapper({
     });
 
   return (
-    <div className={`tpl-spark ${inter.variable} ${mono.variable}`} data-theme={theme}>
+    <div className="tpl-spark" style={{ "--font-spark-sans": "'Inter'", "--font-spark-mono": "'JetBrains Mono'" } as React.CSSProperties} data-theme={theme}>
       <SparkNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}

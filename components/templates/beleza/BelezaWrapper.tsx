@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { TemplateBrand } from "@/lib/templates/registry";
-import { Comfortaa, Nunito } from "next/font/google";
 import "./beleza.css";
 import BelezaNav from "./BelezaNav";
 import BelezaFooter from "./BelezaFooter";
@@ -23,21 +22,6 @@ import BelezaFooter from "./BelezaFooter";
  * no state, no data-theme toggle, so the next/font call stays on the server and
  * the animated (client) sections mount underneath it.
  */
-const comfortaa = Comfortaa({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-beleza-display",
-  display: "swap",
-  preload: false,
-});
-const nunito = Nunito({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-beleza-body",
-  display: "swap",
-  preload: false,
-});
-
 export default function BelezaWrapper({
   children,
   brand,
@@ -46,7 +30,7 @@ export default function BelezaWrapper({
   brand?: TemplateBrand;
 }) {
   return (
-    <div className={`tpl-beleza ${comfortaa.variable} ${nunito.variable}`}>
+    <div className="tpl-beleza" style={{ "--font-beleza-display": "'Comfortaa'", "--font-beleza-body": "'Nunito'" } as React.CSSProperties}>
       <BelezaNav
         brandName={brand?.brandName}
         brandAccent={brand?.brandAccent}
