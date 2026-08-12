@@ -34,10 +34,14 @@ const FAMILIES = {
   lora: { spec: "Lora:wght@400..700", name: "Lora", cssVar: "--font-lora" },
   "source-sans": { spec: "Source+Sans+3:wght@200..900", name: "Source Sans 3", cssVar: "--font-source-sans" },
   literata: { spec: "Literata:wght@200..900", name: "Literata", cssVar: "--font-literata" },
-  cormorant: { spec: "Cormorant+Garamond:wght@400;500;600;700", name: "Cormorant Garamond", cssVar: "--font-cormorant" },
+  // Real italics, not faux: the legacy ferri/salon/portfolio wrappers loaded
+  // them explicitly (and ferri from weight 300), and tenant stylists write
+  // `font-style: italic` for serif headings — a synthesized oblique on a serif
+  // reads as a rendering bug.
+  cormorant: { spec: "Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700", name: "Cormorant Garamond", cssVar: "--font-cormorant" },
   nunito: { spec: "Nunito:wght@200..1000", name: "Nunito", cssVar: "--font-nunito" },
   "nunito-sans": { spec: "Nunito+Sans:wght@200..1000", name: "Nunito Sans", cssVar: "--font-nunito-sans" },
-  playfair: { spec: "Playfair+Display:wght@400..900", name: "Playfair Display", cssVar: "--font-playfair" },
+  playfair: { spec: "Playfair+Display:ital,wght@0,400..900;1,400..900", name: "Playfair Display", cssVar: "--font-playfair" },
   jost: { spec: "Jost:wght@100..900", name: "Jost", cssVar: "--font-jost" },
   onest: { spec: "Onest:wght@100..900", name: "Onest", cssVar: "--font-onest" },
   manrope: { spec: "Manrope:wght@200..800", name: "Manrope", cssVar: "--font-manrope" },
