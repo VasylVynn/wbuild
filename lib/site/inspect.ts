@@ -509,10 +509,17 @@ export async function runDraftQualityLoop(opts: {
    *  one regen trying to replace it with real work. */
   styleFellBack?: boolean;
 }): Promise<{
-  /** The sheet as this loop LEFT it. S4 can replace the S3 sheet with a
-   *  corrective regeneration, so the caller's own S3 copy is stale the moment
-   *  that happens — and the editor renders from what the caller returns. */
+  /** The sheet as this loop LEFT it, present ONLY when its write landed. S4 can
+   *  replace the S3 sheet with a corrective regeneration, so the caller's own
+   *  S3 copy is stale the moment that happens — and the editor renders from
+   *  what the caller returns. */
   wireCss?: string;
+  /** The style write LOST its compare-and-swap: another writer changed the row
+   *  first, and this function has no idea what is on it now. The caller must
+   *  not fall back to its own copy either — that is a guess wearing the clothes
+   *  of a fact. Nothing to render means «go and re-read», and the editor
+   *  reloads. */
+  unknown?: boolean;
 }> {
   const { host, facts, dossier } = opts;
   const textRounds = opts.textRounds ?? 2;
@@ -691,14 +698,17 @@ export async function runDraftQualityLoop(opts: {
       if (style.report.flagged) {
         console.warn(`[style-audit] ${host} FLAGGED: ${style.report.correctiveNote ?? "final fail"}`);
       }
-      // What the caller must render — and ONLY when it actually landed. The
-      // CAS above can lose: a newer writer (the deferred image patch races this
-      // loop) bumps the rev and our write is dropped. Returning `style.css`
-      // anyway would put a sheet on screen that exists nowhere but this
-      // function's memory, and it would vanish on the next reload — the exact
-      // «changes are not visible until reload» complaint, inverted. On a lost
-      // write the caller falls back to its own S3 copy, which IS persisted.
-      return { ...(cas.ok && style.css ? { wireCss: style.css } : {}) };
+      // What the caller must render — and ONLY when it actually landed.
+      //
+      // The CAS above can lose: another writer changed the row first. Returning
+      // `style.css` anyway would put a sheet on screen that exists nowhere but
+      // this function's memory and would vanish on the next reload — the
+      // owner's complaint inverted. And falling back to the caller's own S3
+      // copy is no better: after a lost swap NOBODY here knows what the row
+      // holds, so that copy is a guess too. Say «unknown» and let the caller
+      // re-read instead of choosing between two stale answers.
+      if (!cas.ok) return { unknown: true };
+      return { ...(style.css && { wireCss: style.css }) };
     }
   } catch (e) {
     // Fail-open by contract: the loop must never take generation down.
