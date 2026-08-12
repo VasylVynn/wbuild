@@ -32,6 +32,7 @@ import {
 } from "@/lib/design/axes";
 import { FONT_FAMILIES, getFontPair } from "@/lib/design/font-pairs";
 import { buildStyleBrief } from "@/lib/design/style-brief";
+import { buildFallbackWireCss } from "@/lib/design/fallback-style";
 import { generateWireStyle, WIRE_TEMPLATE_ID } from "@/lib/design/wire-style";
 import { getTemplate } from "@/lib/templates/registry";
 import type { StoredBlock } from "@/lib/blocks/schema";
@@ -537,6 +538,21 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
     // ── S3: deterministic compile + THE draft write ─────────────────────────
     await emit({ stage: "s3_compile", status: "start" });
     const compiled = compileWireCss(rawCss, prevWireCss);
+    // NEVER ship a site with no stylesheet. When the style leg fails on a brand
+    // new tenant there is no previous sheet to fall back to, and the compile
+    // returns nothing — the site went live as the bare grey wireframe, and the
+    // S4 audit called it «pass» because an absent sheet has no violations. The
+    // seeded hue, font pair and motion level are all computed BEFORE any model
+    // is called, so a plain but real design is always available for free.
+    if (!compiled.wireCss) {
+      compiled.wireCss = buildFallbackWireCss({
+        hue: seeded.hue,
+        pairId: brief?.spec.typography.pairId ?? seeded.tuple.font,
+        motionLevel: brief?.spec.motion.level ?? seeded.motionLevel,
+      });
+      compiled.lintNotes.push("style leg produced nothing — shipped the seeded fallback sheet");
+      log.warn("no model stylesheet — using the seeded fallback", { host });
+    }
     if (compiled.lintNotes.length) {
       // The notes THEMSELVES, not a count (invariant 10): when S4 is skipped
       // on the deadline, styleAudit.compileNotes is never written and this log
