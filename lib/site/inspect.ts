@@ -661,7 +661,12 @@ export async function runDraftQualityLoop(opts: {
               ? `[inspect] ${host}: stale contentRev/genToken — newer writer won, loop aborted`
               : `[inspect] ${host}: draft save failed, loop aborted: ${cas.error}`,
           );
-          return {};
+          // Same admission as the style write below: a lost swap means another
+          // writer owns the row and this function no longer knows what is on
+          // it — including the stylesheet, which that writer may well have
+          // replaced. `{}` would read as «nothing changed», and the caller
+          // would ship its stale S3 copy on the strength of it.
+          return { unknown: true };
         }
         rev = cas.nextRev;
         dirty = false;
