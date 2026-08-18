@@ -935,7 +935,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       <ConfirmDialog
         open={regenConfirmOpen}
         title="Зібрати сайт наново з ваших даних?"
-        body="Поточна версія збережеться в чернетках. Збірка триває до 3 хвилин — можна тим часом роздивлятися сайт."
+        body="Поточна версія збережеться в чернетках. Новий варіант зʼявиться тут сам — зазвичай за ~3 хвилини."
         confirmLabel="Так, зібрати"
         onConfirm={() => void runRegenerate()}
         onCancel={() => setRegenConfirmOpen(false)}
@@ -953,7 +953,7 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
             aria-hidden
             className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-honey border-t-transparent"
           />
-          Збираємо сайт наново — зазвичай це близько 3 хвилин…
+          Збираємо новий варіант — зазвичай це близько 3 хвилин…
         </div>
       )}
 
