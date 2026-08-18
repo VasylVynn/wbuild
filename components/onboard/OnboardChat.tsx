@@ -752,12 +752,23 @@ export function OnboardChat({
     [],
   );
 
+  // A restored transcript must open at its END: after the login-gate return
+  // the generation status/CTA lives at the bottom, and a column parked at the
+  // top hides that anything is happening (owner feedback 2026-08-17). The
+  // restore effect arms this flag before each setMessages.
+  const jumpToEndRef = useRef(false);
+
   // Auto-scroll the chat COLUMN only (scrollIntoView would also scroll the
   // page/preview ancestors). Own sends always jump; otherwise don't yank the
   // owner back down if they scrolled up to read.
   useEffect(() => {
     const el = chatScrollRef.current;
     if (!el) return;
+    if (jumpToEndRef.current) {
+      jumpToEndRef.current = false;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
     const last = messages[messages.length - 1];
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 300;
     if (nearBottom || last?.role === "user") el.scrollTop = el.scrollHeight;
@@ -867,6 +878,7 @@ export function OnboardChat({
         // a site moments ago and is still in that tab; the effect below
         // consumes the flag AFTER this state flushes, so generation reads the
         // restored facts (the auth gate still applies).
+        jumpToEndRef.current = true;
         setMessages(data.messages);
         setAutoGenerate(true);
         return;
@@ -874,6 +886,7 @@ export function OnboardChat({
       if (fromUrl && wantsResume) {
         // M12 §3: recap + single CTA (the CTA renders when `confirmed` was
         // restored above). Transient by design — not persisted as a turn.
+        jumpToEndRef.current = true;
         setMessages([
           ...data.messages,
           {
@@ -887,6 +900,7 @@ export function OnboardChat({
         ]);
         return;
       }
+      jumpToEndRef.current = true;
       setMessages(data.messages);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only; `embedded` never changes at runtime
@@ -1728,7 +1742,7 @@ export function OnboardChat({
       ? `h-[100dvh] ${rootBase} lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(400px,32%)]`
       : expanded
         ? `fixed inset-0 z-[100] flex h-[100dvh] flex-col ${rootBase}`
-        : `relative flex h-[min(560px,72dvh)] flex-col overflow-hidden rounded-[24px] border border-line shadow-card ${rootBase}`;
+        : `relative flex h-[clamp(20rem,calc(100dvh-16.5rem),560px)] flex-col overflow-hidden rounded-[24px] border border-line shadow-card sm:h-[min(560px,72dvh)] ${rootBase}`;
     return (
       <div className={shellClass}>
         <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
@@ -2096,7 +2110,10 @@ export function OnboardChat({
               // M10: the first focus on the collapsed hero card expands the
               // chat into the fullscreen overlay — same origin, no navigation.
               onFocus={embedded ? () => setExpanded(true) : undefined}
-              disabled={loading}
+              // Typing stays available while the agent works (owner feedback
+              // 2026-08-17) — only SUBMISSION is gated: the send button below
+              // and send() itself both check `loading`, so Enter mid-turn is a
+              // no-op and the draft text survives until the reply lands.
               placeholder={confirmed ? "Або допишіть щось…" : "Написати…"}
               autoComplete="off"
               className="h-14 min-w-0 flex-1 rounded-full border border-line-strong bg-surface px-5 text-[17px] text-ink placeholder:text-ink-muted transition-shadow focus:border-honey-deep focus:outline-none focus:ring-4 focus:ring-honey/20 focus-visible:outline-2 focus-visible:outline-honey-deep focus-visible:outline-offset-2 disabled:opacity-50"

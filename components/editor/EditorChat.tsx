@@ -500,7 +500,9 @@ export default function EditorChat({
               }
             }}
             rows={2}
-            disabled={busy}
+            // Typing stays available while the agent works — only submission
+            // is gated (send() checks `busy`, the button disables). Mirrors
+            // the onboarding composer (owner feedback 2026-08-17).
             placeholder="Напр.: додай секцію з відгуками…"
             className="min-h-[44px] flex-1 resize-none bg-transparent px-1 py-2.5 text-[13.5px] leading-relaxed text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
           />

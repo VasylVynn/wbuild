@@ -37,14 +37,14 @@ export function HeroChat({ igImportEnabled }: { igImportEnabled: boolean }) {
 /**
  * Static twin of the embedded chat card while the real bundle loads. Purely
  * visual — no handlers; the composer is a disabled lookalike. Class strings
- * copy the embedded-card shell in OnboardChat (h-[min(560px,72dvh)] etc.).
+ * copy the embedded-card shell in OnboardChat (the clamp() mobile height — first-screen fit — plus sm:min(560px,72dvh)).
  */
 function ChatCardPlaceholder() {
   const greeting = placeholderIg
     ? "Вітаю! 👋 Надішліть посилання на свою Instagram-сторінку — і я зберу з неї сайт прямо в цій розмові, щоб вас знаходили не лише в Instagram, а й у Google. Візьму звідти фото, послуги й контакти — а ви підтвердите. Або просто розкажіть, що у вас за бізнес."
     : "Вітаю! 👋 Створю сайт для вашого бізнесу прямо в цій розмові — опублікований сайт можна знайти в Google. Розкажіть, що у вас за бізнес — для початку досить назви.";
   return (
-    <div className="relative flex h-[min(560px,72dvh)] flex-col overflow-hidden rounded-[24px] border border-line bg-canvas text-ink shadow-card">
+    <div className="relative flex h-[clamp(20rem,calc(100dvh-16.5rem),560px)] flex-col overflow-hidden rounded-[24px] border border-line bg-canvas text-ink shadow-card sm:h-[min(560px,72dvh)]">
       <header className="border-b border-line bg-surface/85 backdrop-blur">
         <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
