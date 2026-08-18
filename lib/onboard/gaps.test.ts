@@ -407,6 +407,19 @@ describe("services cue counts menu questions toward the budget", () => {
     expect(countAgentQuestions([{ role: "assistant", content: "Це у Львові, правильно?" }])).toBe(0);
   });
 
+  it("mixed intake+substantive questions spend budget (codex regression 6)", () => {
+    expect(
+      countAgentQuestions([{ role: "assistant", content: "Як називається кафе і чим ви особливі?" }]),
+    ).toBe(1);
+    // pure intake across connectors stays free
+    expect(
+      countAgentQuestions([{ role: "assistant", content: "Залишите телефон або Instagram?" }]),
+    ).toBe(0);
+    expect(
+      countAgentQuestions([{ role: "assistant", content: "Як називається кафе і який телефон?" }]),
+    ).toBe(0);
+  });
+
   it("mixed proposal+gap questions spend budget too (codex regression 3)", () => {
     expect(
       countAgentQuestions([{ role: "assistant", content: "Готові розповісти, що у вас в меню?" }]),

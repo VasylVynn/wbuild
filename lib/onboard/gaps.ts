@@ -362,7 +362,27 @@ const GAP_QUESTION_CUES: RegExp[] = [
  *  not enrichment, so they never spend the interview budget. A sentence that
  *  ALSO hits a gap cue («Яка назва і що в меню?») still counts. */
 const READINESS_INTAKE_QUESTION =
-  /(назв|назива|контакт|телефон|номер|звʼяз|зв'яз|зв’яз|пошт|imejl|імейл|email)/iu;
+  /(назв|назива|контакт|телефон|номер|звʼяз|зв'яз|зв’яз|пошт|imejl|імейл|email|instagram|інстаграм|telegram|телеграм|viber|вайбер)/iu;
+
+/** Is the WHOLE question only intake (name/contact) and/or proposal noise?
+ *  Clause-checked with «і/та/й» as separators too: «Як називається кафе і
+ *  чим ви особливі?» must NOT ride free on its intake half — the substantive
+ *  clause spends budget like any interview question. */
+function isPureIntakeQuestion(sentence: string): boolean {
+  const clauses = sentence
+    .split(/[,;—]|(?<!\p{L})(?:чи|або|і|та|й)(?!\p{L})/u)
+    .map((c) => c.trim())
+    .filter((c) => c.length > 0);
+  return (
+    clauses.length > 0 &&
+    clauses.every(
+      (c) =>
+        READINESS_INTAKE_QUESTION.test(c) ||
+        PROPOSAL_QUESTION.test(c) ||
+        CONFIRMATION_QUESTION.test(c),
+    )
+  );
+}
 
 /** Interrogative pronouns/adverbs — their presence marks a content question
  *  even when proposal verbs ride along in the same sentence. */
@@ -428,7 +448,7 @@ export function countAgentQuestions(transcript?: { role: string; content: string
       // телефон?» burns the budget before enrichment can start).
       if (isPureProposalOrConfirmation(sentence)) continue;
       const isGapCue = GAP_QUESTION_CUES.some((re) => re.test(sentence));
-      if (!isGapCue && READINESS_INTAKE_QUESTION.test(sentence)) continue;
+      if (!isGapCue && isPureIntakeQuestion(sentence)) continue;
       n += 1;
       break; // one interruption per message, however many «?» it carries
     }
