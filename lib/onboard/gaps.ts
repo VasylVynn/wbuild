@@ -63,8 +63,24 @@ export interface DataGap {
 
 /** Hard cap on gaps surfaced to the model — the anti-annoyance contract. */
 export const MAX_GAPS = 2;
-/** Clarifying questions allowed per CONVERSATION (plan §0.1 keeps this at 1–2). */
+/** Clarifying questions allowed per CONVERSATION (plan §0.1 keeps this at 1–2)
+ *  — the RICH-dossier ceiling: an Instagram import already supplied substance,
+ *  so questions are interruptions. */
 export const MAX_CLARIFYING_QUESTIONS = 2;
+/** Without Instagram the chat IS the only source of substance — a site built
+ *  from name+phone is poetic emptiness (zatyshok, 2026-08-18). The interview
+ *  ceiling stays finite (never an infinite questionnaire), but the agent may
+ *  invest twice as many questions because every answer becomes copy/imagery. */
+export const MAX_CLARIFYING_QUESTIONS_THIN = 4;
+
+/** Which ceiling applies: rich (IG import present or real photo inventory) →
+ *  the strict 2; thin (no Instagram, few photos) → 4. Data-shaped like every
+ *  other rule here. */
+export function questionBudgetCeiling(input: Pick<GapInput, "facts" | "media">): number {
+  const hasIg = nonEmpty(input.facts?.instagram);
+  const photoCount = sitePhotoCount(input.media);
+  return hasIg || photoCount >= 3 ? MAX_CLARIFYING_QUESTIONS : MAX_CLARIFYING_QUESTIONS_THIN;
+}
 
 export interface GapInput {
   facts: Partial<BusinessFacts>;
@@ -215,6 +231,15 @@ export function detectGaps(input: GapInput): DataGap[] {
   }
 
   // --- R2 empty set ------------------------------------------------------
+  if (services === 0) {
+    gaps.push({
+      rule: "empty_set",
+      subject: "services",
+      weight: 84,
+      note: "У фактах жодної послуги чи позиції — сайт не зможе сказати, ЩО саме ви пропонуєте, і вийде водою про атмосферу. Варто одним коротким питанням дізнатися 2–4 головні позиції (послуги, страви чи напрямки).",
+    });
+  }
+
   if (photos === 0) {
     gaps.push({
       rule: "empty_set",
@@ -312,7 +337,7 @@ const GAP_QUESTION_CUES: RegExp[] = [
   /фото|світлин|знімк/iu, // photos
   /(?<!\p{L})де(?!\p{L})|міст|адрес|район|локац/iu, // geo / address
   /годин|графік|розклад|коли\s+(ви\s+)?прац/iu, // hours
-  /послуг|напрям/iu, // services
+  /послуг|напрям|меню|страв|асортимент|пропонуєт|замовляют/iu, // services / menu
   /цін|вартіст|скільки\s+кошт/iu, // prices
   /відгук/iu, // testimonials
 ];
@@ -332,15 +357,62 @@ const GAP_QUESTION_CUES: RegExp[] = [
  *  - at most ONE per assistant message: two «?» in a single turn is one
  *    interruption, and the budget is about interruptions.
  */
+/** Interrogative pronouns/adverbs — their presence marks a content question
+ *  even when proposal verbs ride along in the same sentence. */
+const INTERROGATIVE_WORD =
+  /(?<!\p{L})(що|як|яка|які|який|яку|коли|де|куди|звідки|скільки|чому|навіщо|хто|кого|кому|чим|чого)(?!\p{L})/iu;
+
+/** Does this single assistant message ask ANY clarifying question — cue-matched
+ *  or not? The same-round nudge guard needs the WIDE test («одне питання за
+ *  хід»): a menu question phrased without the cue words is still a question,
+ *  and forcing a second one right after it is exactly the interrogation the
+ *  budget exists to prevent. Proposal/confirmation questions stay free. */
+/** Is this question sentence a PURE proposal/confirmation — nothing to answer
+ *  but yes/no to «створюємо?» / «все вірно?»? Interrogative words disqualify
+ *  («Що готового буває зранку?» substring-matches /готов/ but asks content);
+ *  otherwise EVERY clause must be proposal/confirmation-shaped — a mixed
+ *  sentence («Створюємо сайт чи ще додасте послуги?») is not pure. */
+function isPureProposalOrConfirmation(sentence: string): boolean {
+  if (INTERROGATIVE_WORD.test(sentence)) return false;
+  const clauses = sentence
+    .split(/[,;—]|(?<!\p{L})(?:чи|або)(?!\p{L})/u)
+    .map((c) => c.trim())
+    .filter((c) => c.length > 0);
+  return (
+    clauses.length > 0 &&
+    clauses.every((c) => PROPOSAL_QUESTION.test(c) || CONFIRMATION_QUESTION.test(c))
+  );
+}
+
+export function asksClarifyingQuestion(content: string): boolean {
+  for (const sentence of content.split(/(?<=[.!?…])\s+/u)) {
+    if (!sentence.includes("?")) continue;
+    // Purity FIRST (symmetric with countAgentQuestions): a pure proposal
+    // that merely MENTIONS a gap word («Створюємо сайт із цими послугами?»)
+    // asked nothing — it must not suppress the nudge. Everything non-pure
+    // is clarifying: mixed clauses («Створюємо чи ще додасте послуги?») and
+    // interrogatives («Що готового буває зранку?») are caught inside
+    // isPureProposalOrConfirmation. The bias stays safe — a false
+    // «clarifying» merely skips one nudge; a false «pure» would force a
+    // duplicate question in the same turn.
+    if (isPureProposalOrConfirmation(sentence)) continue;
+    return true;
+  }
+  return false;
+}
+
 export function countAgentQuestions(transcript?: { role: string; content: string }[]): number {
   let n = 0;
   for (const m of transcript ?? []) {
     if (m.role !== "assistant" || !m.content) continue;
     for (const sentence of m.content.split(/(?<=[.!?…])\s+/u)) {
       if (!sentence.includes("?")) continue;
-      if (PROPOSAL_QUESTION.test(sentence)) continue;
-      if (CONFIRMATION_QUESTION.test(sentence)) continue;
+      // Gap-subject questions only (the budget counts the MECHANISM) — but
+      // the cue check comes FIRST: a mixed sentence («Готові розповісти, що
+      // у вас в меню?») is a gap question and must spend budget; only a
+      // PURE proposal/confirmation is free (codex review 2026-08-18).
       if (!GAP_QUESTION_CUES.some((re) => re.test(sentence))) continue;
+      if (isPureProposalOrConfirmation(sentence)) continue;
       n += 1;
       break; // one interruption per message, however many «?» it carries
     }
@@ -387,7 +459,7 @@ export function selectGaps(
 ): DataGap[] {
   if (input.status === "confirmed") return [];
   if (ownerSignalsSkip(input.transcript)) return [];
-  const budget = MAX_CLARIFYING_QUESTIONS - countAgentQuestions(input.transcript);
+  const budget = questionBudgetCeiling(input) - countAgentQuestions(input.transcript);
   if (budget <= 0) return [];
   return detectGaps(input).slice(0, Math.min(budget, MAX_GAPS));
 }

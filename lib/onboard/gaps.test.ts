@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import {
+  asksClarifyingQuestion,
   detectGaps,
+  questionBudgetCeiling,
   selectGaps,
   countAgentQuestions,
   MAX_GAPS,
@@ -224,7 +226,7 @@ describe("selectGaps budget", () => {
     ).toBe(2);
   });
 
-  it("goes quiet once the conversation budget is spent", () => {
+  it("goes quiet once the conversation budget is spent (rich dossier → ceiling 2)", () => {
     const spent = [
       { role: "user", content: "Майстерня" },
       { role: "assistant", content: "Чи є ще фото?" },
@@ -233,9 +235,27 @@ describe("selectGaps budget", () => {
       { role: "user", content: "Львів" },
     ];
     expect(MAX_CLARIFYING_QUESTIONS).toBe(2);
-    expect(selectGaps({ ...input, transcript: spent })).toEqual([]);
+    // Instagram present → rich dossier → the strict 2-question ceiling.
+    const rich = { ...input, facts: { ...input.facts, instagram: "maysternya" } };
+    expect(selectGaps({ ...rich, transcript: spent })).toEqual([]);
     // one question asked → exactly one gap may still be raised
-    expect(selectGaps({ ...input, transcript: spent.slice(0, 3) })).toHaveLength(1);
+    expect(selectGaps({ ...rich, transcript: spent.slice(0, 3) })).toHaveLength(1);
+  });
+
+  it("thin dossier (no Instagram, no photos) gets the wider interview ceiling", () => {
+    const spent = [
+      { role: "user", content: "Майстерня" },
+      { role: "assistant", content: "Чи є ще фото?" },
+      { role: "user", content: "ні" },
+      { role: "assistant", content: "А де ви працюєте?" },
+      { role: "user", content: "Львів" },
+    ];
+    expect(questionBudgetCeiling({ facts: {}, media: undefined })).toBe(4);
+    expect(
+      questionBudgetCeiling({ facts: { instagram: "x" }, media: undefined }),
+    ).toBe(2);
+    // 2 spent of 4 → the detector may still raise gaps for a thin dossier
+    expect(selectGaps({ ...input, transcript: spent }).length).toBeGreaterThan(0);
   });
 
   it("counts a gap-driven ask once per message, whatever the prose around it", () => {
@@ -331,5 +351,61 @@ describe("vertical-agnostic", () => {
       .map((g) => g.note.toLowerCase())
       .join(" ");
     for (const v of Object.values(verticals)) expect(notes).not.toContain(v.label.toLowerCase());
+  });
+});
+
+describe("asksClarifyingQuestion (same-round nudge guard)", () => {
+  it("catches a menu question phrased without the budget cue words", () => {
+    expect(asksClarifyingQuestion("Записав! Що у вас найчастіше замовляють гості?")).toBe(true);
+    expect(asksClarifyingQuestion("Що у вас основне в меню?")).toBe(true);
+  });
+  it("ignores proposal and confirmation questions", () => {
+    expect(asksClarifyingQuestion("Створюй сайт?")).toBe(false);
+    expect(asksClarifyingQuestion("Все вірно?")).toBe(false);
+    expect(asksClarifyingQuestion("Записав. Створюємо?")).toBe(false);
+  });
+
+  it("mixed questions with proposal words are STILL clarifying (codex regression)", () => {
+    expect(asksClarifyingQuestion("Готові розповісти, що у вас в меню?")).toBe(true);
+    expect(asksClarifyingQuestion("Створюємо сайт чи ще додасте послуги?")).toBe(true);
+    expect(asksClarifyingQuestion("Генеруємо, чи спершу розкажете про заклад?")).toBe(true);
+  });
+
+  it("interrogative words beat substring-matched proposal verbs (codex regression 2)", () => {
+    expect(asksClarifyingQuestion("Що готового буває зранку?")).toBe(true);
+    expect(asksClarifyingQuestion("З чого починали свою справу?")).toBe(true);
+    expect(asksClarifyingQuestion("Скільки готуєте на день?")).toBe(true);
+    // pure proposals stay exempt — no interrogative, no cue
+    expect(asksClarifyingQuestion("Готові починати?")).toBe(false);
+  });
+
+  it("pure proposals that merely MENTION a gap word do not suppress the nudge (codex regression 4)", () => {
+    expect(asksClarifyingQuestion("Створюємо сайт із цими послугами?")).toBe(false);
+    expect(asksClarifyingQuestion("Генеруємо з цими фото?")).toBe(false);
+    // but the same words in a real question still count
+    expect(asksClarifyingQuestion("Які послуги додати на сайт?")).toBe(true);
+  });
+  it("false on a plain statement", () => {
+    expect(asksClarifyingQuestion("Записав: Затишок, контакт збережено.")).toBe(false);
+  });
+});
+
+describe("services cue counts menu questions toward the budget", () => {
+  it("counts «меню/страви» questions as gap questions", () => {
+    expect(countAgentQuestions([{ role: "assistant", content: "Що у вас в меню?" }])).toBe(1);
+    expect(countAgentQuestions([{ role: "assistant", content: "Які страви подаєте?" }])).toBe(1);
+  });
+
+  it("mixed proposal+gap questions spend budget too (codex regression 3)", () => {
+    expect(
+      countAgentQuestions([{ role: "assistant", content: "Готові розповісти, що у вас в меню?" }]),
+    ).toBe(1);
+    expect(
+      countAgentQuestions([{ role: "assistant", content: "Створюємо сайт чи ще додасте послуги?" }]),
+    ).toBe(1);
+    // a PURE proposal that merely mentions services stays free
+    expect(
+      countAgentQuestions([{ role: "assistant", content: "Створюємо сайт із цими послугами?" }]),
+    ).toBe(0);
   });
 });

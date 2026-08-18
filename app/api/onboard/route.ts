@@ -24,7 +24,7 @@ import {
 } from "@/lib/ai/onboard";
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
 import { validateFacts } from "@/lib/onboard/validate";
-import { countAgentQuestions, MAX_CLARIFYING_QUESTIONS, selectGaps } from "@/lib/onboard/gaps";
+import { asksClarifyingQuestion, countAgentQuestions, questionBudgetCeiling, selectGaps } from "@/lib/onboard/gaps";
 import { getVertical } from "@/lib/verticals/registry";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
 import { canonicalizeContactFacts } from "@/lib/blocks/contact-links";
@@ -356,6 +356,8 @@ export async function POST(req: Request): Promise<Response> {
       try {
         let rounds = 0;
         let iterations = 0;
+        // One gap-nudge continuation per request — never an interrogation loop.
+        let gapNudged = false;
         while (rounds < MAX_ROUNDS && iterations < MAX_ITERATIONS) {
           iterations += 1;
           const vertical = getVertical(accum.verticalId);
@@ -388,7 +390,7 @@ export async function POST(req: Request): Promise<Response> {
             apifyEnabled,
             gaps,
             // Spent budget is a different instruction from «no gaps»: say so.
-            questionsSpent: countAgentQuestions(transcript) >= MAX_CLARIFYING_QUESTIONS,
+            questionsSpent: countAgentQuestions(transcript) >= questionBudgetCeiling({ facts: accum.facts, media }),
           });
           lastSystem = system;
 
@@ -489,6 +491,28 @@ export async function POST(req: Request): Promise<Response> {
           // their tool_result) so the "speak up" continuation below can extend
           // this conversation.
           if (dataUses.length === 0) {
+            // The round that RECEIVES the first real facts is usually the last
+            // one — the per-round system prompt computed its gaps BEFORE the
+            // fold, so «Затишок + телефон» ended the turn with a bare CTA and
+            // the site generated from nothing (zatyshok, 2026-08-18). When
+            // save_facts just opened readiness and the post-fold facts still
+            // have a top gap, ONE forced continuation carries it in the
+            // tool_result so the model asks NOW. selectGaps keeps its own
+            // budget/skip discipline; MAX_ROUNDS bounds the loop.
+            const savedFacts = toolUses.some((b) => b.name === "save_facts");
+            // No nudge when THIS round's own text already asks ANY clarifying
+            // question (wide test — a menu question phrased without the budget
+            // counter's cue words is still a question): forcing a second one
+            // in the same turn is the interrogation the budget prevents.
+            const roundText = final.content
+              .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+              .map((b) => b.text)
+              .join(" ");
+            const roundAlreadyAsks = asksClarifyingQuestion(roundText);
+            const gapNudge =
+              savedFacts && canGenerate && !generateNow && !gapNudged && !roundAlreadyAsks
+                ? selectGaps({ facts: accum.facts, media, dossier, transcript, status: accum.status })
+                : [];
             if (toolUses.length) {
               apiMessages.push({ role: "assistant", content: final.content });
               apiMessages.push({
@@ -498,7 +522,11 @@ export async function POST(req: Request): Promise<Response> {
                     type: "tool_result",
                     tool_use_id: tu.id,
                     content:
-                      tu.name === START_GENERATION_TOOL_NAME ? startGenerationResult : "OK: збережено",
+                      tu.name === START_GENERATION_TOOL_NAME
+                        ? startGenerationResult
+                        : gapNudge.length && tu.name === "save_facts"
+                          ? `OK: збережено. АЛЕ сайт із самих цих фактів вийде порожнім — ${gapNudge[0].note} Додай у відповідь ОДНЕ коротке тепле питання про це (людина може пропустити й одразу тиснути «Створити сайт» — кнопку не блокуй, більше одного питання не став).`
+                          : "OK: збережено",
                   }),
                 ),
               });
@@ -506,6 +534,10 @@ export async function POST(req: Request): Promise<Response> {
             // A rejected start_generation gets one more round (bounded by
             // MAX_ROUNDS) so the model can ask instead of the UI flapping.
             if (generateNow && !canGenerate) continue;
+            if (gapNudge.length) {
+              gapNudged = true;
+              continue;
+            }
             break;
           }
 
