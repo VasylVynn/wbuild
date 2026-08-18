@@ -43,7 +43,16 @@ export const businessFactsSchema = z.object({
   // render/import time (contact-links.ts). Feeds JSON-LD sameAs (D2), the
   // contacts block link (E7) and the Apify import (E5).
   instagram: z.string().optional(),
-  about: z.string().optional(),
+  // The business's ESSENCE in the owner's words — what makes them special,
+  // the atmosphere, who their clients are. The no-IG interview accumulates
+  // its answers here; the dossier feeds it to S1 positioning, S2б copy and
+  // the image subjects. Free text, model-appended (last-wins overwrite).
+  about: z
+    .string()
+    .describe(
+      "Суть бізнесу словами власника: чим особливі, атмосфера, хто клієнти. НАКОПИЧУЙ: до вже збереженого додавай нове одним текстом, не перезаписуй і не перефразовуй сказане власником.",
+    )
+    .optional(),
   services: z.array(serviceFactSchema).optional(),
   testimonials: z.array(testimonialFactSchema).optional(),
   socials: z.array(socialFactSchema).optional(),
