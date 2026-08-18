@@ -370,6 +370,11 @@ export function WireTimelineCards({ data }: { data: unknown }) {
 export function WireGallery({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
   const pending = d.pendingImages ?? 0;
+  // A gallery with nothing to show renders NOTHING — not a bare heading over
+  // an empty grid. This is the floor the pipeline's «resolve to an empty
+  // gallery, which the renderer hides» comment always assumed (only the
+  // legacy blocks/Gallery ever had it; pre-deploy review 2026-08-18).
+  if (d.images.length + pending === 0) return null;
   return (
     <section className="wire-section wire-gallery">
       <div className="wire-container wire-stack">
@@ -444,6 +449,8 @@ export function WireGalleryMasonry({ data }: { data: unknown }) {
 export function WireGalleryStream({ data }: { data: unknown }) {
   const d = data as BlockProps["gallery"];
   const pending = d.pendingImages ?? 0;
+  // Same empty floor as WireGallery (Masonry funnels through WireGallery).
+  if (d.images.length + pending === 0) return null;
   return (
     <section className="wire-section wire-gallery wire-gallery--stream">
       <div className="wire-container wire-stack">

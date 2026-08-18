@@ -783,9 +783,15 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
       const subjects = site.imageSubjects;
       const verticalIdForGen = vertical.id;
       const altBase = facts.city ? `${facts.businessName}, ${facts.city}` : facts.businessName;
-      const imageJob = (async () => {
-        let hero: string | null = null;
-        let gallery: string[] = [];
+      // GENERATION starts now (S3) so the 60-90s of image work runs inside
+      // the function's lifetime (2eba0ee's brownout fix) — but the DB PATCH
+      // waits for after(): S4's quality-loop writers CAS once and abort on a
+      // stale rev, so a patch landing mid-S4 would bump contentRev and
+      // silently discard the styleAudit report, the corrective stylesheet and
+      // the text fixes (pre-deploy review 2026-08-18). after() fires when the
+      // response closes — strictly post-S4 — restoring the old ordering while
+      // keeping the early start.
+      const imagesReady = (async (): Promise<{ hero: string | null; gallery: string[] }> => {
         try {
           const gen = await generateSiteImages({
             verticalId: verticalIdForGen,
@@ -796,20 +802,23 @@ export async function runPipeline(opts: PipelineInput): Promise<PipelineResult> 
             // fallback order instead of the same random two.
             seed: designNonce,
           });
-          hero = gen.hero;
-          gallery = gen.gallery;
+          return { hero: gen.hero, gallery: gen.gallery };
         } catch (e) {
           log.warn("deferred image gen failed", { host, error: e });
+          return { hero: null, gallery: [] };
         }
+      })();
+      after(async () => {
+        const { hero, gallery } = await imagesReady;
         // ALWAYS patch — even on total failure: the pending gallery MUST be
-        // resolved (real images or an empty, self-hiding gallery).
+        // resolved (real images or an empty gallery, which the renderer and
+        // the publish projection both hide).
         try {
           await patchGeneratedImages({ host, hero, gallery, altBase, genToken });
         } catch (e) {
           log.warn("deferred image patch failed", { host, error: e });
         }
-      })();
-      after(() => imageJob);
+      });
     }
 
     // ── S4: QA — after the preview, on its OWN budget, clamped to what's left

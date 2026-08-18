@@ -2114,6 +2114,9 @@ export function OnboardChat({
               // 2026-08-17) — only SUBMISSION is gated: the send button below
               // and send() itself both check `loading`, so Enter mid-turn is a
               // no-op and the draft text survives until the reply lands.
+              // aria-busy + AgentTyping's role="status" carry the busy cue
+              // that the removed `disabled` used to.
+              aria-busy={loading}
               placeholder={confirmed ? "Або допишіть щось…" : "Написати…"}
               autoComplete="off"
               className="h-14 min-w-0 flex-1 rounded-full border border-line-strong bg-surface px-5 text-[17px] text-ink placeholder:text-ink-muted transition-shadow focus:border-honey-deep focus:outline-none focus:ring-4 focus:ring-honey/20 focus-visible:outline-2 focus-visible:outline-honey-deep focus-visible:outline-offset-2 disabled:opacity-50"

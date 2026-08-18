@@ -428,7 +428,9 @@ export default function EditorChat({
           )}
 
           {busy && stage !== "typing" && (
-            <div className="flex items-center gap-2 self-start rounded-2xl rounded-bl-md border border-line bg-surface px-3.5 py-2.5 text-[13px] font-semibold text-ink-muted">
+            // role="status": with the textarea no longer disabled while busy,
+            // this is the machine-readable busy cue (mirrors AgentTyping).
+            <div role="status" className="flex items-center gap-2 self-start rounded-2xl rounded-bl-md border border-line bg-surface px-3.5 py-2.5 text-[13px] font-semibold text-ink-muted">
               <span className="flex gap-1">
                 {[0, 0.2, 0.4].map((d) => (
                   <span
@@ -503,6 +505,7 @@ export default function EditorChat({
             // Typing stays available while the agent works — only submission
             // is gated (send() checks `busy`, the button disables). Mirrors
             // the onboarding composer (owner feedback 2026-08-17).
+            aria-busy={busy}
             placeholder="Напр.: додай секцію з відгуками…"
             className="min-h-[44px] flex-1 resize-none bg-transparent px-1 py-2.5 text-[13.5px] leading-relaxed text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
           />

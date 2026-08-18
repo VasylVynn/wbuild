@@ -115,14 +115,20 @@ export function publishedFromDraft(draft: PageContent): PageContent {
   // Publishing them raw exposed the one failure the job cannot repair — an
   // after() callback killed by the platform (2026-08-13 API incident) left
   // PERMANENT empty tiles on live sites. The live site never shows «coming
-  // soon» boxes; the editor keeps them.
+  // soon» boxes; the editor keeps them. And a pending gallery left with
+  // fewer than assemble's ≥2-image floor is dropped WHOLE — otherwise the
+  // force-injected {«Наша атмосфера», images: []} publishes as a bare
+  // heading over an empty grid (pre-deploy review 2026-08-18). The job's own
+  // re-projection restores the block once real images exist.
   if (Array.isArray(out.blocks)) {
-    out.blocks = out.blocks.map((b) => {
-      if (b.type !== "gallery") return b;
-      const props = b.props as { pendingImages?: number };
-      if (!props.pendingImages) return b;
-      const { pendingImages: _drop, ...rest } = props;
-      return { ...b, props: rest } as typeof b;
+    out.blocks = out.blocks.flatMap((b): StoredBlock[] => {
+      if (b.type !== "gallery") return [b];
+      const props = b.props as { pendingImages?: number; images?: unknown[] };
+      if (!props.pendingImages) return [b];
+      const rest = { ...props };
+      delete rest.pendingImages;
+      if ((rest.images?.length ?? 0) < 2) return [];
+      return [{ ...b, props: rest } as typeof b];
     });
   }
   return out;

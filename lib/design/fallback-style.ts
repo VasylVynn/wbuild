@@ -1,3 +1,4 @@
+import { wcagContrast } from "culori";
 import { FONT_FAMILIES, getFontPair } from "@/lib/design/font-pairs";
 
 /**
@@ -53,10 +54,26 @@ export function buildFallbackWireCss(args: {
   // and already contrast-checked upstream. Without: oklch around the seeded
   // hue keeps the accent's lightness and chroma constant across the wheel, so
   // no hue lands muddy or neon the way raw hsl does.
+  //
+  // One pair the upstream repair does NOT cover: ink-on-SURFACE. The floor
+  // paints cards/even sections/nav with `surface` under `ink` text, but
+  // repairPaletteContrast only enforces ink/bg and accentInk/accent — an S1
+  // palette whose surface drifts dark fails 4.5:1 here. When it does, anchor
+  // the surface to bg instead (a 92% bg tint keeps the palette's character;
+  // ink/bg itself IS repaired upstream, so the tinted pair passes).
+  const surfaceSafe = (() => {
+    if (!p) return undefined;
+    try {
+      if (wcagContrast(p.ink, p.surface) >= 4.5) return p.surface;
+    } catch {
+      /* unparseable anchor — fall through to the tint */
+    }
+    return `color-mix(in oklab, ${p.bg} 92%, ${p.ink})`;
+  })();
   const accent = p?.accent ?? `oklch(0.55 0.14 ${h})`;
   const accentHover = p ? p.accent : `oklch(0.47 0.14 ${h})`;
-  const accentSoft = p?.surface ?? `oklch(0.95 0.03 ${h})`;
-  const surface = p?.surface ?? `oklch(0.99 0.006 ${h})`;
+  const accentSoft = surfaceSafe ?? `oklch(0.95 0.03 ${h})`;
+  const surface = surfaceSafe ?? `oklch(0.99 0.006 ${h})`;
   const canvas = p?.bg ?? `oklch(0.97 0.012 ${h})`;
   const line = p ? `color-mix(in oklab, ${p.ink} 18%, ${p.bg})` : `oklch(0.89 0.02 ${h})`;
   const ink = p?.ink ?? `oklch(0.28 0.03 ${h})`;
