@@ -357,6 +357,13 @@ const GAP_QUESTION_CUES: RegExp[] = [
  *  - at most ONE per assistant message: two «?» in a single turn is one
  *    interruption, and the budget is about interruptions.
  */
+/** The readiness minimum — questions collecting the business NAME or a
+ *  CONTACT channel. They are the entry ticket (readiness = name + contact),
+ *  not enrichment, so they never spend the interview budget. A sentence that
+ *  ALSO hits a gap cue («Яка назва і що в меню?») still counts. */
+const READINESS_INTAKE_QUESTION =
+  /(назв|назива|контакт|телефон|номер|звʼяз|зв'яз|зв’яз|пошт|imejl|імейл|email)/iu;
+
 /** Interrogative pronouns/adverbs — their presence marks a content question
  *  even when proposal verbs ride along in the same sentence. */
 const INTERROGATIVE_WORD =
@@ -374,6 +381,11 @@ const INTERROGATIVE_WORD =
  *  sentence («Створюємо сайт чи ще додасте послуги?») is not pure. */
 function isPureProposalOrConfirmation(sentence: string): boolean {
   if (INTERROGATIVE_WORD.test(sentence)) return false;
+  // Tail confirmations re-read what we already hold: «Це у Львові,
+  // правильно?» costs the owner nothing to answer — free, like «Все вірно?».
+  // (An interrogative earlier in the sentence — «Яка адреса, правильно?» —
+  // already disqualified it above: that one asks for NEW content.)
+  if (/(вірно|правильно|все так|згодні)\s*\?\s*$/iu.test(sentence.trim())) return true;
   const clauses = sentence
     .split(/[,;—]|(?<!\p{L})(?:чи|або)(?!\p{L})/u)
     .map((c) => c.trim())
@@ -407,12 +419,16 @@ export function countAgentQuestions(transcript?: { role: string; content: string
     if (m.role !== "assistant" || !m.content) continue;
     for (const sentence of m.content.split(/(?<=[.!?…])\s+/u)) {
       if (!sentence.includes("?")) continue;
-      // Gap-subject questions only (the budget counts the MECHANISM) — but
-      // the cue check comes FIRST: a mixed sentence («Готові розповісти, що
-      // у вас в меню?») is a gap question and must spend budget; only a
-      // PURE proposal/confirmation is free (codex review 2026-08-18).
-      if (!GAP_QUESTION_CUES.some((re) => re.test(sentence))) continue;
+      // The budget counts EVERY substantive interruption — the interview axes
+      // («чим ви особливі?», «хто ваші гості?») match no gap cue but spend
+      // budget like any other question (codex review 2026-08-18). Free rides:
+      // pure proposals/confirmations («Створюємо?», «Все вірно?») and the
+      // readiness minimum (name/contact intake — the entry ticket, not
+      // enrichment; without this exemption the opening «Як називається і який
+      // телефон?» burns the budget before enrichment can start).
       if (isPureProposalOrConfirmation(sentence)) continue;
+      const isGapCue = GAP_QUESTION_CUES.some((re) => re.test(sentence));
+      if (!isGapCue && READINESS_INTAKE_QUESTION.test(sentence)) continue;
       n += 1;
       break; // one interruption per message, however many «?» it carries
     }

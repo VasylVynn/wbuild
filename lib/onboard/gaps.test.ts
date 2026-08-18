@@ -396,6 +396,17 @@ describe("services cue counts menu questions toward the budget", () => {
     expect(countAgentQuestions([{ role: "assistant", content: "Які страви подаєте?" }])).toBe(1);
   });
 
+  it("interview-axis questions spend budget even without a gap cue (codex regression 5)", () => {
+    expect(countAgentQuestions([{ role: "assistant", content: "Чим ви особливі серед інших кафе?" }])).toBe(1);
+    expect(countAgentQuestions([{ role: "assistant", content: "Хто ваші гості найчастіше?" }])).toBe(1);
+    // readiness intake stays free…
+    expect(countAgentQuestions([{ role: "assistant", content: "Як називається кафе і який телефон?" }])).toBe(0);
+    // …but an intake word beside a gap cue still counts
+    expect(countAgentQuestions([{ role: "assistant", content: "Яка назва і що у вас в меню?" }])).toBe(1);
+    // tail confirmations are free
+    expect(countAgentQuestions([{ role: "assistant", content: "Це у Львові, правильно?" }])).toBe(0);
+  });
+
   it("mixed proposal+gap questions spend budget too (codex regression 3)", () => {
     expect(
       countAgentQuestions([{ role: "assistant", content: "Готові розповісти, що у вас в меню?" }]),
