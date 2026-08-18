@@ -239,10 +239,14 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
   // Rebuild the site from the owner's facts. Gated behind a confirm dialog; the
   // current draft is kept server-side, so nothing is lost (§5.5).
   const runRegenerate = async () => {
+    // The dialog closes IMMEDIATELY — a 2-3 minute server action behind a
+    // frozen «Зачекайте…» modal reads as a hang (owner report 2026-08-18).
+    // The header button flips to «Збираємо…» and the persistent pill above
+    // the frame carries the progress state until the result lands.
+    setRegenConfirmOpen(false);
     setBusyLabel("regenerate");
     const res = await regenerateSite(host);
     setBusyLabel(null);
-    setRegenConfirmOpen(false);
     if (res.ok && res.blocks) {
       // The whole point of «Перегенерувати» is a different LOOK. If the design
       // did not come back, the draft still changed — and state cannot be
@@ -931,14 +935,27 @@ export default function EditorShell({ initial }: { initial: EditorData }) {
       <ConfirmDialog
         open={regenConfirmOpen}
         title="Зібрати сайт наново з ваших даних?"
-        body="Поточна версія збережеться в чернетках."
+        body="Поточна версія збережеться в чернетках. Збірка триває до 3 хвилин — можна тим часом роздивлятися сайт."
         confirmLabel="Так, зібрати"
-        busy={regenerating}
         onConfirm={() => void runRegenerate()}
-        onCancel={() => {
-          if (!regenerating) setRegenConfirmOpen(false);
-        }}
+        onCancel={() => setRegenConfirmOpen(false)}
       />
+
+      {/* Persistent progress pill for the whole regen window — the toast
+          auto-hides after 3.5s, which is useless feedback for a 2-3 minute
+          build. Yields the spot whenever a toast needs it. */}
+      {regenerating && !toast && (
+        <div
+          role="status"
+          className="pointer-events-none fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2.5 rounded-full bg-ink px-5 py-3 text-[14px] font-semibold text-white shadow-card"
+        >
+          <span
+            aria-hidden
+            className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-honey border-t-transparent"
+          />
+          Збираємо сайт наново — зазвичай це близько 3 хвилин…
+        </div>
+      )}
 
       {toast && (
         <Toast
