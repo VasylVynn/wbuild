@@ -198,7 +198,11 @@ export async function generateWireStyle(
     model: GEN_MODEL,
     max_tokens: 16000,
     thinking: { type: "adaptive" },
-    output_config: { effort: "high" },
+    // "medium": at "high", thinking + a 16k sheet blew the 150s S2а budget on
+    // every live generation (measured 2026-08-18: s2 elapsed 150010ms,
+    // styled:false — the fallback floor shipped instead of a real design).
+    // The sheet is format-heavy writing against a decided brief; medium fits.
+    output_config: { effort: "medium" },
     system: SYSTEM,
     // Prompt caching (2026-08-10): the wireframe source is byte-identical for
     // EVERY tenant on a deploy, so it leads the user turn with a cache

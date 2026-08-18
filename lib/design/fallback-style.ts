@@ -88,6 +88,7 @@ export function buildFallbackWireCss(args: {
 
   return `.tpl-salonwire {
 ${fonts}  --wire-ink: ${ink};
+  --wire-accent: ${accent};
   --wire-ink-soft: ${inkSoft};
   --wire-line: ${line};
   --wire-surface: ${surface};

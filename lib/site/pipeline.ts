@@ -127,9 +127,11 @@ const CHAIN_BUDGET_MS = 240_000;
 const S0_BUDGET_MS = 5_000;
 /** Measured live: adaptive thinking alone can spend 20-30s before the tool
  *  call; a 40s budget aborted S1 on a real regen (v1 fallback = no designSpec,
- *  no fonts/motion — the headline feature silently off). 60s keeps the chain
- *  at 5+60+150+~5 ≈ 220s ≤ 240s. */
-const S1_BUDGET_MS = 60_000;
+ *  no fonts/motion — the headline feature silently off). 2026-08-18: at
+ *  effort "high" S1 blew even 60s on every generation — the effort is now
+ *  "medium" (design-brief.ts) and 75s is the cushion, keeping the chain at
+ *  5+75+150+~5 ≈ 235s ≤ 240s. */
+const S1_BUDGET_MS = 75_000;
 /** Content leg (composition) — measured 44–79s pre-v2, unchanged inputs. */
 const S2B_BUDGET_MS = 120_000;
 /** Style leg: the V3 wireframe grew the prompt (wire.css + sections.tsx),

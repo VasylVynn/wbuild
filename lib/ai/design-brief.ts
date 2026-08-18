@@ -329,7 +329,12 @@ ${formatDossierForPrompt(dossier)}
         // for adaptive thinking, which shares this budget.
         max_tokens: 8000,
         thinking: { type: "adaptive" },
-        output_config: { effort: "high" },
+        // "medium": at "high", adaptive thinking on the grown prompt (archetype
+        // docs, cta axis) blew the 60s stage budget on EVERY live generation —
+        // measured 2026-08-18: S1 aborted at 60.0s, v1 fallback, no designSpec,
+        // default design shipped. The brief is a structured decision, not deep
+        // analysis; medium lands well inside the budget.
+        output_config: { effort: "medium" },
         system: stripLoneSurrogates(buildSystem(verticalId)),
         tools: [designBriefTool],
         tool_choice: { type: "auto" },

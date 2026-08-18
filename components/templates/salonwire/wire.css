@@ -111,6 +111,10 @@
 
 .wire-eyebrow { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.2em; color: var(--wire-ink-soft); }
 .wire-title { font-size: 1.875rem; font-weight: 600; line-height: 1.15; font-family: var(--font-heading, inherit); }
+/* The headline's accent tail (schema: continuation on its own line, its own
+   color). display:block gives it the line; the accent color comes from the
+   generated sheet's token with the heading ink as fallback. */
+.wire-title__accent { display: block; color: var(--wire-accent, inherit); }
 .wire-subtitle { font-size: 1rem; color: var(--wire-ink-soft); max-width: 46ch; }
 .wire-heading { font-size: 1.25rem; font-weight: 600; font-family: var(--font-heading, inherit); }
 .wire-text { font-size: 0.9375rem; color: var(--wire-ink-soft); }

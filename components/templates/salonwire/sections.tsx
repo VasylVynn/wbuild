@@ -105,7 +105,19 @@ function WireHeroContent({ d }: { d: BlockProps["hero"] }) {
   return (
     <>
       {d.eyebrow && <span className="wire-eyebrow">{d.eyebrow}</span>}
-      <h1 className="wire-title">{d.title}</h1>
+      {/* titleAccent is the headline's CONTINUATION (schema contract: an
+          accent tail on its own line) — the wireframe silently dropped it
+          since the 07-27 migration, shipping truncated h1s like «…та
+          авторська» (mood-bakery-2, 2026-08-18). */}
+      <h1 className="wire-title">
+        {d.title}
+        {d.titleAccent && (
+          <>
+            {" "}
+            <span className="wire-title__accent">{d.titleAccent}</span>
+          </>
+        )}
+      </h1>
       {d.subtitle && <p className="wire-subtitle">{d.subtitle}</p>}
       <div className="wire-row wire-hero__actions">
         {d.ctaLabel && (
