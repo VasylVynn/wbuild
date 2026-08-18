@@ -109,5 +109,21 @@ const DRAFT_ONLY = [
 export function publishedFromDraft(draft: PageContent): PageContent {
   const out: PageContent = { ...draft };
   for (const key of DRAFT_ONLY) delete out[key];
+  // Gallery shimmer placeholders are a DRAFT affordance: the deferred image
+  // job resolves them in the draft and re-projects the published copy itself
+  // (with a purge), so the live site gains the tiles the moment they exist.
+  // Publishing them raw exposed the one failure the job cannot repair — an
+  // after() callback killed by the platform (2026-08-13 API incident) left
+  // PERMANENT empty tiles on live sites. The live site never shows «coming
+  // soon» boxes; the editor keeps them.
+  if (Array.isArray(out.blocks)) {
+    out.blocks = out.blocks.map((b) => {
+      if (b.type !== "gallery") return b;
+      const props = b.props as { pendingImages?: number };
+      if (!props.pendingImages) return b;
+      const { pendingImages: _drop, ...rest } = props;
+      return { ...b, props: rest } as typeof b;
+    });
+  }
   return out;
 }
