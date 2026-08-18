@@ -369,7 +369,7 @@ const INTAKE_REQUEST =
 /** Doing-things-in-the-channel verbs — «що публікуєте в Instagram?» is a
  *  substantive question about the business, not a contact request. */
 const CHANNEL_CONTENT_VERB =
-  /(публіку|веде|ведете|пост|знімає|знімаєте|пише|пишете|фотографу|виклада|розповіда)/iu;
+  /(публіку|веде|ведете|пост|знімає|знімаєте|(?<!на)пише|(?<!на)пишете|фотографу|виклада|розповіда)/iu;
 /** «Як називається …» / «яка назва …» — the name ask. */
 const NAME_ASK = /(як (вас |тебе )?назива|яка назва)/iu;
 

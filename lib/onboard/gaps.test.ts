@@ -434,6 +434,10 @@ describe("services cue counts menu questions toward the budget", () => {
     expect(
       countAgentQuestions([{ role: "assistant", content: "Як з вами звʼязатись — телефон чи Instagram?" }]),
     ).toBe(0);
+    // «Напишете телефон?» is a contact request — «пишете» inside «напишете»
+    // must not trip the activity veto (codex regression 8)
+    expect(countAgentQuestions([{ role: "assistant", content: "Напишете телефон?" }])).toBe(0);
+    expect(countAgentQuestions([{ role: "assistant", content: "Що пишете в Instagram?" }])).toBe(1);
   });
 
   it("mixed proposal+gap questions spend budget too (codex regression 3)", () => {
