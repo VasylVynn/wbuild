@@ -420,6 +420,22 @@ describe("services cue counts menu questions toward the budget", () => {
     ).toBe(0);
   });
 
+  it("channel mentions are not intake — activity questions spend budget (codex regression 7)", () => {
+    expect(
+      countAgentQuestions([{ role: "assistant", content: "Що публікуєте в Instagram?" }]),
+    ).toBe(1);
+    expect(
+      countAgentQuestions([{ role: "assistant", content: "Як часто ведете Telegram?" }]),
+    ).toBe(1);
+    // real contact requests stay free
+    expect(
+      countAgentQuestions([{ role: "assistant", content: "Залишите Instagram чи телефон?" }]),
+    ).toBe(0);
+    expect(
+      countAgentQuestions([{ role: "assistant", content: "Як з вами звʼязатись — телефон чи Instagram?" }]),
+    ).toBe(0);
+  });
+
   it("mixed proposal+gap questions spend budget too (codex regression 3)", () => {
     expect(
       countAgentQuestions([{ role: "assistant", content: "Готові розповісти, що у вас в меню?" }]),

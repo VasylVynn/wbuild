@@ -361,8 +361,30 @@ const GAP_QUESTION_CUES: RegExp[] = [
  *  CONTACT channel. They are the entry ticket (readiness = name + contact),
  *  not enrichment, so they never spend the interview budget. A sentence that
  *  ALSO hits a gap cue («Яка назва і що в меню?») still counts. */
-const READINESS_INTAKE_QUESTION =
-  /(назв|назива|контакт|телефон|номер|звʼяз|зв'яз|зв’яз|пошт|imejl|імейл|email|instagram|інстаграм|telegram|телеграм|viber|вайбер)/iu;
+const INTAKE_NOUN =
+  /(назв|контакт|телефон|номер|звʼяз|зв'яз|зв’яз|пошт|imejl|імейл|email|instagram|інстаграм|telegram|телеграм|viber|вайбер)/iu;
+/** «Дайте/залиште/який у вас …» — the clause REQUESTS an identifier. */
+const INTAKE_REQUEST =
+  /(залиш|дайте|скинь|надішл|вкаж|напиш|поділ|підкаж|можна|є(?!\p{L})|який|яка|ваш|з вами|з тобою)/iu;
+/** Doing-things-in-the-channel verbs — «що публікуєте в Instagram?» is a
+ *  substantive question about the business, not a contact request. */
+const CHANNEL_CONTENT_VERB =
+  /(публіку|веде|ведете|пост|знімає|знімаєте|пише|пишете|фотографу|виклада|розповіда)/iu;
+/** «Як називається …» / «яка назва …» — the name ask. */
+const NAME_ASK = /(як (вас |тебе )?назива|яка назва)/iu;
+
+/** ONE clause is intake when it asks to PROVIDE the name or a contact
+ *  identifier — not when it merely MENTIONS a channel («що публікуєте в
+ *  Instagram?» spends budget like any interview question). Bare-noun clauses
+ *  («телефон або Instagram?») are alternative lists of channels — intake. */
+function clauseIsIntake(clause: string): boolean {
+  if (NAME_ASK.test(clause)) return true; // «як називається …» has no intake NOUN
+  if (!INTAKE_NOUN.test(clause)) return false;
+  if (CHANNEL_CONTENT_VERB.test(clause)) return false;
+  const words = clause.split(/\s+/u).filter(Boolean);
+  if (words.length <= 2) return true; // bare «телефон» / «Instagram»
+  return INTAKE_REQUEST.test(clause);
+}
 
 /** Is the WHOLE question only intake (name/contact) and/or proposal noise?
  *  Clause-checked with «і/та/й» as separators too: «Як називається кафе і
@@ -377,9 +399,7 @@ function isPureIntakeQuestion(sentence: string): boolean {
     clauses.length > 0 &&
     clauses.every(
       (c) =>
-        READINESS_INTAKE_QUESTION.test(c) ||
-        PROPOSAL_QUESTION.test(c) ||
-        CONFIRMATION_QUESTION.test(c),
+        clauseIsIntake(c) || PROPOSAL_QUESTION.test(c) || CONFIRMATION_QUESTION.test(c),
     )
   );
 }
