@@ -98,6 +98,10 @@ export interface LlmCreateParams {
   tools?: LlmTool[];
   tool_choice?: LlmToolChoice;
   effort?: LlmEffort;
+  /** text.verbosity (gpt-5.6: low|medium|high, default medium). The chat
+   *  routes set "low" — replies are contracted to 1–3 sentences and 5.6 is
+   *  already concise; generation paths keep the default. */
+  verbosity?: "low" | "medium" | "high";
   signal?: AbortSignal;
 }
 
@@ -240,6 +244,7 @@ function buildParams(params: LlmCreateParams): ResponseCreateParamsNonStreaming 
     ...(params.effort && params.effort !== "none"
       ? { reasoning: { effort: params.effort } }
       : {}),
+    ...(params.verbosity && { text: { verbosity: params.verbosity } }),
     // The agentic loops replay full history themselves — server-side state
     // would double-bill and drift from the transcript contract.
     store: false,

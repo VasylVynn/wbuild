@@ -464,6 +464,7 @@ export async function POST(req: Request): Promise<Response> {
             model: CHAT_MODEL,
             max_tokens: 8000,
             effort: "high",
+            verbosity: "low",
             system: stripLoneSurrogates(roundSystem),
             tools: buildTools(),
             messages: sanitizeMessages(apiMessages),
