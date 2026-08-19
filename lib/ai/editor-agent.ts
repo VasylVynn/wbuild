@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import type Anthropic from "@anthropic-ai/sdk";
+import type { LlmTool } from "./llm";
 import type { StoredBlock } from "@/lib/blocks/schema";
 import type { PageSeo } from "@/lib/tenant/types";
 import { blockLibrary } from "@/lib/blocks/library";
@@ -143,12 +143,12 @@ export const TOOL_LABELS: Record<ToolName, string> = {
   inspect_site: "Перевіряю сайт…",
 };
 
-export function buildTools(): Anthropic.Beta.BetaTool[] {
+export function buildTools(): LlmTool[] {
   return (Object.keys(toolInputSchemas) as ToolName[]).map((name) => ({
     name,
     description: TOOL_DESCRIPTIONS[name],
     input_schema: z.toJSONSchema(toolInputSchemas[name]),
-  })) as unknown as Anthropic.Beta.BetaTool[];
+  }));
 }
 
 // ---------------------------------------------------------------------------

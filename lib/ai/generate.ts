@@ -8,7 +8,7 @@ import {
 } from "@/lib/site/design-spec";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropic, GEN_MODEL } from "./anthropic";
+import { llmCreate, GEN_MODEL, type LlmTool } from "./llm";
 import {
   heroSchema,
   switchbackItemSchema,
@@ -429,7 +429,7 @@ const buildSiteTool = {
   name: "build_site",
   description: "Зібрати односторінковий сайт: скомпонувати масив blocks — які секції, у якому порядку, з яким вмістом.",
   input_schema: z.toJSONSchema(generationSchema),
-} as unknown as Anthropic.Tool;
+} as unknown as LlmTool;
 
 export async function generateSite(
   // The Business Dossier (03 §1.5) — the single rich context for generation:
@@ -467,7 +467,6 @@ export async function generateSite(
   // Absent → no seeded fallback for non-hero sections (today's behaviour).
   sectionVariantRoll?: (sectionId: string) => number,
 ): Promise<GeneratedSite> {
-  const client = getAnthropic();
   const vertical = getVertical(verticalId);
   // One structural wireframe, always (cleanup 2026-07-27). Template choice,
   // the seeded shortlist and the design-DNA axes are gone: the model composes
@@ -505,17 +504,12 @@ ${buildSectionDoc(template)}`;
 
 Збери сайт за правилами вище і виклич build_site.`;
 
-  const res = await client.messages.create({
+  const res = await llmCreate({
     model: GEN_MODEL,
-    // Sonnet 5 tokenizer runs ~30% heavier for the same text (03 §0.1) — the
-    // old 16000 cap starved big compositions.
     max_tokens: 20000,
-    // Sonnet 5: `budget_tokens` returns 400 — adaptive thinking + nested
-    // output_config.effort is the supported surface (03 §0.1). Thinking stays
-    // incompatible with a forced tool_choice → "auto"; a missing tool call is
-    // a hard failure below (no retry).
-    thinking: { type: "adaptive" },
-    output_config: { effort: "high" },
+    // Luna + high reasoning (owner call 2026-08-19). tool_choice stays "auto";
+    // a missing tool call is a hard failure below (no retry).
+    effort: "high",
     // Belt at the API boundary: the dossier carries emoji-heavy scraped text —
     // a lone surrogate anywhere in the body is a hard 400 (§lib/ai/sanitize).
     system: stripLoneSurrogates(buildSystem(vertical, template)),
@@ -524,23 +518,18 @@ ${buildSectionDoc(template)}`;
     messages: [
       {
         role: "user",
+        // Static docs lead the message — OpenAI's automatic prompt caching
+        // keys on the stable prefix (no markup needed).
         content: [
-          {
-            type: "text" as const,
-            text: stripLoneSurrogates(staticDocs),
-            cache_control: { type: "ephemeral" as const },
-          },
+          { type: "text" as const, text: stripLoneSurrogates(staticDocs) },
           { type: "text" as const, text: stripLoneSurrogates(dynamicPrompt) },
         ],
       },
     ],
-    // Retries disabled (pipeline v2 §6): one attempt IS the 120s S2б stage
-    // budget — a second full composition can't fit, so a 429/transient goes
-    // straight to the caller's honest-error path. The per-request timeout must
-    // EXCEED the stage budget so the caller's AbortSignal stays the single
-    // authority over the deadline (the client's 120s default tied the stage
-    // budget exactly and could fire first — same trap as the S2а leg).
-  }, { signal, maxRetries: 0, timeout: 130_000 });
+    // One attempt IS the 120s S2б stage budget — a second full composition
+    // can't fit, so a transient failure goes straight to the honest-error path.
+    signal,
+  });
 
   const toolUse = res.content.find((b) => b.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {

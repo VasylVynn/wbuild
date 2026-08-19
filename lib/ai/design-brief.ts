@@ -1,7 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import type Anthropic from "@anthropic-ai/sdk";
-import { getAnthropic, GEN_MODEL } from "./anthropic";
+import { llmCreate, GEN_MODEL, type LlmTool } from "./llm";
 import { stripLoneSurrogates } from "./sanitize";
 import { UNREACHABLE_TYPES } from "./generate";
 import { formatDossierForPrompt, type Dossier } from "@/lib/dossier";
@@ -132,7 +131,7 @@ const designBriefTool = {
   description:
     "Зафіксувати дизайн-бриф сайту: позиціонування, палітру-якорі, шрифтову пару, план секцій, рівень motion і роботу з фото.",
   input_schema: z.toJSONSchema(briefPayloadSchema),
-} as unknown as Anthropic.Tool;
+} as unknown as LlmTool;
 
 // ---------------------------------------------------------------------------
 // Parse + validate (pure — exported for tests)
@@ -159,12 +158,44 @@ export function parseDesignBriefPayload(
     typeof (raw as { rationale?: unknown } | null)?.rationale === "string"
       ? ((raw as { rationale: string }).rationale.trim() || undefined)
       : undefined;
-  const result = validateDesignSpec(raw, ctx);
+  let result = validateDesignSpec(raw, ctx);
   if (!result.ok) {
+    // Wordiness repair (Luna, 2026-08-19): a 320-char imagery.treatment used
+    // to reject an otherwise-valid brief WHOLE — v1 fallback over a length
+    // cap. Clamp every over-long STRING in the payload to the schema's
+    // ceiling and re-validate once; only structural failures stay fatal.
+    const clamped = clampLongStrings(raw, 300);
+    result = validateDesignSpec(clamped, ctx);
+    if (result.ok) {
+      console.warn(`[design-brief] payload accepted after string clamp`);
+      return {
+        spec: result.spec,
+        ...(rationale && { rationale }),
+        repairs: [...result.repairs, "over-long strings clamped to schema limits"],
+      };
+    }
     console.warn(`[design-brief] payload rejected: ${result.repairs.join("; ") || "unparseable"}`);
     return null;
   }
   return { spec: result.spec, ...(rationale && { rationale }), repairs: result.repairs };
+}
+
+/** Depth-first clamp of every string in an untyped payload — the schema's own
+ *  max() then passes; word-boundary cut so a clamped phrase stays readable. */
+function clampLongStrings(value: unknown, max: number): unknown {
+  if (typeof value === "string") {
+    if (value.length <= max) return value;
+    const cut = value.slice(0, max);
+    const atWord = cut.lastIndexOf(" ");
+    return (atWord > max * 0.6 ? cut.slice(0, atWord) : cut).trim();
+  }
+  if (Array.isArray(value)) return value.map((v) => clampLongStrings(v, max));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, clampLongStrings(v, max)]),
+    );
+  }
+  return value;
 }
 
 // ---------------------------------------------------------------------------
@@ -302,8 +333,7 @@ export async function generateDesignBrief(input: DesignBriefInput): Promise<Desi
   const { dossier, verticalId, paletteCandidates, seededProposals, wireframeCapabilities, signal } =
     input;
   try {
-    const client = getAnthropic();
-
+  
     // Cache-friendly order (04 §2): static-per-template docs first, volatile
     // per-business data (proposals, palette, dossier) last.
     const paletteBlock = paletteCandidates.length
@@ -322,28 +352,20 @@ ${formatDossierForPrompt(dossier)}
 
 Склади дизайн-бриф для цього бізнесу і виклич design_brief.`;
 
-    const res = await client.messages.create(
-      {
-        model: GEN_MODEL,
-        // The payload is small (positioning + plan + hexes); the headroom is
-        // for adaptive thinking, which shares this budget.
-        max_tokens: 8000,
-        thinking: { type: "adaptive" },
-        // "medium": at "high", adaptive thinking on the grown prompt (archetype
-        // docs, cta axis) blew the 60s stage budget on EVERY live generation —
-        // measured 2026-08-18: S1 aborted at 60.0s, v1 fallback, no designSpec,
-        // default design shipped. The brief is a structured decision, not deep
-        // analysis; medium lands well inside the budget.
-        output_config: { effort: "medium" },
-        system: stripLoneSurrogates(buildSystem(verticalId)),
-        tools: [designBriefTool],
-        tool_choice: { type: "auto" },
-        messages: [{ role: "user", content: stripLoneSurrogates(userPrompt) }],
-      },
-      // One attempt IS the stage budget (spec §6 arithmetic: a retry cannot
-      // fit inside it) — degradation to v1 is the retry.
-      { signal, maxRetries: 0 },
-    );
+    // Luna (nano tier) is fast — "high" reasoning fits the 75s stage budget
+    // with room to spare (owner call 2026-08-19: raise reasoning across the
+    // board on the cheaper model). One attempt IS the stage budget; the v1
+    // fallback is the retry.
+    const res = await llmCreate({
+      model: GEN_MODEL,
+      max_tokens: 8000,
+      effort: "high",
+      system: stripLoneSurrogates(buildSystem(verticalId)),
+      tools: [designBriefTool],
+      tool_choice: { type: "auto" },
+      messages: [{ role: "user", content: stripLoneSurrogates(userPrompt) }],
+      signal,
+    });
 
     const toolUse = res.content.find((b) => b.type === "tool_use");
     if (!toolUse || toolUse.type !== "tool_use") {

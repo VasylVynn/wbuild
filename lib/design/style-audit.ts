@@ -1,7 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import type Anthropic from "@anthropic-ai/sdk";
-import { getAnthropic, GEN_MODEL } from "@/lib/ai/anthropic";
+import { llmCreate, GEN_MODEL, type LlmTool } from "@/lib/ai/llm";
 import { stripLoneSurrogates } from "@/lib/ai/sanitize";
 import { lintWireCss } from "@/lib/design/css-lint";
 import { fixContrast } from "@/lib/design/css-contrast";
@@ -48,7 +47,7 @@ const verdictTool = {
   name: "report_style_verdict",
   description: "Повернути вердикт про якість стилю.",
   input_schema: z.toJSONSchema(verdictSchema),
-} as unknown as Anthropic.Tool;
+} as unknown as LlmTool;
 
 /** The adherence lens, appended to the SYSTEM prompt only when a designSpec
  *  exists. Tolerance is explicit: deterministic repairs (fixContrast) may have
@@ -72,15 +71,13 @@ async function auditStyleWithModel(
   note?: string;
   adherence?: StyleAuditReport["adherence"];
 }> {
-  const client = getAnthropic();
   const briefBlock = designSpec
     ? `\nДИЗАЙН-БРИФ (якого мав слідувати цей CSS):${designSpecStyleLines(designSpec)}\n`
     : "";
-  const res = await client.messages.create({
+  const res = await llmCreate({
     model: GEN_MODEL,
     max_tokens: 500,
-    thinking: { type: "disabled" },
-    output_config: { effort: "low" },
+    effort: "low",
     system: `Ти — арт-директор, який приймає згенерований дизайн сайту малого українського бізнесу. Тобі дано стильовий CSS сайту і текст його секцій. Оціни ЛИШЕ грубі дефекти, НЕ смакові нюанси:
 - кислотні або конфліктні кольори, які б'ють по очах;
 - нечитабельні комбінації (текст майже зливається з фоном);
@@ -104,7 +101,8 @@ ${css.slice(0, CSS_SIZE_LIMIT)}
 Виклич report_style_verdict.`),
       },
     ],
-  }, { signal });
+    signal,
+  });
   const toolUse = res.content.find((b) => b.type === "tool_use");
   const parsed = toolUse?.type === "tool_use" ? verdictSchema.safeParse(toolUse.input) : undefined;
   if (!parsed?.success) return { verdict: "pass" }; // unparseable → fail-open

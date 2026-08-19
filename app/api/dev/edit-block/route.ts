@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAnthropicConfigured } from "@/lib/ai/anthropic";
+import { isLlmConfigured } from "@/lib/ai/llm";
 import { aiEditBlock } from "@/lib/ai/edit-block";
 import type { BusinessFacts } from "@/lib/verticals/schema";
 
@@ -11,8 +11,8 @@ export async function POST(req: Request) {
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "disabled in production" }, { status: 403 });
   }
-  if (!isAnthropicConfigured()) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY not set" }, { status: 400 });
+  if (!isLlmConfigured()) {
+    return NextResponse.json({ error: "OPENAI_API_KEY not set" }, { status: 400 });
   }
   const body = (await req.json().catch(() => null)) as {
     type?: string;

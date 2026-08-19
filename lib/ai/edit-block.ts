@@ -1,7 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropic, CHAT_MODEL } from "./anthropic";
+import { llmCreate, CHAT_MODEL, type LlmMessage, type LlmTool } from "./llm";
 import { blockSchemas, isBlockType, type BlockType } from "@/lib/blocks/schema";
 import { getVertical } from "@/lib/verticals/registry";
 import type { BusinessFacts } from "@/lib/verticals/schema";
@@ -26,13 +25,12 @@ export async function aiEditBlock(input: {
   const schema = blockSchemas[type];
   const vertical = getVertical(input.verticalId);
 
-  const client = getAnthropic();
   const resultSchema = z.object({ props: schema, note: z.string().max(300).optional() });
   const editTool = {
     name: "apply_edit",
     description: "Застосувати відредагований вміст блоку.",
     input_schema: z.toJSONSchema(resultSchema),
-  } as unknown as Anthropic.Tool;
+  } as unknown as LlmTool;
 
   const system = `Ти — редактор вмісту ОДНОГО блоку сайту українського бізнесу (${vertical.label}).
 Тобі дано поточний вміст блоку і інструкцію власника. Зміни вміст ЗА ІНСТРУКЦІЄЮ — і більше нічого.
@@ -56,14 +54,14 @@ ${JSON.stringify(input.facts ?? {}, null, 2)}
 
   let lastError = "no tool call";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const messages: Anthropic.MessageParam[] =
+    const messages: LlmMessage[] =
       attempt === 0
         ? [{ role: "user", content: user }]
         : [
             { role: "user", content: user },
             { role: "user", content: `Попередній результат не пройшов схему: ${lastError}. Виправ і виклич apply_edit ще раз.` },
           ];
-    const res = await client.messages.create({
+    const res = await llmCreate({
       model: CHAT_MODEL,
       max_tokens: 4000,
       system,

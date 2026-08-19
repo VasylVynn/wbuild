@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
-import type Anthropic from "@anthropic-ai/sdk";
-import { getAnthropic, CHAT_MODEL } from "@/lib/ai/anthropic";
+import { llmStream, CHAT_MODEL, type LlmMessage, type LlmToolUseBlock, type LlmToolResultBlock } from "@/lib/ai/llm";
+import { fetchUrlForAgent } from "@/lib/ai/web-fetch";
 import { stripLoneSurrogates, safeSlice, sanitizeMessages } from "@/lib/ai/sanitize";
 import {
   onboardTools,
@@ -193,7 +193,6 @@ export async function POST(req: Request): Promise<Response> {
   const apifyEnabled = isApifyConfigured();
   const ip = ipFromHeaders(await headers());
 
-  const client = getAnthropic();
 
   // --- Tool handlers (fail-open: partial/empty result beats throwing). ---
 
@@ -330,10 +329,22 @@ export async function POST(req: Request): Promise<Response> {
     return `Ок: фото ${p.data.photoId} — ${label}.`;
   }
 
+  async function runWebFetch(input: unknown): Promise<string> {
+    const url = (input as { url?: unknown } | null)?.url;
+    if (typeof url !== "string" || !/^https?:\/\//i.test(url)) return "Некоректний URL.";
+    try {
+      const text = await fetchUrlForAgent(url);
+      return text ? text.slice(0, 24_000) : "Сторінка порожня.";
+    } catch (e) {
+      return `Не вдалося прочитати сторінку: ${e instanceof Error ? e.message : "помилка"}.`;
+    }
+  }
+
   async function runDataTool(name: string, input: unknown): Promise<string> {
     if (name === "scrape_instagram") return runScrape(input);
     if (name === "analyze_image") return runAnalyze(input);
     if (name === "set_media_role") return runSetRole(input);
+    if (name === "web_fetch") return runWebFetch(input);
     return "Невідомий інструмент.";
   }
 
@@ -341,7 +352,7 @@ export async function POST(req: Request): Promise<Response> {
   const rs = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (obj: unknown) => controller.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`));
-      const apiMessages: Anthropic.Beta.BetaMessageParam[] = transcript.map((m) => ({
+      const apiMessages: LlmMessage[] = transcript.map((m) => ({
         role: m.role,
         content: m.content,
       }));
@@ -394,48 +405,33 @@ export async function POST(req: Request): Promise<Response> {
           });
           lastSystem = system;
 
-          const stream = client.beta.messages.stream({
+          // Strip lone surrogates (emoji cut mid-pair by our excerpt slices).
+          // OpenAI prompt caching is automatic on the stable prefix — the
+          // stable part leads `system` for exactly that reason.
+          const stream = llmStream({
             model: CHAT_MODEL,
             max_tokens: 8000,
-            thinking: { type: "adaptive" },
-            output_config: { effort: "medium", task_budget: { type: "tokens", total: 40000 } },
-            betas: ["task-budgets-2026-03-13"],
-            // Strip lone surrogates (emoji cut mid-pair by our excerpt slices) —
-            // an unpaired surrogate anywhere in the body is a hard 400 (§sanitize).
-            // Prompt caching (2026-08-10): the breakpoint sits after the stable
-            // part — byte-identical across turns/conversations per vertical —
-            // so tools + the static prompt are read from cache at 0.1×; facts +
-            // dossier vary per turn and stay outside the cached prefix.
-            system: [
-              {
-                type: "text" as const,
-                text: stripLoneSurrogates(system.stable),
-                cache_control: { type: "ephemeral" as const },
-              },
-              { type: "text" as const, text: stripLoneSurrogates(system.dynamic) },
-            ],
+            effort: "medium",
+            system: `${stripLoneSurrogates(system.stable)}\n\n${stripLoneSurrogates(system.dynamic)}`,
             tools: onboardTools,
             messages: sanitizeMessages(apiMessages),
           });
 
           let roundHasText = false;
-          for await (const ev of stream) {
-            if (ev.type === "content_block_start") {
-              const cb = ev.content_block;
-              if (cb.type === "thinking") {
-                send({ t: "think" });
-              } else if (cb.type === "tool_use" || cb.type === "server_tool_use") {
-                send({ t: "tool", name: cb.name, label: TOOL_LABELS[cb.name] ?? "Працюю…" });
-              }
-            } else if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
+          for await (const ev of stream.events) {
+            if (ev.type === "thinking_start") {
+              send({ t: "think" });
+            } else if (ev.type === "tool_start") {
+              send({ t: "tool", name: ev.name, label: TOOL_LABELS[ev.name] ?? "Працюю…" });
+            } else if (ev.type === "text_delta") {
               if (!roundHasText && sawText) {
                 finalText += "\n\n";
                 send({ t: "d", text: "\n\n" });
               }
               roundHasText = true;
               sawText = true;
-              finalText += ev.delta.text;
-              send({ t: "d", text: ev.delta.text });
+              finalText += ev.text;
+              send({ t: "d", text: ev.text });
             }
           }
 
@@ -450,16 +446,11 @@ export async function POST(req: Request): Promise<Response> {
               msg: "turn usage",
               input: final.usage.input_tokens,
               output: final.usage.output_tokens,
-              cacheRead: final.usage.cache_read_input_tokens ?? 0,
-              cacheWrite: final.usage.cache_creation_input_tokens ?? 0,
+              cacheRead: final.usage.cache_read_input_tokens,
+              cacheWrite: final.usage.cache_creation_input_tokens,
             }),
           );
 
-          // Server web_fetch may pause the turn — resume WITHOUT consuming a round.
-          if (final.stop_reason === "pause_turn") {
-            apiMessages.push({ role: "assistant", content: final.content });
-            continue;
-          }
           rounds += 1;
 
           // Fold every save_facts (last-wins) — the "commit".
@@ -470,7 +461,7 @@ export async function POST(req: Request): Promise<Response> {
           }
 
           const toolUses = final.content.filter(
-            (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use",
+            (b): b is LlmToolUseBlock => b.type === "tool_use",
           );
           const dataUses = toolUses.filter((b) => (DATA_TOOL_NAMES as readonly string[]).includes(b.name));
           const generateNow = toolUses.some((b) => b.name === START_GENERATION_TOOL_NAME);
@@ -505,7 +496,7 @@ export async function POST(req: Request): Promise<Response> {
             // counter's cue words is still a question): forcing a second one
             // in the same turn is the interrogation the budget prevents.
             const roundText = final.content
-              .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+              .filter((b): b is { type: "text"; text: string } => b.type === "text")
               .map((b) => b.text)
               .join(" ");
             const roundAlreadyAsks = asksClarifyingQuestion(roundText);
@@ -518,7 +509,7 @@ export async function POST(req: Request): Promise<Response> {
               apiMessages.push({
                 role: "user",
                 content: toolUses.map(
-                  (tu): Anthropic.Beta.BetaToolResultBlockParam => ({
+                  (tu): LlmToolResultBlock => ({
                     type: "tool_result",
                     tool_use_id: tu.id,
                     content:
@@ -547,7 +538,7 @@ export async function POST(req: Request): Promise<Response> {
           const dataResults = await Promise.all(
             dataUses.map(async (tu) => ({ id: tu.id, text: await runDataTool(tu.name, tu.input) })),
           );
-          const results: Anthropic.Beta.BetaToolResultBlockParam[] = toolUses.map((tu) =>
+          const results: LlmToolResultBlock[] = toolUses.map((tu) =>
             (DATA_TOOL_NAMES as readonly string[]).includes(tu.name)
               ? {
                   type: "tool_result",
@@ -588,29 +579,19 @@ export async function POST(req: Request): Promise<Response> {
               content:
                 "(службова примітка: твоя минула відповідь не мала тексту — напиши ЗАРАЗ повідомлення власнику українською, без викликів інструментів)",
             });
-            const speak = client.beta.messages.stream({
+            const speak = llmStream({
               model: CHAT_MODEL,
               max_tokens: 2000,
-              thinking: { type: "adaptive" },
-              output_config: { effort: "low" },
-              // Same stable-prefix blocks as the main call: tool_choice only
-              // invalidates the messages tier, so this reads the same cache.
-              system: [
-                {
-                  type: "text" as const,
-                  text: stripLoneSurrogates(lastSystem.stable),
-                  cache_control: { type: "ephemeral" as const },
-                },
-                { type: "text" as const, text: stripLoneSurrogates(lastSystem.dynamic) },
-              ],
+              effort: "low",
+              system: `${stripLoneSurrogates(lastSystem.stable)}\n\n${stripLoneSurrogates(lastSystem.dynamic)}`,
               tools: onboardTools,
               tool_choice: { type: "none" },
               messages: sanitizeMessages(apiMessages),
             });
-            for await (const ev of speak) {
-              if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
-                finalText += ev.delta.text;
-                send({ t: "d", text: ev.delta.text });
+            for await (const ev of speak.events) {
+              if (ev.type === "text_delta") {
+                finalText += ev.text;
+                send({ t: "d", text: ev.text });
               }
             }
             await speak.finalMessage();

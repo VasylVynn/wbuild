@@ -502,7 +502,7 @@ import { aiEditBlock } from "@/lib/ai/edit-block";
 import { checkRateLimit, ipFromHeaders, rateLimitMessage } from "@/lib/rate-limit";
 import { headers } from "next/headers";
 import { sendTelegramMessage } from "@/lib/telegram/push";
-import { isAnthropicConfigured } from "@/lib/ai/anthropic";
+import { isLlmConfigured } from "@/lib/ai/llm";
 
 /**
  * «Відредагувати з ШІ»: rewrites ONE block's props per the owner's instruction.
@@ -516,7 +516,7 @@ export async function aiEditBlockAction(
 ): Promise<{ ok: true; props: unknown; note?: string } | { ok: false; error: string }> {
   const gate = await requireMember({ host });
   if (!gate.ok) return { ok: false, error: gate.error ?? "Потрібно увійти." };
-  if (!isAnthropicConfigured()) return { ok: false, error: "AI не налаштовано." };
+  if (!isLlmConfigured()) return { ok: false, error: "AI не налаштовано." };
   if (!instruction.trim()) return { ok: false, error: "Опишіть, що змінити." };
 
   const limit = await checkRateLimit("ai_edit", ipFromHeaders(await headers()));

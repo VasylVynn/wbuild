@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAnthropicConfigured } from "@/lib/ai/anthropic";
+import { isLlmConfigured } from "@/lib/ai/llm";
 import { onboardTurn, type ChatMsg } from "@/lib/ai/onboard";
 import type { FloristFacts } from "@/lib/verticals/florist";
 
@@ -13,8 +13,8 @@ export async function POST(req: Request) {
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "disabled in production" }, { status: 403 });
   }
-  if (!isAnthropicConfigured()) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY not set" }, { status: 400 });
+  if (!isLlmConfigured()) {
+    return NextResponse.json({ error: "OPENAI_API_KEY not set" }, { status: 400 });
   }
   const body = (await req.json().catch(() => ({}))) as {
     history?: ChatMsg[];

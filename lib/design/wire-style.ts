@@ -1,7 +1,7 @@
 import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { getAnthropic, isAnthropicConfigured, GEN_MODEL } from "@/lib/ai/anthropic";
+import { llmCreate, isLlmConfigured, GEN_MODEL } from "@/lib/ai/llm";
 import { FONT_FAMILIES, getFontPair } from "@/lib/design/font-pairs";
 import { extractSectionSource } from "@/lib/design/wire-source";
 import { salonwireSections } from "@/components/templates/salonwire";
@@ -95,7 +95,9 @@ MOTION: рівень руху задає бриф (0 — статика … 3 �
 - він має бути ВПІЗНАВАНО про цей бізнес. Салон краси, автосервіс і юридична фірма мусять отримати три різні світи, а не один світ у трьох кольорах
 - уникай дефолтного «AI-вигляду»: фіолетові градієнти на білому, Inter-подібна сірість, однакові скруглені картки з мʼякою тінню
 
-ВИВІД: тільки CSS. Без markdown, без \`\`\`, без пояснень. Кожен селектор має починатися з .tpl-salonwire, щоб стилі не витекли назовні.`;
+ВИВІД: тільки CSS. Без markdown, без \`\`\`, без пояснень. Кожен селектор має починатися з .tpl-salonwire, щоб стилі не витекли назовні.
+
+КОНТРАСТ (жорстке правило): кожен текстовий клас у КОЖНОМУ контексті (hero, картка, футер) отримує ВЛАСНУ declaration кольору — ніколи не перевикористовуй одне значення на різних фонах. Перед тим як записати пару «текст/фон», перевір подумки контраст ≥4.5:1; світлий текст лише на явно темному фоні й навпаки.`;
 
 export type WireStyleResult = {
   css: string;
@@ -179,9 +181,8 @@ export async function generateWireStyle(
   // as before the brief existed.
   opts: { hue?: number; signal?: AbortSignal; designSpec?: DesignSpec } = {},
 ): Promise<WireStyleResult> {
-  if (!isAnthropicConfigured()) throw new Error("ANTHROPIC_API_KEY not set");
+  if (!isLlmConfigured()) throw new Error("OPENAI_API_KEY not set");
   const { css, tsx } = await wireframeSource();
-  const client = getAnthropic();
   // Slim the markup context to the planned sections (V5): only possible with a
   // designSpec — the v1 fallback can't know the composition, so it keeps the
   // whole file, exactly the pre-V5 behavior.
@@ -194,21 +195,15 @@ export async function generateWireStyle(
       ? hueLine(((opts.hue % 360) + 360) % 360)
       : "";
 
-  const res = await client.messages.create({
+  // OpenAI prompt caching is AUTOMATIC on stable prefixes — the framework
+  // block leads the message for exactly that reason (no cache_control markup).
+  // Luna + high reasoning (owner call 2026-08-19): the nano tier writes the
+  // 16k sheet well inside the 150s S2а budget.
+  const res = await llmCreate({
     model: GEN_MODEL,
     max_tokens: 16000,
-    thinking: { type: "adaptive" },
-    // "medium": at "high", thinking + a 16k sheet blew the 150s S2а budget on
-    // every live generation (measured 2026-08-18: s2 elapsed 150010ms,
-    // styled:false — the fallback floor shipped instead of a real design).
-    // The sheet is format-heavy writing against a decided brief; medium fits.
-    output_config: { effort: "medium" },
+    effort: "high",
     system: SYSTEM,
-    // Prompt caching (2026-08-10): the wireframe source is byte-identical for
-    // EVERY tenant on a deploy, so it leads the user turn with a cache
-    // breakpoint — system + framework read at 0.1× on every style call
-    // org-wide. The per-business brief follows OUTSIDE the cached prefix and
-    // sits last, closest to the task, where instructions land best anyway.
     messages: [
       {
         role: "user",
@@ -224,7 +219,6 @@ ${css}
 \`\`\`tsx
 ${tsxForPrompt}
 \`\`\``,
-            cache_control: { type: "ephemeral" as const },
           },
           {
             type: "text" as const,
@@ -236,13 +230,10 @@ ${brief}${anchor}
         ],
       },
     ],
-    // Retries disabled (pipeline v2 §6): one attempt IS the S2а/S4-regen stage
-    // budget — a failed call degrades (prev sheet / grey) instead of retrying
-    // past the deadline. The per-request timeout must exceed the S2а stage
-    // budget (150s): the client default of 120s was firing FIRST and starved
-    // the widened stage budget (measured live: "Request timed out" at 120.0s
-    // on the post-V3 prompt, which crosses 120s routinely).
-  }, { signal: opts.signal, maxRetries: 0, timeout: 160_000 });
+    // One attempt IS the S2а/S4-regen stage budget — a failed call degrades
+    // (prev sheet / floor) instead of retrying past the deadline.
+    signal: opts.signal,
+  });
 
   const text = res.content
     .map((b) => (b.type === "text" ? b.text : ""))

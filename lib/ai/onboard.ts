@@ -1,7 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropic, CHAT_MODEL } from "./anthropic";
+import { llmCreate, CHAT_MODEL, type LlmTool } from "./llm";
 import { stripLoneSurrogates, sanitizeMessages, safeSlice } from "@/lib/ai/sanitize";
 import { businessFactsSchema, type BusinessFacts } from "@/lib/verticals/schema";
 import { getVertical, VERTICAL_IDS } from "@/lib/verticals/registry";
@@ -56,8 +55,9 @@ const saveFactsSchema = z.object({
 
 // ---------------------------------------------------------------------------
 // Tool definitions (04 §1-§2). save_facts is the "commit"; the data tools
-// (scrape/analyze/set_media_role) round-trip so the model sees their results;
-// web_fetch is an Anthropic SERVER tool (no handler, no SSRF);
+// (scrape/analyze/set_media_role/web_fetch) round-trip so the model sees their
+// results — web_fetch became a LOCAL tool in the OpenAI migration (2026-08-19,
+// lib/ai/web-fetch.ts owns the SSRF guards the old server tool made moot);
 // start_generation is TERMINAL — the loop ends and the client starts the
 // existing generate flow (plan C2/C7: the agent DOES, it does not promise).
 // ---------------------------------------------------------------------------
@@ -87,7 +87,7 @@ const saveFactsTool = {
         ),
     }),
   ),
-} as unknown as Anthropic.Tool;
+} as unknown as LlmTool;
 
 /** Terminal signal tool (plan C2/C7): the model calls it when the owner
  *  explicitly agreed to generate. The route ends the loop, emits {t:"generate"}
@@ -100,7 +100,7 @@ const startGenerationTool = {
   description:
     "Запустити створення чернетки сайту. Викликай, ЩОЙНО власник явно погодився створити сайт («так», «створюй», «генеруй», «давай»). Не обіцяй запуск словами — викликай цей інструмент; далі процес веде платформа.",
   input_schema: z.toJSONSchema(z.object({})),
-} as unknown as Anthropic.Tool;
+} as unknown as LlmTool;
 
 const scrapeInstagramTool = {
   name: "scrape_instagram",
@@ -117,7 +117,7 @@ const scrapeInstagramTool = {
         .describe("Необовʼязково: що саме шукати цього разу (напр. «телефон», «адреса»)."),
     }),
   ),
-} as unknown as Anthropic.Tool;
+} as unknown as LlmTool;
 
 const analyzeImageTool = {
   name: "analyze_image",
@@ -132,7 +132,7 @@ const analyzeImageTool = {
         .describe("Список id фото (з медіа-інвентарю) для повторного аналізу."),
     }),
   ),
-} as unknown as Anthropic.Tool;
+} as unknown as LlmTool;
 
 const setMediaRoleTool = {
   name: "set_media_role",
@@ -144,30 +144,33 @@ const setMediaRoleTool = {
       role: z.enum(PHOTO_ROLES).describe("site | text_source | logo | hidden"),
     }),
   ),
-} as unknown as Anthropic.Tool;
+} as unknown as LlmTool;
 
-/** Anthropic server tool: fetches ONLY URLs already present in the conversation
- *  (no SSRF, no handler). Bounded by max_uses + max_content_tokens (04 §5.1). */
+/** Local fetch tool (OpenAI migration): the route executes it via
+ *  lib/ai/web-fetch.ts (public-address checks, size/time caps). The prompt
+ *  still allows ONLY URLs already present in the conversation. */
 const webFetchTool = {
-  type: "web_fetch_20260209",
   name: "web_fetch",
-  max_uses: 3,
-  max_content_tokens: 6000,
-};
+  description:
+    "Прочитати сторінку за URL, який ВЖЕ є в розмові (напр. посилання від власника). Повертає текст сторінки.",
+  input_schema: z.toJSONSchema(
+    z.object({ url: z.string().describe("Повний URL зі схемою http(s), точно як у розмові.") }),
+  ),
+} as unknown as LlmTool;
 
-/** Full agentic tool set for the streaming loop (beta call). */
-export const onboardTools = [
+/** Full agentic tool set for the streaming loop. */
+export const onboardTools: LlmTool[] = [
   scrapeInstagramTool,
   analyzeImageTool,
   setMediaRoleTool,
   saveFactsTool,
   startGenerationTool,
   webFetchTool,
-] as unknown as Anthropic.Beta.BetaToolUnion[];
+];
 
-/** Names the loop executes itself (round-trip). web_fetch is server-side;
- *  save_facts is the commit; start_generation is terminal (no round-trip). */
-export const DATA_TOOL_NAMES = ["scrape_instagram", "analyze_image", "set_media_role"] as const;
+/** Names the loop executes itself (round-trip). save_facts is the commit;
+ *  start_generation is terminal (no round-trip). */
+export const DATA_TOOL_NAMES = ["scrape_instagram", "analyze_image", "set_media_role", "web_fetch"] as const;
 export type DataToolName = (typeof DATA_TOOL_NAMES)[number];
 
 /** Handler-side input validation (tool_use.input is untrusted). */
@@ -500,24 +503,14 @@ export async function onboardTurn(
     questionsSpent: countAgentQuestions(messages) >= MAX_CLARIFYING_QUESTIONS,
   });
 
-  const client = getAnthropic();
-  const res = await client.messages.create({
+  // Same lone-surrogate guard as the streaming route: history resent by the
+  // client may carry an emoji cut mid-pair (the prod 400) — strip before send.
+  // OpenAI caches the stable prefix automatically (stable leads the string).
+  const res = await llmCreate({
     model: CHAT_MODEL,
     max_tokens: 4000,
-    thinking: { type: "adaptive" },
-    // Same lone-surrogate guard as the streaming route: history resent by the
-    // client may carry an emoji cut mid-pair (the prod 400) — strip before send.
-    // Same cache-breakpoint shape as the streaming route. NOTE: this path's
-    // smaller tool set means a DIFFERENT prefix (tools render first), so it
-    // keeps its own cache entry — still worth it across degraded turns.
-    system: [
-      {
-        type: "text" as const,
-        text: stripLoneSurrogates(system.stable),
-        cache_control: { type: "ephemeral" as const },
-      },
-      { type: "text" as const, text: stripLoneSurrogates(system.dynamic) },
-    ],
+    effort: "medium",
+    system: `${stripLoneSurrogates(system.stable)}\n\n${stripLoneSurrogates(system.dynamic)}`,
     // start_generation is available so the degraded path stays behavior-
     // consistent with the prompt (readiness = tool-call, item W0-7).
     tools: [saveFactsTool, startGenerationTool],
@@ -549,7 +542,7 @@ export async function onboardTurn(
   if (generate) acc = { ...acc, status: "confirmed" };
 
   const text = res.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .filter((b): b is { type: "text"; text: string } => b.type === "text")
     .map((b) => b.text)
     .join("\n");
   // Aligned with the streaming route (owner decision): NO question-append —

@@ -1,6 +1,6 @@
 import "server-only";
 import { stripLoneSurrogates, safeSlice } from "@/lib/ai/sanitize";
-import { getAnthropic, isAnthropicConfigured, VISION_MODEL } from "@/lib/ai/anthropic";
+import { llmCreate, isLlmConfigured, VISION_MODEL, type LlmTool } from "@/lib/ai/llm";
 import { isStorageUrl, PHOTO_KINDS, type PhotoKind, type ExtractedInfo } from "./media";
 import { DEFAULT_SITE_QUALITY } from "./rank";
 import { extractPalette } from "./palette";
@@ -271,7 +271,7 @@ function normalizeExtractedInfo(v: unknown): ExtractedInfo {
  */
 export async function analyzePhoto(url: string): Promise<PhotoAnalysis | null> {
   if (!isStorageUrl(url)) return null; // §4.8 — we only analyze our own assets
-  if (!isAnthropicConfigured()) return null;
+  if (!isLlmConfigured()) return null;
 
   const img = await fetchImageBytes(url);
   if (!img) return null;
@@ -282,37 +282,29 @@ export async function analyzePhoto(url: string): Promise<PhotoAnalysis | null> {
   const paletteP = extractPalette(img.buf);
 
   try {
-    const client = getAnthropic();
-    const res = await client.messages.create(
-      {
-        model: VISION_MODEL,
-        max_tokens: 1200,
-        // Bounded classification/OCR task: no thinking, minimal effort (§0.1).
-        // Sonnet 5 runs adaptive thinking by default when omitted, so disable
-        // it explicitly (accepted on Sonnet 5; only Fable 5 rejects "disabled").
-        thinking: { type: "disabled" },
-        output_config: { effort: "low" },
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: img.mime, data: img.b64 } },
-              {
-                type: "text",
-                text: "Власник малого бізнесу завантажив це фото для свого сайту. Класифікуй його, перепиши ВЕСЬ видимий текст дослівно (ocrText), познач, чи це радше інформаційна картинка з текстом (textHeavy) чи справжнє фото для сайту (useOnSite), оціни якість знімка (siteQuality, subjectCentered, burnedText, heroCandidate) і витягни телефони/ціни/адреси/години/акції, якщо вони написані на зображенні. Оцінюй суворо: з цих оцінок ми обираємо, які фото взагалі потраплять на сайт і яке стане головним банером. Пиши лише те, що бачиш — нічого не вигадуй. Виклич photo_analysis.",
-              },
-            ],
-          },
-        ],
-        // Prompt caching (2026-08-10): the tool schema is the whole stable
-        // prefix here (no system; the image leads the user turn and varies per
-        // call) — cache it once, read on every one of the ~15 analyses per
-        // onboarding and across tenants.
-        tools: [{ ...analysisTool, cache_control: { type: "ephemeral" as const } }],
-        tool_choice: { type: "tool", name: "photo_analysis" },
-      },
-      { timeout: VISION_TIMEOUT_MS },
-    );
+    const res = await llmCreate({
+      model: VISION_MODEL,
+      max_tokens: 1200,
+      // Bounded classification/OCR task — low effort (§0.1).
+      effort: "low",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: img.mime, data: img.b64 } },
+            {
+              type: "text",
+              text: "Власник малого бізнесу завантажив це фото для свого сайту. Класифікуй його, перепиши ВЕСЬ видимий текст дослівно (ocrText), познач, чи це радше інформаційна картинка з текстом (textHeavy) чи справжнє фото для сайту (useOnSite), оціни якість знімка (siteQuality, subjectCentered, burnedText, heroCandidate) і витягни телефони/ціни/адреси/години/акції, якщо вони написані на зображенні. Оцінюй суворо: з цих оцінок ми обираємо, які фото взагалі потраплять на сайт і яке стане головним банером. Пиши лише те, що бачиш — нічого не вигадуй. Виклич photo_analysis.",
+            },
+          ],
+        },
+      ],
+      // OpenAI prompt caching is automatic — the tool schema is the stable
+      // prefix across the ~15 analyses per onboarding.
+      tools: [analysisTool],
+      tool_choice: { type: "tool", name: "photo_analysis" },
+      signal: AbortSignal.timeout(VISION_TIMEOUT_MS),
+    });
     const tool = res.content.find((c) => c.type === "tool_use");
     if (!tool || tool.type !== "tool_use") return null;
     const input = tool.input as Record<string, unknown>;
